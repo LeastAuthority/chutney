@@ -147,6 +147,10 @@ do
             export CHUTNEY_LISTEN_ADDRESS_V6="$2"
             shift
             ;;
+        # Disable all IPv6 functionality
+        --no-ipv6)
+            export CHUTNEY_DISABLE_IPV6=true
+            ;;
         # The DNS server config for Tor Exits. Chutney's default is
         # /etc/resolv.conf, even if tor's compile time default is different.
         --dns-conf)
