@@ -89,6 +89,7 @@ chutney environmental variables documented below:
 ``` shell
 --ipv4             CHUTNEY_LISTEN_ADDRESS=IPV4
 --ipv6             CHUTNEY_LISTEN_ADDRESS_V6=IPV6
+--no-ipv6          CHUTNEY_DISABLE_IPV6=1
 
 # Chutney uses /etc/resolv.conf if none of these options are set
 --dns-conf         CHUTNEY_DNS_CONF=PATH
@@ -125,6 +126,7 @@ chutney environmental variables documented below:
 
 --controlling-pid  CHUTNEY_CONTROLLING_PID=N
 --net-dir          CHUTNEY_DATA_DIR=PATH
+--no-controlsocket CHUTNEY_ENABLE_CONTROLSOCKET=false
 ```
 (These are advanced options: in the past, they have had long-standing bugs.)
 

@@ -1992,6 +1992,8 @@ DEFAULTS = {
     # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
     # ipv6_addr=None to support IPv4-only systems
     'ipv6_addr': os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6', None),
+    # Whether to disable all ipv6 functionality
+    'disableipv6': getenv_bool('CHUTNEY_DISABLE_IPV6', False),
     # dirserver_flags: used only if authority=True
     'dirserver_flags': 'no-v2',
     # chutney_dir: directory of the chutney source code
@@ -2057,6 +2059,9 @@ DEFAULTS = {
     # defaults to 1 on Linux, and 0 otherwise
     'sandbox': int(getenv_bool('CHUTNEY_TOR_SANDBOX',
                                platform.system() == 'Linux')),
+
+    # Whether to enable a unix control socket (via ControlSocket in torrc)
+    'enable_controlsocket': getenv_bool('CHUTNEY_ENABLE_CONTROLSOCKET', True),
 }
 
 
@@ -2068,8 +2073,11 @@ class TorEnviron(chutney.Templating.Environ):
        Environment fields provided:
 
           orport, controlport, socksport, dirport: *Port torrc option
+          orport_directive: full ORPort torrc option, including flags
+          addressdisableipv6: torrc option to disable ipv6
           dir: DataDirectory torrc option
           nick: Nickname torrc option
+          controlsocket: ControlSocket torrc option
           tor_gencert: name or path of the tor-gencert binary
           auth_passphrase: obsoleted by CookieAuthentication
           torrc_template_path: path to chutney torrc_templates directory
@@ -2092,6 +2100,7 @@ class TorEnviron(chutney.Templating.Environ):
           orport_base, controlport_base, socksport_base, dirport_base: the
              initial port numbers used by nodenum 0. Each additional node adds
              1 to the port numbers.
+          disableipv6: whether to disable all ipv6 functionality
           tor-gencert (note hyphen): name or path of the tor-gencert binary (if
              present)
           chutney_dir: directory of the chutney source code
@@ -2108,6 +2117,7 @@ class TorEnviron(chutney.Templating.Environ):
           bridgeauthority: are we a bridge authority?
           relay: are we a relay? (includes exits and bridges)
           bridge: are we a bridge?
+          enable_controlsocket: enable unix control socket?
     """
 
     def __init__(self, parent=None, **kwargs):
@@ -2115,6 +2125,27 @@ class TorEnviron(chutney.Templating.Environ):
 
     def _get_orport(self, my):
         return my['orport_base'] + my['nodenum']
+
+    def _get_addressdisableipv6(self, my):
+        if my['disableipv6']:
+            return '1'
+        else:
+            return '0'
+
+    def _get_orport_directive(self, my):
+        res = str(my['orport'])
+        if my['disableipv6']:
+            # Even though we set the "AddressIPv6Only" directive,
+            # tor will still try to bind the orport to a v6 address
+            # unless we also override it here.
+            res += ' IPv4Only'
+        return res
+
+    def _get_controlsocket(self, my):
+        if my['enable_controlsocket']:
+            return my['dir'].joinpath('control')
+        else:
+            return '0'
 
     def _get_controlport(self, my):
         return my['controlport_base'] + my['nodenum']

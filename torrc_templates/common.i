@@ -31,9 +31,10 @@ Nickname $nick
 ShutdownWaitLength 2
 DisableDebuggerAttachment 0
 
+AddressDisableIPv6 $addressdisableipv6
 ControlPort $controlport
 # Use ControlSocket rather than ControlPort unix: to support older tors
-ControlSocket ${dir}/control
+ControlSocket ${controlsocket}
 CookieAuthentication 1
 PidFile ${dir}/pid
 
