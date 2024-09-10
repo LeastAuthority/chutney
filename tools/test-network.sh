@@ -210,6 +210,10 @@ do
             export CHUTNEY_ALLOW_FAILURES="$2"
             shift
             ;;
+        # Disable the unix control socket.
+        --no-controlsocket)
+            export CHUTNEY_ENABLE_CONTROLSOCKET=false
+            ;;
         # Try not to say anything (applies only to this script)
         --quiet)
             export ECHO=true

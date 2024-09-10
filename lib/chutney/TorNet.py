@@ -2057,6 +2057,9 @@ DEFAULTS = {
     # defaults to 1 on Linux, and 0 otherwise
     'sandbox': int(getenv_bool('CHUTNEY_TOR_SANDBOX',
                                platform.system() == 'Linux')),
+
+    # Whether to enable a unix control socket (via ControlSocket in torrc)
+    'enable_controlsocket': getenv_bool('CHUTNEY_ENABLE_CONTROLSOCKET', True),
 }
 
 
@@ -2070,6 +2073,7 @@ class TorEnviron(chutney.Templating.Environ):
           orport, controlport, socksport, dirport: *Port torrc option
           dir: DataDirectory torrc option
           nick: Nickname torrc option
+          controlsocket: ControlSocket torrc option
           tor_gencert: name or path of the tor-gencert binary
           auth_passphrase: obsoleted by CookieAuthentication
           torrc_template_path: path to chutney torrc_templates directory
@@ -2108,6 +2112,7 @@ class TorEnviron(chutney.Templating.Environ):
           bridgeauthority: are we a bridge authority?
           relay: are we a relay? (includes exits and bridges)
           bridge: are we a bridge?
+          enable_controlsocket: enable unix control socket?
     """
 
     def __init__(self, parent=None, **kwargs):
@@ -2115,6 +2120,12 @@ class TorEnviron(chutney.Templating.Environ):
 
     def _get_orport(self, my):
         return my['orport_base'] + my['nodenum']
+
+    def _get_controlsocket(self, my):
+        if my['enable_controlsocket']:
+            return my['dir'].joinpath('control')
+        else:
+            return '0'
 
     def _get_controlport(self, my):
         return my['controlport_base'] + my['nodenum']

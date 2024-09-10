@@ -125,6 +125,7 @@ chutney environmental variables documented below:
 
 --controlling-pid  CHUTNEY_CONTROLLING_PID=N
 --net-dir          CHUTNEY_DATA_DIR=PATH
+--no-controlsocket CHUTNEY_ENABLE_CONTROLSOCKET=false
 ```
 (These are advanced options: in the past, they have had long-standing bugs.)
 
