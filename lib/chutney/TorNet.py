@@ -201,7 +201,7 @@ def get_new_absolute_nodes_path(now=time.time()):
     i = 0
     while newdir.exists():
         i += 1
-        newdir = "%s.%d" % (newdirbase, i)
+        newdir = Path("%s.%d" % (newdirbase, i))
     return newdir
 
 def _warnMissingTor(tor_path, cmdline, tor_name="tor"):
