@@ -1,0 +1,4 @@
+# It seems *some* job must be merged to main to initialize CI
+fake-job:
+  script:
+    - echo "Done"
