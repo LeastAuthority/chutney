@@ -2807,27 +2807,27 @@ def runConfigFile(verb, data):
     return getattr(network, verb)()
 
 
-def parseArgs():
+def parseArgs(argv):
     """Parse and return commandline arguments."""
-    if len(sys.argv) < 3:
+    if len(argv) < 3:
         exit_on_error("Not enough arguments given.")
-    if not os.path.isfile(sys.argv[2]):
-        exit_on_error("Cannot find networkfile: {0}.".format(sys.argv[2]))
-    return {'network_cfg': sys.argv[2], 'action': sys.argv[1]}
+    if not os.path.isfile(argv[2]):
+        exit_on_error("Cannot find networkfile: {0}.".format(argv[2]))
+    return {'network_cfg': argv[2], 'action': argv[1]}
 
 
-def main():
+def main(action, network_cfg):
     global _BASE_ENVIRON
     global _THE_NETWORK
     _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
     _THE_NETWORK = Network(_BASE_ENVIRON)
 
-    args = parseArgs()
-    f = open(args['network_cfg'])
-    result = runConfigFile(args['action'], f.read())
+    f = open(network_cfg)
+    result = runConfigFile(action, f.read())
     if result is False:
         return -1
     return 0
 
 if __name__ == '__main__':
-    sys.exit(main())
+    kwargs = parseArgs(sys.argv)
+    sys.exit(main(**kwargs))
