@@ -2806,6 +2806,12 @@ def runConfigFile(verb, data):
 
     return getattr(network, verb)()
 
+def _initGlobals():
+    """One-time initialization of globals"""
+    global _BASE_ENVIRON
+    global _THE_NETWORK
+    _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
+    _THE_NETWORK = Network(_BASE_ENVIRON)
 
 def parseArgs(argv):
     """Parse and return commandline arguments."""
@@ -2815,12 +2821,8 @@ def parseArgs(argv):
         exit_on_error("Cannot find networkfile: {0}.".format(argv[2]))
     return {'network_cfg': argv[2], 'action': argv[1]}
 
-
 def main(action, network_cfg):
-    global _BASE_ENVIRON
-    global _THE_NETWORK
-    _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
-    _THE_NETWORK = Network(_BASE_ENVIRON)
+    _initGlobals()
 
     f = open(network_cfg)
     result = runConfigFile(action, f.read())
