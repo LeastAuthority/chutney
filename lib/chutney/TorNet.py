@@ -2813,6 +2813,13 @@ def _initGlobals():
     _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
     _THE_NETWORK = Network(_BASE_ENVIRON)
 
+def createNetwork(gen_nodes):
+    """Use `gen_nodes` to generate a list of nodes and return the corresponding Network."""
+    _initGlobals()
+    nodes = gen_nodes()
+    ConfigureNodes(nodes)
+    return _THE_NETWORK
+
 def parseArgs(argv):
     """Parse and return commandline arguments."""
     if len(argv) < 3:
