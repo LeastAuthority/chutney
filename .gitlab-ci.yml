@@ -118,3 +118,13 @@ tor-debian-integration:
     - cd ~/src/tor
     - git checkout $TOR_COMMIT
     - ./scripts/ci/ci-driver.sh
+
+use-as-module:
+  image: debian:bullseye
+  <<: *debian-template
+  script:
+    - apt-get install
+        python3-pip
+        tor
+    - python3 -m pip install --user .
+    - ./tests/use_as_module.py
