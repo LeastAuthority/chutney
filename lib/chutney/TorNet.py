@@ -16,6 +16,7 @@ from pathlib import Path
 
 import errno
 import importlib
+import importlib.resources
 import os
 import platform
 import re
@@ -2177,7 +2178,7 @@ class TorEnviron(chutney.Templating.Environ):
         return self['nick']  # OMG TEH SECURE!
 
     def _get_torrc_template_path(self, my):
-        return [Path(my['chutney_dir'], 'torrc_templates')]
+        return [importlib.resources.files("chutney").joinpath('data', 'torrc_templates')]
 
     def _get_lockfile(self, my):
         return Path(self['dir'], 'lock')
