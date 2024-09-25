@@ -105,7 +105,7 @@ variables:
     - if [ "$TRACING" = yes ]; then apt install liblttng-ust-dev; fi
 
 tor-debian-integration:
-  image: debian:bullseye
+  image: amd64/debian:bullseye
   <<: *tor-debian-template
   variables:
     CHECK: "no"
@@ -124,10 +124,11 @@ tor-debian-integration:
 # replicating tor's CI.
 .debian-template: &debian-template
   <<: *x86-64-template
+  image: amd64/debian:bullseye
   variables:
     DEBIAN_FRONTEND: "noninteractive"
   cache:
-    key: debian-template-apt
+    key: amd64-debian-template-apt
     paths:
       - apt-cache
   before_script:
@@ -139,7 +140,6 @@ tor-debian-integration:
     - python3 -m pip install --user .
 
 run-examples:
-  image: debian:bullseye
   <<: *debian-template
   script:
     - ./examples/use_as_module.py
