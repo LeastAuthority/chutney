@@ -2,9 +2,6 @@
 requires = [
   # installation backend
   "setuptools>=61.0",
-  # plugin to include all version controlled files
-  # under the module directory (./lib) as resources.
-  "setuptools_scm>=8"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -31,3 +28,8 @@ Issues = "https://gitlab.torproject.org/tpo/core/chutney/-/issues/"
 [tool.setuptools]
 # module root is under `lib` (instead of the default of `src`)
 package-dir = {"" = "lib"}
+
+[tool.setuptools.packages.find]
+# root of where to look for resource files.
+# Files must also be specified in MANIFEST.in to actually be included.
+where = ["lib"]
