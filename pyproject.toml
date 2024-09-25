@@ -1,5 +1,11 @@
 [build-system]
-requires = ["setuptools>=61.0", "setuptools_scm>=8"]
+requires = [
+  # installation backend
+  "setuptools>=61.0",
+  # plugin to include all version controlled files
+  # under the module directory (./lib) as resources.
+  "setuptools_scm>=8"
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -23,4 +29,5 @@ Homepage = "https://gitlab.torproject.org/tpo/core/chutney"
 Issues = "https://gitlab.torproject.org/tpo/core/chutney/-/issues/"
 
 [tool.setuptools]
+# module root is under `lib` (instead of the default of `src`)
 package-dir = {"" = "lib"}
