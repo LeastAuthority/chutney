@@ -55,7 +55,8 @@ variables:
       apt-get upgrade -qy
 
 # This template sets us up for Debian system in particular.
-.debian-template: &debian-template
+# This is copied from tor's CI and should stay closely aligned with it.
+.tor-debian-template: &tor-debian-template
   <<: *artifacts-template
   <<: *x86-64-template
   variables:
@@ -105,7 +106,7 @@ variables:
 
 tor-debian-integration:
   image: debian:bullseye
-  <<: *debian-template
+  <<: *tor-debian-template
   variables:
     CHECK: "no"
     CHUTNEY: "yes"
@@ -119,12 +120,26 @@ tor-debian-integration:
     - git checkout $TOR_COMMIT
     - ./scripts/ci/ci-driver.sh
 
+# A more stripped-down debian template for tests that aren't specifically
+# replicating tor's CI.
+.debian-template: &debian-template
+  <<: *x86-64-template
+  variables:
+    DEBIAN_FRONTEND: "noninteractive"
+  cache:
+    key: debian-template-apt
+    paths:
+      - apt-cache
+  before_script:
+    - *apt-template
+    - apt-get install
+        python3
+        python3-pip
+        tor
+    - python3 -m pip install --user .
+
 run-examples:
   image: debian:bullseye
   <<: *debian-template
   script:
-    - apt-get install
-        python3-pip
-        tor
-    - python3 -m pip install --user .
     - ./examples/use_as_module.py
