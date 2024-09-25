@@ -55,7 +55,8 @@ variables:
       apt-get upgrade -qy
 
 # This template sets us up for Debian system in particular.
-.debian-template: &debian-template
+# This is copied from tor's CI and should stay closely aligned with it.
+.tor-debian-template: &tor-debian-template
   <<: *artifacts-template
   <<: *x86-64-template
   variables:
@@ -104,8 +105,8 @@ variables:
     - if [ "$TRACING" = yes ]; then apt install liblttng-ust-dev; fi
 
 tor-debian-integration:
-  image: debian:bullseye
-  <<: *debian-template
+  image: amd64/debian:bullseye
+  <<: *tor-debian-template
   variables:
     CHECK: "no"
     CHUTNEY: "yes"
@@ -118,3 +119,27 @@ tor-debian-integration:
     - cd ~/src/tor
     - git checkout $TOR_COMMIT
     - ./scripts/ci/ci-driver.sh
+
+# A more stripped-down debian template for tests that aren't specifically
+# replicating tor's CI.
+.debian-template: &debian-template
+  <<: *x86-64-template
+  image: amd64/debian:bullseye
+  variables:
+    DEBIAN_FRONTEND: "noninteractive"
+  cache:
+    key: amd64-debian-template-apt
+    paths:
+      - apt-cache
+  before_script:
+    - *apt-template
+    - apt-get install
+        python3
+        python3-pip
+        tor
+    - python3 -m pip install --user .
+
+run-examples:
+  <<: *debian-template
+  script:
+    - ./examples/use_as_module.py

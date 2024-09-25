@@ -1,0 +1,6 @@
+# This file is used by setuptools to specify
+# which files to include as resources when installing the package.
+# <https://setuptools.pypa.io/en/latest/userguide/miscellaneous.html#using-manifest-in>
+
+# Include all files in this directory.
+graft lib/chutney/data

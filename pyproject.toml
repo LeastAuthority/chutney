@@ -1,0 +1,35 @@
+[build-system]
+requires = [
+  # installation backend
+  "setuptools>=61.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chutney"
+version = "0.0.1"
+authors = [
+  { name="The Tor Project" },
+]
+description = "A tool for building local testing Tor networks"
+readme = "README.md"
+# Oldest tested version (default on debian bullseye).
+# May or may not work on older versions.
+requires-python = ">=3.9.2"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://gitlab.torproject.org/tpo/core/chutney"
+Issues = "https://gitlab.torproject.org/tpo/core/chutney/-/issues/"
+
+[tool.setuptools]
+# module root is under `lib` (instead of the default of `src`)
+package-dir = {"" = "lib"}
+
+[tool.setuptools.packages.find]
+# root of where to look for resource files.
+# Files must also be specified in MANIFEST.in to actually be included.
+where = ["lib"]
