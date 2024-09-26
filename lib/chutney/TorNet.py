@@ -415,6 +415,7 @@ class Node(object):
     # _env
     # _builder
     # _controller
+    # _network
 
     ########
     # Users are expected to call these:
@@ -430,6 +431,7 @@ class Node(object):
         self._env = self._createEnviron(parent, kwargs)
         self._builder = None
         self._controller = None
+        self._network = None
 
     def getN(self, N):
         """Generate 'N' nodes of the same configuration as this node.
@@ -466,7 +468,7 @@ class Node(object):
            to start it, stop it, see if it's running, etc.)
         """
         if self._controller is None:
-            self._controller = LocalNodeController(self._env)
+            self._controller = LocalNodeController(self._network, self._env)
         return self._controller
 
     def setNodenum(self, num):
@@ -896,8 +898,9 @@ class LocalNodeBuilder(NodeBuilder):
 
 class LocalNodeController(NodeController):
 
-    def __init__(self, env):
+    def __init__(self, network, env):
         NodeController.__init__(self, env)
+        self._network = network
         self._env = env
         self.most_recent_oniondesc_status = None
         self.most_recent_bootstrap_status = None
@@ -1393,7 +1396,7 @@ class LocalNodeController(NodeController):
 
     def getDocTypeDisplayLimit(self):
         """Return the expected number of document types in this network."""
-        if _THE_NETWORK._dfltEnv['hasbridgeauth']:
+        if self._network._dfltEnv['hasbridgeauth']:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
         else:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
@@ -1475,11 +1478,11 @@ class LocalNodeController(NodeController):
         if not consensus_member and not bridge_member:
             return None
 
-        launch_phase = _THE_NETWORK._dfltEnv['launch_phase']
+        launch_phase = self._network._dfltEnv['launch_phase']
 
         # at this point, consensus_member == not bridge_member
         directory_files = dict()
-        for node in _THE_NETWORK._nodes:
+        for node in self._network._nodes:
             if node._env['launch_phase'] > launch_phase:
                 continue
             nick = node._env['nick']
@@ -2267,6 +2270,7 @@ class Network(object):
         n.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(n)
+        n._network = self
         if n._env['bridgeauthority']:
             self._dfltEnv['hasbridgeauth'] = True
 
@@ -2743,18 +2747,6 @@ bridges = '''
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
 
-_THE_NETWORK = Network(_BASE_ENVIRON)
-
-def Require(feature):
-    network = _THE_NETWORK
-    network._addRequirement(feature)
-
-def ConfigureNodes(nodelist):
-    network = _THE_NETWORK
-
-    for n in nodelist:
-        network._addNode(n)
-
 def getTests():
     chutney_path = get_absolute_chutney_path()
     chutney_tests_path = chutney_path / "scripts" / "chutney_tests"
@@ -2763,10 +2755,10 @@ def getTests():
             if not test.name.startswith("_")]
 
 
-def usage(network):
+def usage():
     return "\n".join(["Usage: chutney {command/test} {networkfile}",
                       "Known commands are: %s" % (
-                          " ".join(x for x in dir(network)
+                          " ".join(x for x in dir(Network)
                                    if not x.startswith("_"))),
                       "Known tests are: %s" % (
                           " ".join(getTests()))
@@ -2775,21 +2767,28 @@ def usage(network):
 
 def exit_on_error(err_msg):
     print("Error: {0}\n".format(err_msg))
-    print(usage(_THE_NETWORK))
+    print(usage())
     sys.exit(1)
 
 
 def runConfigFile(verb, data):
-    _GLOBALS = dict(_BASE_ENVIRON=_BASE_ENVIRON,
-                    Node=Node,
+    # Wrappers used from network scripts (`data`) that manipulate
+    # an implicit network (`_THE_NETWORK`).
+    _THE_NETWORK = Network(_BASE_ENVIRON)
+    def Require(feature):
+        _THE_NETWORK._addRequirement(feature)
+    def ConfigureNodes(nodelist):
+        for n in nodelist:
+            _THE_NETWORK._addNode(n)
+
+    _GLOBALS = dict(Node=Node,
                     Require=Require,
                     ConfigureNodes=ConfigureNodes,
-                    _THE_NETWORK=_THE_NETWORK,
                     torrc_option_warn_count=0,
                     TORRC_OPTION_WARN_LIMIT=10)
 
     exec(data, _GLOBALS)
-    network = _GLOBALS['_THE_NETWORK']
+    network = _THE_NETWORK
 
     # let's check if the verb is a valid test and run it
     if verb in getTests():
@@ -2811,9 +2810,11 @@ def runConfigFile(verb, data):
 
 def createNetwork(gen_nodes):
     """Use `gen_nodes` to generate a list of nodes and return the corresponding Network."""
+    network = Network(_BASE_ENVIRON)
     nodes = gen_nodes()
-    ConfigureNodes(nodes)
-    return _THE_NETWORK
+    for node in nodes:
+        network._addNode(node)
+    return network
 
 def parseArgs(argv):
     """Parse and return commandline arguments."""
