@@ -399,7 +399,7 @@ environment variable.
 
 ## Test scripts
 
-The test scripts are stored in the `scripts/chutney_tests` directory. These
+The test scripts are stored in the `lib/chutney/network_tests` directory. These
 Python files must define a `run_test(network)` function. Files starting with
 an underscore ("_") are ignored.
 

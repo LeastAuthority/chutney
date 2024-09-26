@@ -3,7 +3,7 @@
 set -o errexit
 set -o nounset
 
-PYTHONPATH="$(dirname "${0}")/lib:$(dirname "${0}")/scripts:${PYTHONPATH-}"
+PYTHONPATH="$(dirname "${0}")/lib:${PYTHONPATH-}"
 export PYTHONPATH
 # make a last-ditch effort to set CHUTNEY_PATH based on this script's location
 if ! test "${CHUTNEY_PATH+y}"

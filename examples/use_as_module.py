@@ -7,6 +7,7 @@ import os
 
 from chutney import TorNet
 from chutney.TorNet import Node, TorEnviron
+from chutney.network_tests import verify
 
 env = TorEnviron(controlling_pid=os.getpid())
 
@@ -19,4 +20,5 @@ network = TorNet.createNetwork(env, Authority.getN(3) + ExitRelay.getN(5) + Clie
 network.configure()
 network.start()
 network.wait_for_bootstrap()
+verify.run_test(network)
 network.stop()

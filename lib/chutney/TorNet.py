@@ -2738,8 +2738,7 @@ bridges = '''
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
 
 def getTests():
-    chutney_path = get_absolute_chutney_path()
-    chutney_tests_path = chutney_path / "scripts" / "chutney_tests"
+    chutney_tests_path = importlib.resources.files("chutney.network_tests")
 
     return [test.stem for test in chutney_tests_path.glob("*.py")
             if not test.name.startswith("_")]
@@ -2785,7 +2784,7 @@ def runConfigFile(verb, data):
 
     # let's check if the verb is a valid test and run it
     if verb in getTests():
-        test_module = importlib.import_module("chutney_tests.{}".format(verb))
+        test_module = importlib.import_module("chutney.network_tests.{}".format(verb))
         try:
             run_test = test_module.run_test
         except AttributeError as e:
