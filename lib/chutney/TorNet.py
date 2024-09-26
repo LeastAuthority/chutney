@@ -2808,10 +2808,9 @@ def runConfigFile(verb, data):
 
     return getattr(network, verb)()
 
-def createNetwork(gen_nodes):
-    """Use `gen_nodes` to generate a list of nodes and return the corresponding Network."""
-    network = Network(_BASE_ENVIRON)
-    nodes = gen_nodes()
+def createNetwork(env, nodes):
+    """Create a Network containing `nodes`"""
+    network = Network(env)
     for node in nodes:
         network._addNode(node)
     return network
