@@ -2816,12 +2816,17 @@ def parseArgs(argv):
     return {'network_cfg': argv[2], 'action': argv[1]}
 
 def main(action, network_cfg):
+    """A slightly more hermetic main could be called reasonably from python"""
     f = open(network_cfg)
     result = runConfigFile(action, f.read())
     if result is False:
         return -1
     return 0
 
-if __name__ == '__main__':
+def __main__():
+    """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
     kwargs = parseArgs(sys.argv)
     sys.exit(main(**kwargs))
+
+if __name__ == '__main__':
+    __main__()
