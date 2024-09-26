@@ -19,6 +19,6 @@ network = TorNet.createNetwork(env, Authority.getN(3) + ExitRelay.getN(5) + Clie
 
 network.configure()
 network.start()
-network.wait_for_bootstrap()
-verify.run_test(network)
+assert(network.wait_for_bootstrap())
+assert(verify.run_test(network))
 network.stop()
