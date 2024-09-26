@@ -420,15 +420,14 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, parent_env, **kwargs):
         """Create a new Node.
 
            Initial fields in this Node's environment are set from 'kwargs'.
 
            Any fields not found there will be searched for in 'parent'.
         """
-        self._parent = parent
-        self._env = self._createEnviron(parent, kwargs)
+        self._env = TorEnviron(parent_env, **kwargs)
         self._builder = None
         self._controller = None
         self._network = None
@@ -436,13 +435,13 @@ class Node(object):
     def getN(self, N):
         """Generate 'N' nodes of the same configuration as this node.
         """
-        return [Node(self) for _ in range(N)]
+        return [Node(self._env) for _ in range(N)]
 
     def specialize(self, **kwargs):
         """Return a new Node based on this node's value as its defaults,
            but with the values from 'kwargs' (if any) overriding them.
         """
-        return Node(parent=self, **kwargs)
+        return Node(self._env, **kwargs)
 
     def set_runtime(self, key, fn):
         """Specify a runtime function that gets invoked to find the
@@ -487,15 +486,8 @@ class Node(object):
         if parent:
             parentenv = parent._env
         else:
-            parentenv = self._getDefaultEnviron()
+            parentenv = self._network._dfltEnv
         return TorEnviron(parentenv, **argdict)
-
-    def _getDefaultEnviron(self):
-        """Return the default environment.  Any variables that we can't find
-           set for any particular node, we look for here.
-        """
-        return _BASE_ENVIRON
-
 
 class _NodeCommon(object):
 
@@ -2122,7 +2114,7 @@ class TorEnviron(chutney.Templating.Environ):
           enable_controlsocket: enable unix control socket?
     """
 
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, parent=chutney.Templating.Environ(parent=None, **DEFAULTS), **kwargs):
         chutney.Templating.Environ.__init__(self, parent=parent, **kwargs)
 
     def _get_orport(self, my):
@@ -2248,8 +2240,6 @@ class TorEnviron(chutney.Templating.Environ):
                   .format(dns_conf, TorEnviron.OFFLINE_DNS_RESOLV_CONF))
             dns_conf = TorEnviron.OFFLINE_DNS_RESOLV_CONF
         return "ServerDNSResolvConfFile %s" % (dns_conf)
-
-_BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
 
 KNOWN_REQUIREMENTS = {
     "IPV6": chutney.Host.is_ipv6_supported
@@ -2774,14 +2764,17 @@ def exit_on_error(err_msg):
 def runConfigFile(verb, data):
     # Wrappers used from network scripts (`data`) that manipulate
     # an implicit network (`_THE_NETWORK`).
+    _BASE_ENVIRON = TorEnviron()
     _THE_NETWORK = Network(_BASE_ENVIRON)
     def Require(feature):
         _THE_NETWORK._addRequirement(feature)
     def ConfigureNodes(nodelist):
         for n in nodelist:
             _THE_NETWORK._addNode(n)
-
-    _GLOBALS = dict(Node=Node,
+    def NodeWrapper(parent=None, **kwargs):
+        parent_env = parent._env if parent else _BASE_ENVIRON
+        return Node(parent_env, **kwargs)
+    _GLOBALS = dict(Node=NodeWrapper,
                     Require=Require,
                     ConfigureNodes=ConfigureNodes,
                     torrc_option_warn_count=0,
