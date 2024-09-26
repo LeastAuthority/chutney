@@ -2267,6 +2267,8 @@ class Network(object):
         n.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(n)
+        if n._env['bridgeauthority']:
+            self._dfltEnv['hasbridgeauth'] = True
 
     def _addRequirement(self, requirement):
         requirement = requirement.upper()
@@ -2752,8 +2754,6 @@ def ConfigureNodes(nodelist):
 
     for n in nodelist:
         network._addNode(n)
-        if n._env['bridgeauthority']:
-            network._dfltEnv['hasbridgeauth'] = True
 
 def getTests():
     chutney_path = get_absolute_chutney_path()
