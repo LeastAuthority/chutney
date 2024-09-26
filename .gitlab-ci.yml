@@ -136,6 +136,7 @@ tor-debian-integration:
     - apt-get install
         python3
         python3-pip
+        shellcheck
         tor
 
 run-examples:
@@ -148,3 +149,8 @@ unit-tests:
   <<: *debian-template
   script:
   - ./tests/unit-tests.sh
+
+shellcheck:
+  <<: *debian-template
+  script:
+  - ./tests/shellcheck-tests.sh
