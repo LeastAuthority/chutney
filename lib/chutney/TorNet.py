@@ -35,10 +35,8 @@ import chutney.Util
 # Keep in sync with torrc_templates/authority.i V3AuthVotingInterval
 V3_AUTH_VOTING_INTERVAL = 20.0
 
-_BASE_ENVIRON = None
 _TOR_VERSIONS = None
 _TORRC_OPTIONS = None
-_THE_NETWORK = None
 
 TORRC_OPTION_WARN_LIMIT = 10
 torrc_option_warn_count =  0
@@ -2248,6 +2246,8 @@ class TorEnviron(chutney.Templating.Environ):
             dns_conf = TorEnviron.OFFLINE_DNS_RESOLV_CONF
         return "ServerDNSResolvConfFile %s" % (dns_conf)
 
+_BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
+
 KNOWN_REQUIREMENTS = {
     "IPV6": chutney.Host.is_ipv6_supported
 }
@@ -2741,6 +2741,8 @@ bridges = '''
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
 
+_THE_NETWORK = Network(_BASE_ENVIRON)
+
 def Require(feature):
     network = _THE_NETWORK
     network._addRequirement(feature)
@@ -2807,16 +2809,8 @@ def runConfigFile(verb, data):
 
     return getattr(network, verb)()
 
-def _initGlobals():
-    """One-time initialization of globals"""
-    global _BASE_ENVIRON
-    global _THE_NETWORK
-    _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
-    _THE_NETWORK = Network(_BASE_ENVIRON)
-
 def createNetwork(gen_nodes):
     """Use `gen_nodes` to generate a list of nodes and return the corresponding Network."""
-    _initGlobals()
     nodes = gen_nodes()
     ConfigureNodes(nodes)
     return _THE_NETWORK
@@ -2830,8 +2824,6 @@ def parseArgs(argv):
     return {'network_cfg': argv[2], 'action': argv[1]}
 
 def main(action, network_cfg):
-    _initGlobals()
-
     f = open(network_cfg)
     result = runConfigFile(action, f.read())
     if result is False:
