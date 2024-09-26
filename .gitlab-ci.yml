@@ -127,6 +127,10 @@ tor-debian-integration:
   image: amd64/debian:bullseye
   variables:
     DEBIAN_FRONTEND: "noninteractive"
+    # Number of seconds to allow for bootstrap, overriding the default of 60.
+    # 120 is what e.g. bootstrap-network.sh uses.
+    # Give even a bit more than that since we're not using retries (as test-network.sh does)
+    CHUTNEY_START_TIME: 300
   cache:
     key: $CI_JOB_NAME_SLUG-apt
     paths:

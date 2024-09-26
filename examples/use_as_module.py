@@ -15,10 +15,15 @@ Authority = Node(env, tag="a", authority=1, relay=1, torrc="authority.tmpl")
 ExitRelay = Node(env, tag="r", relay=1, exit=1, torrc="relay.tmpl")
 Client = Node(env, tag="c", client=1, torrc="client.tmpl")
 
-network = TorNet.createNetwork(env, Authority.getN(3) + ExitRelay.getN(5) + Client.getN(2))
+network = TorNet.createNetwork(env, Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
 network.start()
+
+# This has a tendency to timeout with the default of 60s.
+# This timeout can be increased through the CHUTNEY_START_TIME env variable.
+# TODO: Make this directly overridable from python.
 assert(network.wait_for_bootstrap())
+
 assert(verify.run_test(network))
 network.stop()
