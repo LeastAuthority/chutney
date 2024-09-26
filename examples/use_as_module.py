@@ -8,10 +8,7 @@ import os
 from chutney import TorNet
 from chutney.TorNet import Node
 
-# Configure tor processes to abort if this script dies prematurely.
-# TODO: Add a way to set this and other such global config through some way
-# other than os env variables.
-os.environ["CHUTNEY_CONTROLLING_PID"] = str(os.getpid())
+TorNet.DEFAULTS['controlling_pid'] = os.getpid()
 
 def makeNodes():
     Authority = Node(tag="a", authority=1, relay=1, torrc="authority.tmpl")
