@@ -398,6 +398,7 @@ class Template(object):
                 raise ValueError("Too many iterations in expanding template!")
 
 if __name__ == '__main__':
+    import importlib.resources
     import sys
     if len(sys.argv) == 1:
         import doctest
@@ -405,6 +406,7 @@ if __name__ == '__main__':
         print("done")
     else:
         for fn in sys.argv[1:]:
-            with open(fn, 'r') as f:
+            path = importlib.resources.files("chutney").joinpath('data', 'torrc_templates', fn)
+            with open(path, 'r') as f:
                 t = Template(f.read())
                 print(fn, t.freevars())
