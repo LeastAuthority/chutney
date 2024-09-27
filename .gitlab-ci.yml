@@ -137,6 +137,11 @@ tor-debian-integration:
       - apt-cache
   before_script:
     - *apt-template
+  artifacts:
+    expire_in: 1 week
+    when: on_failure
+    paths:
+      - net
 
 run-examples:
   <<: *debian-template
