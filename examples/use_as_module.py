@@ -18,7 +18,7 @@ Client = Node(env, tag="c", client=1, torrc="client.tmpl")
 network = TorNet.createNetwork(env, Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
-network.start()
+assert(network.start())
 
 # This has a tendency to timeout with the default of 60s.
 # This timeout can be increased through the CHUTNEY_START_TIME env variable.
