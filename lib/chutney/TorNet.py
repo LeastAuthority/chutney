@@ -2270,7 +2270,7 @@ class Network(object):
             raise RuntimeError(("Unrecognized requirement %r"%requirement))
         self._requirements.append(requirement)
 
-    def move_aside_nodes_dir(self):
+    def move_aside_nodes_dir(self) -> None:
         """Move aside the nodes directory, if it exists and is not a link.
         Used for backwards-compatibility only: nodes is created as a link to
         a new directory with a unique name in the current implementation.
@@ -2290,7 +2290,7 @@ class Network(object):
         print("NOTE: renaming '%s' to '%s'" % (nodesdir, newdir))
         nodesdir.rename(newdir)
 
-    def create_new_nodes_dir(self):
+    def create_new_nodes_dir(self) -> None:
         """Create a new directory with a unique name, and symlink it to nodes
         """
         # for backwards compatibility, move aside the old nodes directory
@@ -2332,9 +2332,9 @@ class Network(object):
         for n in self._nodes:
             n.getBuilder().checkConfig(self)
 
-    def supported(self):
+    def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
-           and host information we have.
+           and host information we have, and prints the result.
         """
         missing_any = False
         for r in self._requirements:
@@ -2348,7 +2348,7 @@ class Network(object):
         if missing_any:
             sys.exit(1)
 
-    def configure(self):
+    def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
            started.
         """
@@ -2423,7 +2423,7 @@ bridges = '''
         for b in builders:
             b.postConfig(network)
 
-    def status(self):
+    def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
            return True if all nodes are running.
         """
@@ -2435,14 +2435,15 @@ bridges = '''
         print("%d/%d nodes are running" % (n_ok, len(self._nodes)))
         return n_ok == len(statuses)
 
-    def restart(self):
+    def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
            network's nodes.
         """
         self.stop()
         self.start()
 
-    def start(self):
+    # TODO: raise an exception on errors.
+    def start(self) -> bool:
         """Start all our network's nodes and return True on no errors."""
         # format polling correctly - avoid printing a newline
         sys.stdout.write("Starting nodes")
@@ -2456,7 +2457,7 @@ bridges = '''
         print("")
         return rv
 
-    def hup(self):
+    def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
            errors.
         """
@@ -2467,7 +2468,7 @@ bridges = '''
                                controllers,
                                most_recent_desc_status,
                                elapsed=None,
-                               msg="Bootstrap in progress"):
+                               msg="Bootstrap in progress") -> None:
         nick_set = set()
         cons_auth_nick_set = set()
         elapsed_msg = ""
@@ -2531,9 +2532,10 @@ bridges = '''
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    def wait_for_bootstrap(self):
+    # TODO: raise an exception on timeout.
+    def wait_for_bootstrap(self) -> bool:
         """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap.
+           bootstrap. Returns True on success, or False on timeout.
         """
         print("Waiting for nodes to bootstrap...\n")
         start = time.time()
@@ -2667,7 +2669,7 @@ bridges = '''
     def final_cleanup(self,
                       wrote_dot,
                       any_tor_was_running,
-                      cleanup_runfiles):
+                      cleanup_runfiles) -> None:
         '''Perform final cleanup actions, based on the arguments:
              - wrote_dot: end a series of logged dots with a newline
              - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
@@ -2692,7 +2694,7 @@ bridges = '''
                 c.cleanup_lockfile()
                 c.cleanup_pidfile()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop our network's running tor nodes."""
         any_tor_was_running = False
         controllers = [n.getController() for n in self._nodes]
@@ -2727,7 +2729,7 @@ bridges = '''
                            any_tor_was_running,
                            True)
 
-    def print_phases(self):
+    def print_phases(self) -> None:
         """Print the total number of phases in which the network is
            initialized, configured, or bootstrapped."""
         def max_phase(key):
