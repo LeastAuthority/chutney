@@ -44,6 +44,9 @@ torrc_option_warn_count =  0
 class MissingBinaryException(Exception):
     pass
 
+class TimeoutException(Exception):
+    pass
+
 def getenv_type(env_var, default, type_, type_name=None):
     """
        Return the value of the environment variable 'envar' as type_,
@@ -2544,10 +2547,9 @@ bridges = '''
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    # TODO: raise an exception on timeout.
-    def wait_for_bootstrap(self) -> bool:
-        """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap. Returns True on success, or False on timeout.
+    def wait_for_bootstrap(self) -> None:
+        """
+        Wait for the network to bootstrap. Raises `TimeoutException` on timeout.
         """
         print("Waiting for nodes to bootstrap...\n")
         start = time.time()
@@ -2623,7 +2625,7 @@ bridges = '''
                     time.sleep(sleep_time)
                     now = time.time()
                     elapsed = now - start
-                return True
+                return
             if now >= limit:
                 break
             if now >= next_print_status:
@@ -2638,7 +2640,7 @@ bridges = '''
                     print("start: {} limit: {}".format(start, limit))
                     print("next_print_status: {} now: {}"
                           .format(next_print_status, time.time()))
-                    return False
+                    raise TimeoutException()
                 else:
                     self.print_bootstrap_status(controllers,
                                                 most_recent_desc_status,
@@ -2663,13 +2665,13 @@ bridges = '''
                 print("start: {} limit: {}".format(start, limit))
                 print("next_print_status: {} now: {}"
                       .format(next_print_status, time.time()))
-                return False
+                raise TimeoutException()
 
         self.print_bootstrap_status(controllers,
                                     most_recent_desc_status,
                                     elapsed=elapsed,
                                     msg="Bootstrap failed")
-        return False
+        raise TimeoutException()
 
     # Keep in sync with ShutdownWaitLength in common.i
     SHUTDOWN_WAIT_LENGTH = 2
@@ -2811,11 +2813,15 @@ class CLICommands:
         """
         return self._net.hup()
 
-    def wait_for_bootstrap(self) -> bool:
+    def wait_for_bootstrap(self) -> None:
         """Invoked from tools/test-network.sh to wait for the network to
            bootstrap. Returns True on success, or False on timeout.
         """
-        return self._net.wait_for_bootstrap()
+        try:
+            self._net.wait_for_bootstrap()
+            return True
+        except TimeoutException:
+            return False
 
     def stop(self) -> None:
         """Stop our network's running tor nodes."""

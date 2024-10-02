@@ -24,7 +24,7 @@ assert(network.start())
 # This has a tendency to timeout with the default of 60s.
 # This timeout can be increased through the CHUTNEY_START_TIME env variable.
 # TODO: Make this directly overridable from python.
-assert(network.wait_for_bootstrap())
+network.wait_for_bootstrap()
 
 assert(verify.run_test(network))
 network.stop()
