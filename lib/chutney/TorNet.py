@@ -2741,15 +2741,85 @@ bridges = '''
                            any_tor_was_running,
                            True)
 
+class CLICommands:
+    """
+    Methods invokable from CLI.
+
+    All methods that don't start with `_` are invocable from the command-line.
+    """
+    def __init__(self, network: Network):
+        self._net = network
+
     def print_phases(self) -> None:
         """Print the total number of phases in which the network is
            initialized, configured, or bootstrapped."""
         def max_phase(key):
-            return max(int(n._env[key]) for n in self._nodes)
+            return max(int(n._env[key]) for n in self._net._nodes)
         cfg_max = max_phase("config_phase")
         launch_max = max_phase("launch_phase")
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
+
+    def final_cleanup(self,
+                      wrote_dot,
+                      any_tor_was_running,
+                      cleanup_runfiles) -> None:
+        '''Perform final cleanup actions, based on the arguments:
+             - wrote_dot: end a series of logged dots with a newline
+             - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
+             - cleanup_runfiles: delete old lockfiles from crashed tors
+                                 rename old pid files from stopped tors
+        '''
+        self._net.final_cleanup(wrote_dot, any_tor_was_running, cleanup_runfiles)
+
+    def create_new_nodes_dir(self) -> None:
+        """Create a new directory with a unique name, and symlink it to nodes
+        """
+        self._net.create_new_nodes_dir()
+
+    def supported(self) -> None:
+        """Check whether this network is supported by the set of binaries
+           and host information we have, and prints the result.
+        """
+        self._net.supported()
+
+    def configure(self) -> None:
+        """Invoked from command line: Configure and prepare the network to be
+           started.
+        """
+        self._net.configure()
+
+    def status(self) -> bool:
+        """Print how many nodes are running and how many are expected, and
+           return True if all nodes are running.
+        """
+        return self._net.status()
+
+    def restart(self) -> None:
+        """Invoked from command line: Stop and subsequently start our
+           network's nodes.
+        """
+        self._net.restart()
+
+    def start(self) -> None:
+        """Start all our network's nodes and return True on no errors."""
+        return self._net.start()
+
+    def hup(self) -> bool:
+        """Send SIGHUP to all our network's running nodes and return True on no
+           errors.
+        """
+        return self._net.hup()
+
+    def wait_for_bootstrap(self) -> bool:
+        """Invoked from tools/test-network.sh to wait for the network to
+           bootstrap. Returns True on success, or False on timeout.
+        """
+        return self._net.wait_for_bootstrap()
+
+    def stop(self) -> None:
+        """Stop our network's running tor nodes."""
+        self._net.stop()
 
 def getTests():
     chutney_tests_path = importlib.resources.files("chutney.network_tests")
@@ -2761,7 +2831,7 @@ def getTests():
 def usage():
     return "\n".join(["Usage: chutney {command/test} {networkfile}",
                       "Known commands are: %s" % (
-                          " ".join(x for x in dir(Network)
+                          " ".join(x for x in dir(CLICommands)
                                    if not x.startswith("_"))),
                       "Known tests are: %s" % (
                           " ".join(getTests()))
@@ -2805,13 +2875,15 @@ def runConfigFile(verb, data):
             return False
         return run_test(network)
 
+    cli_cmds = CLICommands(network)
+
     # tell the user we don't know what their verb meant
-    if not hasattr(network, verb):
+    if not hasattr(cli_cmds, verb):
         print(usage(network))
         print("Error: I don't know how to %s." % verb)
         return
 
-    return getattr(network, verb)()
+    return getattr(cli_cmds, verb)()
 
 def parseArgs(argv):
     """Parse and return commandline arguments."""
