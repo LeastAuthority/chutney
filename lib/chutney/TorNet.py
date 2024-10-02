@@ -13,6 +13,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from pathlib import Path
+from typing import List
 
 import errno
 import importlib
@@ -54,6 +55,23 @@ class ChutneyMissingBinaryError(ChutneyError):
 
 class ChutneyTimeoutError(ChutneyError):
     pass
+
+class ChutneyErrorGroup(ChutneyError):
+    """A list of errors.
+
+    For use in methods like `start` where we want to continue after the first error,
+    but collect all of the errors.
+
+    Analogous to python 3.11's `ExceptionGroup`
+    """
+
+    def __init__(self, description: str, errs: List[ChutneyError]):
+        self._description = description
+        self._errs = errs
+        ChutneyError.__init__(self, description, errs)
+
+    def __str__(self) -> str:
+        return self._description + ' [\n  ' + '\n  '.join([str(e) for e in self._errs]) + '\n]\n'
 
 def getenv_type(env_var, default, type_, type_name=None):
     """
@@ -563,9 +581,8 @@ class NodeController(_NodeCommon):
            node is running, false otherwise.
         """
 
-    def start(self):
-        """Try to start this node; return True if we succeeded or it was
-           already running, False if we failed."""
+    def start(self) -> None:
+        """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
         raise NotImplementedError()
 
     def stop(self, sig=signal.SIGINT):
@@ -1168,13 +1185,12 @@ class LocalNodeController(NodeController):
             print("{:12} is not running".format(nick))
             return False
 
-    def start(self):
-        """Try to start this node; return True if we succeeded or it was
-           already running, False if we failed."""
+    def start(self) -> None:
+        """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
 
         if self.isRunning():
             print("{:12} is already running".format(self._env['nick']))
-            return True
+            return
         tor_path = self._env['tor']
         torrc = self._getTorrcFname()
         cmdline = [
@@ -1183,12 +1199,19 @@ class LocalNodeController(NodeController):
             ]
         p = launch_process(cmdline)
         if self.waitOnLaunch():
-            # this requires that RunAsDaemon is set
+            # this requires that RunAsDaemon is set.
             (stdouterr, empty_stderr) = p.communicate()
             debug(stdouterr)
             assert empty_stderr is None
+            # We expect the parent process to have exited with code 0.
+            if p.returncode != 0:
+                raise ChutneyError(
+                    f"Couldn't launch {self._env['nick']:12}"
+                    + f" command '{' '.join(cmdline)}': "
+                    + f" exit {p.returncode},"
+                    + f" output '{stdouterr}'")
         else:
-            # this does not require RunAsDaemon to be set, but is slower.
+            # this requires RunAsDaemon to *not* be set, and is slower.
             #
             # poll() only catches failures before the call itself
             # so let's sleep a little first
@@ -1197,27 +1220,16 @@ class LocalNodeController(NodeController):
             #
             # avoid writing a newline or space when polling
             # so output comes out neatly
-            sys.stdout.write('.')
-            sys.stdout.flush()
+            print('.', end='', flush=True)
             time.sleep(self._env['poll_launch_time'])
             p.poll()
-        if p.returncode is not None and p.returncode != 0:
-            if self._env['poll_launch_time'] is None:
-                print(("Couldn't launch {:12} command '{}': " +
-                       "exit {}, output '{}'")
-                      .format(self._env['nick'],
-                              " ".join(cmdline),
-                              p.returncode,
-                              stdouterr))
-            else:
-                print(("Couldn't poll {:12} command '{}' " +
-                       "after waiting {} seconds for launch: " +
-                       "exit {}").format(self._env['nick'],
-                                         " ".join(cmdline),
-                                         self._env['poll_launch_time'],
-                                         p.returncode))
-            return False
-        return True
+            if p.returncode is not None:
+                # Process unexpectedly exited
+                raise ChutneyError(
+                    f"'{self._env['nick']:12}' unexpectedly exited with code {p.returncode}."
+                    + f" command '{' '.join(cmdline)}'"
+                    + f" after waiting {self._env['poll_launch_time']} seconds for launch")
+
 
     def stop(self, sig=signal.SIGINT):
         """Try to stop this node by sending it the signal 'sig'."""
@@ -2465,20 +2477,24 @@ bridges = '''
         self.stop()
         self.start()
 
-    # TODO: raise an exception on errors.
-    def start(self) -> bool:
-        """Start all our network's nodes and return True on no errors."""
+    def start(self) -> None:
+        """Start all our network's nodes. Raises an `ChutneyErrorGroup` on errors"""
         # format polling correctly - avoid printing a newline
-        sys.stdout.write("Starting nodes")
-        sys.stdout.flush()
-        rv = all([n.getController().start() for n in self._nodes
-                  if n._env['launch_phase'] ==
-                  self._dfltEnv['CUR_LAUNCH_PHASE']])
+        print("Starting nodes", end="")
+        errs = []
+        for n in self._nodes:
+            if n._env['launch_phase'] != self._dfltEnv['CUR_LAUNCH_PHASE']:
+                continue
+            try:
+                n.getController().start()
+            except ChutneyError as e:
+                errs.append(e)
+        if len(errs) > 0:
+            raise ChutneyErrorGroup("Some nodes couldn't start", errs)
         # now print a newline unconditionally - this stops poll()ing
         # output from being squashed together, at the cost of a blank
         # line in wait()ing output
         print("")
-        return rv
 
     def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
