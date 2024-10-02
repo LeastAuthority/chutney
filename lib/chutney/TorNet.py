@@ -260,7 +260,7 @@ def run_tor(cmdline, exit_on_missing=True):
        Otherwise, raise a MissingBinaryException.
     """
     if not debug_flag:
-        cmdline.append("--quiet")
+        cmdline.append("--hush")
     try:
         stdouterr = subprocess.check_output(cmdline,
                                             stderr=subprocess.STDOUT,
@@ -297,7 +297,7 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
     """
     if tor_name == "tor":
         if not debug_flag:
-            cmdline.append("--quiet")
+            cmdline.append("--hush")
     elif tor_name == "tor-gencert":
         if debug_flag:
             cmdline.append("-v")
@@ -342,7 +342,7 @@ def run_tor_gencert(cmdline, passphrase):
 def tor_exists(tor):
     """Return true iff this tor binary exists."""
     try:
-        run_tor([tor, "--quiet", "--version"], exit_on_missing=False)
+        run_tor([tor, "--hush", "--version"], exit_on_missing=False)
         return True
     except ChutneyMissingBinaryError:
         return False
@@ -407,7 +407,7 @@ def get_tor_modules(tor):
     cmdline = [
         tor,
         "--list-modules",
-        "--quiet"
+        "--hush"
         ]
     try:
         mods = run_tor(cmdline)
