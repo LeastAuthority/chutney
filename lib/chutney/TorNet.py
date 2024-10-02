@@ -2848,12 +2848,6 @@ def usage():
                       ])
 
 
-def exit_on_error(err_msg):
-    print("Error: {0}\n".format(err_msg))
-    print(usage())
-    sys.exit(1)
-
-
 def runConfigFile(verb, data):
     # Wrappers used from network scripts (`data`) that manipulate
     # an implicit network (`_THE_NETWORK`).
@@ -2889,27 +2883,23 @@ def runConfigFile(verb, data):
 
     # tell the user we don't know what their verb meant
     if not hasattr(cli_cmds, verb):
-        print(usage(network))
+        print(usage())
         print("Error: I don't know how to %s." % verb)
         return
 
     return getattr(cli_cmds, verb)()
-
-def parseArgs(argv):
-    """Parse and return commandline arguments."""
-    if len(argv) < 3:
-        raise ChutneyError("Not enough arguments given.")
-    if not os.path.isfile(argv[2]):
-        raise ChutneyError("Cannot find networkfile: {0}.".format(argv[2]))
-    return {'network_cfg': argv[2], 'action': argv[1]}
 
 def main(action, network_cfg) -> None:
     """A slightly more hermetic main could be called reasonably from python
 
     Raises an exception derived from `ChutneyError` on failure.
     """
-    f = open(network_cfg)
-    result = runConfigFile(action, f.read())
+    try:
+        with open(network_cfg) as f:
+            network_cfg_contents = f.read()
+    except OSError as e:
+        raise ChutneyError(f"Couldn't read network config file {network_cfg}") from e
+    result = runConfigFile(action, network_cfg_contents)
     if result is False:
         # TODO: eliminate this case. Have all commands
         # return a more informative error instead of `False`
@@ -2917,17 +2907,19 @@ def main(action, network_cfg) -> None:
 
 def __main__():
     """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
+    import traceback
     try:
-        kwargs = parseArgs(sys.argv)
-    except ChutneyError as e:
-        print("Argument handling failed: ", e)
+        (action, network_cfg) = sys.argv[1:]
+    except ValueError:
+        print("Wrong number of arguments.")
         print(usage())
         sys.exit(-1)
     try:
-        main(action=kwargs['action'], network_cfg=kwargs['network_cfg'])
+        main(action, network_cfg)
     except ChutneyError as e:
-        print("Command failed: ", e)
+        traceback.print_exception(e, limit=0)
         sys.exit(-1)
+    sys.exit(0)
 
 if __name__ == '__main__':
     __main__()
