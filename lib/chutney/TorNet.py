@@ -420,28 +420,36 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, parent_env, **kwargs):
+    def __init__(self, network: "Network", parent: "Node" = None, **kwargs):
         """Create a new Node.
 
-           Initial fields in this Node's environment are set from 'kwargs'.
+           Initial fields in this Node's environment are set from `kwargs`.
+           Any fields not found there will be searched for in `parent`, if
+           present, or else in `network`.
 
-           Any fields not found there will be searched for in 'parent'.
+           Note that the created `Node` won't actually be instantiated in
+           `network` until e.g. `network.addNode` is called. This is to support
+           "template nodes", as used with `Node.getN`.
         """
+        self._network = network
+        if parent:
+            parent_env = parent._env
+        else:
+            parent_env = network._dfltEnv
         self._env = TorEnviron(parent_env, **kwargs)
         self._builder = None
         self._controller = None
-        self._network = None
 
     def getN(self, N):
         """Generate 'N' nodes of the same configuration as this node.
         """
-        return [Node(self._env) for _ in range(N)]
+        return [Node(network=self._network, parent=self) for _ in range(N)]
 
     def specialize(self, **kwargs):
         """Return a new Node based on this node's value as its defaults,
            but with the values from 'kwargs' (if any) overriding them.
         """
-        return Node(self._env, **kwargs)
+        return Node(network=self._network, parent=self, **kwargs)
 
     def set_runtime(self, key, fn):
         """Specify a runtime function that gets invoked to find the
@@ -475,19 +483,6 @@ class Node(object):
            in a network gets its own nodenum.
         """
         self._env['nodenum'] = num
-
-    #####
-    # These are internal:
-
-    def _createEnviron(self, parent, argdict):
-        """Return an Environ that delegates to the parent node's Environ (if
-           there is a parent node), or to the default environment.
-        """
-        if parent:
-            parentenv = parent._env
-        else:
-            parentenv = self._network._dfltEnv
-        return TorEnviron(parentenv, **argdict)
 
 class _NodeCommon(object):
 
@@ -2267,13 +2262,19 @@ class Network(object):
         self._nextnodenum = 0
         self.dir = ""
 
-    def _addNode(self, n):
-        n.setNodenum(self._nextnodenum)
+    def addNode(self, node: Node):
+        """Add `node` to the network. `node` must have been created with this `Network`."""
+        assert node._network is self, "Node was created from a different Network"
+        node.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
-        self._nodes.append(n)
-        n._network = self
-        if n._env['bridgeauthority']:
+        self._nodes.append(node)
+        if node._env['bridgeauthority']:
             self._dfltEnv['hasbridgeauth'] = True
+
+    def addNodes(self, nodes: [Node]):
+        """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
+        for node in nodes:
+            self.addNode(node)
 
     def _addRequirement(self, requirement):
         requirement = requirement.upper()
@@ -2782,10 +2783,9 @@ def runConfigFile(verb, data):
         _THE_NETWORK._addRequirement(feature)
     def ConfigureNodes(nodelist):
         for n in nodelist:
-            _THE_NETWORK._addNode(n)
+            _THE_NETWORK.addNode(n)
     def NodeWrapper(parent=None, **kwargs):
-        parent_env = parent._env if parent else _BASE_ENVIRON
-        return Node(parent_env, **kwargs)
+        return Node(_THE_NETWORK, parent, **kwargs)
     _GLOBALS = dict(Node=NodeWrapper,
                     Require=Require,
                     ConfigureNodes=ConfigureNodes,
@@ -2812,13 +2812,6 @@ def runConfigFile(verb, data):
         return
 
     return getattr(network, verb)()
-
-def createNetwork(env, nodes):
-    """Create a Network containing `nodes`"""
-    network = Network(env)
-    for node in nodes:
-        network._addNode(node)
-    return network
 
 def parseArgs(argv):
     """Parse and return commandline arguments."""

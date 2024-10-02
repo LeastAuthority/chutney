@@ -10,12 +10,13 @@ from chutney.TorNet import Node, TorEnviron
 from chutney.network_tests import verify
 
 env = TorEnviron(controlling_pid=os.getpid())
+network = TorNet.Network(env)
 
-Authority = Node(env, tag="a", authority=1, relay=1, torrc="authority.tmpl")
-ExitRelay = Node(env, tag="r", relay=1, exit=1, torrc="relay.tmpl")
-Client = Node(env, tag="c", client=1, torrc="client.tmpl")
+Authority = Node(network, tag="a", authority=1, relay=1, torrc="authority.tmpl")
+ExitRelay = Node(network, tag="r", relay=1, exit=1, torrc="relay.tmpl")
+Client = Node(network, tag="c", client=1, torrc="client.tmpl")
 
-network = TorNet.createNetwork(env, Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
+network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
 assert(network.start())
