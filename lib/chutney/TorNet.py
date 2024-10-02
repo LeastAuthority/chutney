@@ -1948,7 +1948,8 @@ class LocalNodeController(NodeController):
             # (But we shouldn't print a descriptor status for them.)
             return None
 
-DEFAULTS = {
+# Default parent for `TorEnviron`
+_DEFAULT_TOR_ENVIRON = chutney.Templating.Environ(parent=None, **{
     # authority: whether a node is an authority or bridge authority
     'authority': False,
     # bridgeauthority: whether a node is a bridge authority
@@ -2056,8 +2057,7 @@ DEFAULTS = {
 
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     'enable_controlsocket': getenv_bool('CHUTNEY_ENABLE_CONTROLSOCKET', True),
-}
-
+})
 
 class TorEnviron(chutney.Templating.Environ):
 
@@ -2114,7 +2114,18 @@ class TorEnviron(chutney.Templating.Environ):
           enable_controlsocket: enable unix control socket?
     """
 
-    def __init__(self, parent=chutney.Templating.Environ(parent=None, **DEFAULTS), **kwargs):
+    def __init__(self, parent=_DEFAULT_TOR_ENVIRON, **kwargs):
+        """
+        Create a `TorEnviron` with the given `parent` environment, and `kwargs` adding and overriding mappings.
+
+        `parent`, if specified, must be an instance of `TorEnviron`.
+        """
+        # Creating an instance that isn't a descendent of `_DEFAULT_TOR_ENVIRON`
+        # is probably a mistake.
+        # If we find a use case for it though, we can remove this assertion and
+        # update the doc comment.
+        assert isinstance(parent, TorEnviron) or parent is _DEFAULT_TOR_ENVIRON, "Using unsupported parent ignores defaults"
+
         chutney.Templating.Environ.__init__(self, parent=parent, **kwargs)
 
     def _get_orport(self, my):
