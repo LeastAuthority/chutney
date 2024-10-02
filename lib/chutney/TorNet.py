@@ -35,10 +35,8 @@ import chutney.Util
 # Keep in sync with torrc_templates/authority.i V3AuthVotingInterval
 V3_AUTH_VOTING_INTERVAL = 20.0
 
-_BASE_ENVIRON = None
 _TOR_VERSIONS = None
 _TORRC_OPTIONS = None
-_THE_NETWORK = None
 
 TORRC_OPTION_WARN_LIMIT = 10
 torrc_option_warn_count =  0
@@ -417,32 +415,41 @@ class Node(object):
     # _env
     # _builder
     # _controller
+    # _network
 
     ########
     # Users are expected to call these:
 
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, network: "Network", parent: "Node" = None, **kwargs):
         """Create a new Node.
 
-           Initial fields in this Node's environment are set from 'kwargs'.
+           Initial fields in this Node's environment are set from `kwargs`.
+           Any fields not found there will be searched for in `parent`, if
+           present, or else in `network`.
 
-           Any fields not found there will be searched for in 'parent'.
+           Note that the created `Node` won't actually be instantiated in
+           `network` until e.g. `network.addNode` is called. This is to support
+           "template nodes", as used with `Node.getN`.
         """
-        self._parent = parent
-        self._env = self._createEnviron(parent, kwargs)
+        self._network = network
+        if parent:
+            parent_env = parent._env
+        else:
+            parent_env = network._dfltEnv
+        self._env = TorEnviron(parent_env, **kwargs)
         self._builder = None
         self._controller = None
 
     def getN(self, N):
         """Generate 'N' nodes of the same configuration as this node.
         """
-        return [Node(self) for _ in range(N)]
+        return [Node(network=self._network, parent=self) for _ in range(N)]
 
     def specialize(self, **kwargs):
         """Return a new Node based on this node's value as its defaults,
            but with the values from 'kwargs' (if any) overriding them.
         """
-        return Node(parent=self, **kwargs)
+        return Node(network=self._network, parent=self, **kwargs)
 
     def set_runtime(self, key, fn):
         """Specify a runtime function that gets invoked to find the
@@ -468,7 +475,7 @@ class Node(object):
            to start it, stop it, see if it's running, etc.)
         """
         if self._controller is None:
-            self._controller = LocalNodeController(self._env)
+            self._controller = LocalNodeController(self._network, self._env)
         return self._controller
 
     def setNodenum(self, num):
@@ -476,26 +483,6 @@ class Node(object):
            in a network gets its own nodenum.
         """
         self._env['nodenum'] = num
-
-    #####
-    # These are internal:
-
-    def _createEnviron(self, parent, argdict):
-        """Return an Environ that delegates to the parent node's Environ (if
-           there is a parent node), or to the default environment.
-        """
-        if parent:
-            parentenv = parent._env
-        else:
-            parentenv = self._getDefaultEnviron()
-        return TorEnviron(parentenv, **argdict)
-
-    def _getDefaultEnviron(self):
-        """Return the default environment.  Any variables that we can't find
-           set for any particular node, we look for here.
-        """
-        return _BASE_ENVIRON
-
 
 class _NodeCommon(object):
 
@@ -898,8 +885,9 @@ class LocalNodeBuilder(NodeBuilder):
 
 class LocalNodeController(NodeController):
 
-    def __init__(self, env):
+    def __init__(self, network, env):
         NodeController.__init__(self, env)
+        self._network = network
         self._env = env
         self.most_recent_oniondesc_status = None
         self.most_recent_bootstrap_status = None
@@ -1395,7 +1383,7 @@ class LocalNodeController(NodeController):
 
     def getDocTypeDisplayLimit(self):
         """Return the expected number of document types in this network."""
-        if _THE_NETWORK._dfltEnv['hasbridgeauth']:
+        if self._network._dfltEnv['hasbridgeauth']:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
         else:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
@@ -1477,11 +1465,11 @@ class LocalNodeController(NodeController):
         if not consensus_member and not bridge_member:
             return None
 
-        launch_phase = _THE_NETWORK._dfltEnv['launch_phase']
+        launch_phase = self._network._dfltEnv['launch_phase']
 
         # at this point, consensus_member == not bridge_member
         directory_files = dict()
-        for node in _THE_NETWORK._nodes:
+        for node in self._network._nodes:
             if node._env['launch_phase'] > launch_phase:
                 continue
             nick = node._env['nick']
@@ -1955,7 +1943,8 @@ class LocalNodeController(NodeController):
             # (But we shouldn't print a descriptor status for them.)
             return None
 
-DEFAULTS = {
+# Default parent for `TorEnviron`
+_DEFAULT_TOR_ENVIRON = chutney.Templating.Environ(parent=None, **{
     # authority: whether a node is an authority or bridge authority
     'authority': False,
     # bridgeauthority: whether a node is a bridge authority
@@ -2063,8 +2052,7 @@ DEFAULTS = {
 
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     'enable_controlsocket': getenv_bool('CHUTNEY_ENABLE_CONTROLSOCKET', True),
-}
-
+})
 
 class TorEnviron(chutney.Templating.Environ):
 
@@ -2121,7 +2109,18 @@ class TorEnviron(chutney.Templating.Environ):
           enable_controlsocket: enable unix control socket?
     """
 
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, parent=_DEFAULT_TOR_ENVIRON, **kwargs):
+        """
+        Create a `TorEnviron` with the given `parent` environment, and `kwargs` adding and overriding mappings.
+
+        `parent`, if specified, must be an instance of `TorEnviron`.
+        """
+        # Creating an instance that isn't a descendent of `_DEFAULT_TOR_ENVIRON`
+        # is probably a mistake.
+        # If we find a use case for it though, we can remove this assertion and
+        # update the doc comment.
+        assert isinstance(parent, TorEnviron) or parent is _DEFAULT_TOR_ENVIRON, "Using unsupported parent ignores defaults"
+
         chutney.Templating.Environ.__init__(self, parent=parent, **kwargs)
 
     def _get_orport(self, my):
@@ -2263,10 +2262,19 @@ class Network(object):
         self._nextnodenum = 0
         self.dir = ""
 
-    def _addNode(self, n):
-        n.setNodenum(self._nextnodenum)
+    def addNode(self, node: Node):
+        """Add `node` to the network. `node` must have been created with this `Network`."""
+        assert node._network is self, "Node was created from a different Network"
+        node.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
-        self._nodes.append(n)
+        self._nodes.append(node)
+        if node._env['bridgeauthority']:
+            self._dfltEnv['hasbridgeauth'] = True
+
+    def addNodes(self, nodes: [Node]):
+        """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
+        for node in nodes:
+            self.addNode(node)
 
     def _addRequirement(self, requirement):
         requirement = requirement.upper()
@@ -2274,7 +2282,7 @@ class Network(object):
             raise RuntimeError(("Unrecognized requirement %r"%requirement))
         self._requirements.append(requirement)
 
-    def move_aside_nodes_dir(self):
+    def move_aside_nodes_dir(self) -> None:
         """Move aside the nodes directory, if it exists and is not a link.
         Used for backwards-compatibility only: nodes is created as a link to
         a new directory with a unique name in the current implementation.
@@ -2294,7 +2302,7 @@ class Network(object):
         print("NOTE: renaming '%s' to '%s'" % (nodesdir, newdir))
         nodesdir.rename(newdir)
 
-    def create_new_nodes_dir(self):
+    def create_new_nodes_dir(self) -> None:
         """Create a new directory with a unique name, and symlink it to nodes
         """
         # for backwards compatibility, move aside the old nodes directory
@@ -2336,9 +2344,9 @@ class Network(object):
         for n in self._nodes:
             n.getBuilder().checkConfig(self)
 
-    def supported(self):
+    def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
-           and host information we have.
+           and host information we have, and prints the result.
         """
         missing_any = False
         for r in self._requirements:
@@ -2352,7 +2360,7 @@ class Network(object):
         if missing_any:
             sys.exit(1)
 
-    def configure(self):
+    def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
            started.
         """
@@ -2427,7 +2435,7 @@ bridges = '''
         for b in builders:
             b.postConfig(network)
 
-    def status(self):
+    def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
            return True if all nodes are running.
         """
@@ -2439,14 +2447,15 @@ bridges = '''
         print("%d/%d nodes are running" % (n_ok, len(self._nodes)))
         return n_ok == len(statuses)
 
-    def restart(self):
+    def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
            network's nodes.
         """
         self.stop()
         self.start()
 
-    def start(self):
+    # TODO: raise an exception on errors.
+    def start(self) -> bool:
         """Start all our network's nodes and return True on no errors."""
         # format polling correctly - avoid printing a newline
         sys.stdout.write("Starting nodes")
@@ -2460,7 +2469,7 @@ bridges = '''
         print("")
         return rv
 
-    def hup(self):
+    def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
            errors.
         """
@@ -2471,7 +2480,7 @@ bridges = '''
                                controllers,
                                most_recent_desc_status,
                                elapsed=None,
-                               msg="Bootstrap in progress"):
+                               msg="Bootstrap in progress") -> None:
         nick_set = set()
         cons_auth_nick_set = set()
         elapsed_msg = ""
@@ -2535,9 +2544,10 @@ bridges = '''
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    def wait_for_bootstrap(self):
+    # TODO: raise an exception on timeout.
+    def wait_for_bootstrap(self) -> bool:
         """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap.
+           bootstrap. Returns True on success, or False on timeout.
         """
         print("Waiting for nodes to bootstrap...\n")
         start = time.time()
@@ -2671,7 +2681,7 @@ bridges = '''
     def final_cleanup(self,
                       wrote_dot,
                       any_tor_was_running,
-                      cleanup_runfiles):
+                      cleanup_runfiles) -> None:
         '''Perform final cleanup actions, based on the arguments:
              - wrote_dot: end a series of logged dots with a newline
              - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
@@ -2696,7 +2706,7 @@ bridges = '''
                 c.cleanup_lockfile()
                 c.cleanup_pidfile()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop our network's running tor nodes."""
         any_tor_was_running = False
         controllers = [n.getController() for n in self._nodes]
@@ -2731,7 +2741,7 @@ bridges = '''
                            any_tor_was_running,
                            True)
 
-    def print_phases(self):
+    def print_phases(self) -> None:
         """Print the total number of phases in which the network is
            initialized, configured, or bootstrapped."""
         def max_phase(key):
@@ -2741,30 +2751,17 @@ bridges = '''
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
 
-def Require(feature):
-    network = _THE_NETWORK
-    network._addRequirement(feature)
-
-def ConfigureNodes(nodelist):
-    network = _THE_NETWORK
-
-    for n in nodelist:
-        network._addNode(n)
-        if n._env['bridgeauthority']:
-            network._dfltEnv['hasbridgeauth'] = True
-
 def getTests():
-    chutney_path = get_absolute_chutney_path()
-    chutney_tests_path = chutney_path / "scripts" / "chutney_tests"
+    chutney_tests_path = importlib.resources.files("chutney.network_tests")
 
     return [test.stem for test in chutney_tests_path.glob("*.py")
             if not test.name.startswith("_")]
 
 
-def usage(network):
+def usage():
     return "\n".join(["Usage: chutney {command/test} {networkfile}",
                       "Known commands are: %s" % (
-                          " ".join(x for x in dir(network)
+                          " ".join(x for x in dir(Network)
                                    if not x.startswith("_"))),
                       "Known tests are: %s" % (
                           " ".join(getTests()))
@@ -2773,25 +2770,34 @@ def usage(network):
 
 def exit_on_error(err_msg):
     print("Error: {0}\n".format(err_msg))
-    print(usage(_THE_NETWORK))
+    print(usage())
     sys.exit(1)
 
 
 def runConfigFile(verb, data):
-    _GLOBALS = dict(_BASE_ENVIRON=_BASE_ENVIRON,
-                    Node=Node,
+    # Wrappers used from network scripts (`data`) that manipulate
+    # an implicit network (`_THE_NETWORK`).
+    _BASE_ENVIRON = TorEnviron()
+    _THE_NETWORK = Network(_BASE_ENVIRON)
+    def Require(feature):
+        _THE_NETWORK._addRequirement(feature)
+    def ConfigureNodes(nodelist):
+        for n in nodelist:
+            _THE_NETWORK.addNode(n)
+    def NodeWrapper(parent=None, **kwargs):
+        return Node(_THE_NETWORK, parent, **kwargs)
+    _GLOBALS = dict(Node=NodeWrapper,
                     Require=Require,
                     ConfigureNodes=ConfigureNodes,
-                    _THE_NETWORK=_THE_NETWORK,
                     torrc_option_warn_count=0,
                     TORRC_OPTION_WARN_LIMIT=10)
 
     exec(data, _GLOBALS)
-    network = _GLOBALS['_THE_NETWORK']
+    network = _THE_NETWORK
 
     # let's check if the verb is a valid test and run it
     if verb in getTests():
-        test_module = importlib.import_module("chutney_tests.{}".format(verb))
+        test_module = importlib.import_module("chutney.network_tests.{}".format(verb))
         try:
             run_test = test_module.run_test
         except AttributeError as e:
@@ -2807,20 +2813,6 @@ def runConfigFile(verb, data):
 
     return getattr(network, verb)()
 
-def _initGlobals():
-    """One-time initialization of globals"""
-    global _BASE_ENVIRON
-    global _THE_NETWORK
-    _BASE_ENVIRON = TorEnviron(chutney.Templating.Environ(**DEFAULTS))
-    _THE_NETWORK = Network(_BASE_ENVIRON)
-
-def createNetwork(gen_nodes):
-    """Use `gen_nodes` to generate a list of nodes and return the corresponding Network."""
-    _initGlobals()
-    nodes = gen_nodes()
-    ConfigureNodes(nodes)
-    return _THE_NETWORK
-
 def parseArgs(argv):
     """Parse and return commandline arguments."""
     if len(argv) < 3:
@@ -2830,14 +2822,17 @@ def parseArgs(argv):
     return {'network_cfg': argv[2], 'action': argv[1]}
 
 def main(action, network_cfg):
-    _initGlobals()
-
+    """A slightly more hermetic main could be called reasonably from python"""
     f = open(network_cfg)
     result = runConfigFile(action, f.read())
     if result is False:
         return -1
     return 0
 
-if __name__ == '__main__':
+def __main__():
+    """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
     kwargs = parseArgs(sys.argv)
     sys.exit(main(**kwargs))
+
+if __name__ == '__main__':
+    __main__()

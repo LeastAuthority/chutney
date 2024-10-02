@@ -7,7 +7,7 @@ set -o nounset
 myname=$(basename "$0")
 
 # Respect the user's $PYTHON
-PYTHON=${PYTHON:-python}
+PYTHON=${PYTHON:-python3}
 echo "$myname: using python '$PYTHON'"
 
 echo "$myname: finding chutney directory"
@@ -50,7 +50,7 @@ export LOG_FILE
 test -n "$LOG_FILE"
 
 echo "$myname: checking for Templating.py failures:"
-$PYTHON lib/chutney/Templating.py torrc_templates/common.i | tee "$LOG_FILE"
+PYTHONPATH="${PYTHONPATH:-}:lib" $PYTHON -m chutney.Templating common.i | tee "$LOG_FILE"
 grep -q owning_controller_process "$LOG_FILE"
 grep -q connlimit "$LOG_FILE"
 grep -q controlport "$LOG_FILE"

@@ -6,22 +6,25 @@ Attempt to use chutney as a module.
 import os
 
 from chutney import TorNet
-from chutney.TorNet import Node
+from chutney.TorNet import Node, TorEnviron
+from chutney.network_tests import verify
 
-# Configure tor processes to abort if this script dies prematurely.
-# TODO: Add a way to set this and other such global config through some way
-# other than os env variables.
-os.environ["CHUTNEY_CONTROLLING_PID"] = str(os.getpid())
+env = TorEnviron(controlling_pid=os.getpid())
+network = TorNet.Network(env)
 
-def makeNodes():
-    Authority = Node(tag="a", authority=1, relay=1, torrc="authority.tmpl")
-    ExitRelay = Node(tag="r", relay=1, exit=1, torrc="relay.tmpl")
-    Client = Node(tag="c", client=1, torrc="client.tmpl")
-    return Authority.getN(3) + ExitRelay.getN(5) + Client.getN(2)
+Authority = Node(network, tag="a", authority=1, relay=1, torrc="authority.tmpl")
+ExitRelay = Node(network, tag="r", relay=1, exit=1, torrc="relay.tmpl")
+Client = Node(network, tag="c", client=1, torrc="client.tmpl")
 
-network = TorNet.createNetwork(makeNodes)
+network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
-network.start()
-network.wait_for_bootstrap()
+assert(network.start())
+
+# This has a tendency to timeout with the default of 60s.
+# This timeout can be increased through the CHUTNEY_START_TIME env variable.
+# TODO: Make this directly overridable from python.
+assert(network.wait_for_bootstrap())
+
+assert(verify.run_test(network))
 network.stop()
