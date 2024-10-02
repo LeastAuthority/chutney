@@ -19,12 +19,10 @@ Client = Node(network, tag="c", client=1, torrc="client.tmpl")
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
-assert(network.start())
+network.start()
 
 # This has a tendency to timeout with the default of 60s.
-# This timeout can be increased through the CHUTNEY_START_TIME env variable.
-# TODO: Make this directly overridable from python.
-network.wait_for_bootstrap()
+network.wait_for_bootstrap(300)
 
 assert(verify.run_test(network))
 network.stop()

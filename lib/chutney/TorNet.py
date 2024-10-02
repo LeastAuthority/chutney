@@ -2547,13 +2547,13 @@ bridges = '''
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    def wait_for_bootstrap(self) -> None:
+    def wait_for_bootstrap(self, limit_secs:int=getenv_int("CHUTNEY_START_TIME", 60)) -> None:
         """
         Wait for the network to bootstrap. Raises `TimeoutException` on timeout.
         """
         print("Waiting for nodes to bootstrap...\n")
         start = time.time()
-        limit = start + getenv_int("CHUTNEY_START_TIME", 60)
+        limit = start + limit_secs
         next_print_status = start + Network.PRINT_NETWORK_STATUS_DELAY
         bootstrap_upto = self._dfltEnv['CUR_LAUNCH_PHASE']
 
