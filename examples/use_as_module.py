@@ -24,5 +24,5 @@ network.start()
 # This has a tendency to timeout with the default of 60s.
 network.wait_for_bootstrap(300)
 
-assert(verify.run_test(network))
+verify.run_test(network)
 network.stop()

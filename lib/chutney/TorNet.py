@@ -28,6 +28,7 @@ import time
 import base64
 
 from chutney.Debug import debug_flag, debug
+from chutney.network_tests import NetworkTestFailure
 
 import chutney.Host
 import chutney.Templating
@@ -2893,7 +2894,11 @@ def runConfigFile(verb, data):
         except AttributeError as e:
             print("Error running test {!r}: {}".format(verb, e))
             return False
-        return run_test(network)
+        try:
+            run_test(network)
+        except NetworkTestFailure as e:
+            raise ChutneyError(f"Test '{verb}' failed") from e
+        return
 
     cli_cmds = CLICommands(network)
 
