@@ -2823,13 +2823,9 @@ class CLICommands:
 
     def wait_for_bootstrap(self) -> None:
         """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap. Returns True on success, or False on timeout.
+           bootstrap.
         """
-        try:
-            self._net.wait_for_bootstrap()
-            return True
-        except ChutneyTimeoutError:
-            return False
+        self._net.wait_for_bootstrap()
 
     def stop(self) -> None:
         """Stop our network's running tor nodes."""
@@ -2902,23 +2898,36 @@ def runConfigFile(verb, data):
 def parseArgs(argv):
     """Parse and return commandline arguments."""
     if len(argv) < 3:
-        exit_on_error("Not enough arguments given.")
+        raise ChutneyError("Not enough arguments given.")
     if not os.path.isfile(argv[2]):
-        exit_on_error("Cannot find networkfile: {0}.".format(argv[2]))
+        raise ChutneyError("Cannot find networkfile: {0}.".format(argv[2]))
     return {'network_cfg': argv[2], 'action': argv[1]}
 
-def main(action, network_cfg):
-    """A slightly more hermetic main could be called reasonably from python"""
+def main(action, network_cfg) -> None:
+    """A slightly more hermetic main could be called reasonably from python
+
+    Raises an exception derived from `ChutneyError` on failure.
+    """
     f = open(network_cfg)
     result = runConfigFile(action, f.read())
     if result is False:
-        return -1
-    return 0
+        # TODO: eliminate this case. Have all commands
+        # return a more informative error instead of `False`
+        raise ChutneyError("Unspecified failure")
 
 def __main__():
     """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
-    kwargs = parseArgs(sys.argv)
-    sys.exit(main(**kwargs))
+    try:
+        kwargs = parseArgs(sys.argv)
+    except ChutneyError as e:
+        print("Argument handling failed: ", e)
+        print(usage())
+        sys.exit(-1)
+    try:
+        main(action=kwargs['action'], network_cfg=kwargs['network_cfg'])
+    except ChutneyError as e:
+        print("Command failed: ", e)
+        sys.exit(-1)
 
 if __name__ == '__main__':
     __main__()
