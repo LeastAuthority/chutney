@@ -41,10 +41,18 @@ _TORRC_OPTIONS = None
 TORRC_OPTION_WARN_LIMIT = 10
 torrc_option_warn_count =  0
 
-class MissingBinaryException(Exception):
+class ChutneyError(Exception):
+    """Base class for "normal" errors originating from this module
+
+    i.e. any public functions in this module raising an exception that *isn't*
+    a subclass of this indicates a programming error in this module.
+    """
     pass
 
-class TimeoutException(Exception):
+class ChutneyMissingBinaryError(ChutneyError):
+    pass
+
+class ChutneyTimeoutError(ChutneyError):
     pass
 
 def getenv_type(env_var, default, type_, type_name=None):
@@ -247,7 +255,7 @@ def run_tor(cmdline, exit_on_missing=True):
                 _warnMissingTor(cmdline[0], cmdline)
                 sys.exit(1)
             else:
-                raise MissingBinaryException()
+                raise ChutneyMissingBinaryError()
         else:
             raise
     except subprocess.CalledProcessError as e:
@@ -257,7 +265,7 @@ def run_tor(cmdline, exit_on_missing=True):
                 _warnMissingTor(cmdline[0], cmdline)
                 sys.exit(1)
             else:
-                raise MissingBinaryException()
+                raise ChutneyMissingBinaryError()
         else:
             raise
     return stdouterr
@@ -291,7 +299,7 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
                 _warnMissingTor(cmdline[0], cmdline, tor_name=tor_name)
                 sys.exit(1)
             else:
-                raise MissingBinaryException()
+                raise ChutneyMissingBinaryError()
         else:
             raise
     return p
@@ -318,7 +326,7 @@ def tor_exists(tor):
     try:
         run_tor([tor, "--quiet", "--version"], exit_on_missing=False)
         return True
-    except MissingBinaryException:
+    except ChutneyMissingBinaryError:
         return False
 
 @chutney.Util.memoized
@@ -328,7 +336,7 @@ def tor_gencert_exists(gencert):
         p = launch_process([gencert, "--help"], exit_on_missing=False)
         p.wait()
         return True
-    except MissingBinaryException:
+    except ChutneyMissingBinaryError:
         return False
 
 @chutney.Util.memoized
@@ -2640,7 +2648,7 @@ bridges = '''
                     print("start: {} limit: {}".format(start, limit))
                     print("next_print_status: {} now: {}"
                           .format(next_print_status, time.time()))
-                    raise TimeoutException()
+                    raise ChutneyTimeoutError()
                 else:
                     self.print_bootstrap_status(controllers,
                                                 most_recent_desc_status,
@@ -2665,13 +2673,13 @@ bridges = '''
                 print("start: {} limit: {}".format(start, limit))
                 print("next_print_status: {} now: {}"
                       .format(next_print_status, time.time()))
-                raise TimeoutException()
+                raise ChutneyTimeoutError()
 
         self.print_bootstrap_status(controllers,
                                     most_recent_desc_status,
                                     elapsed=elapsed,
                                     msg="Bootstrap failed")
-        raise TimeoutException()
+        raise ChutneyTimeoutError()
 
     # Keep in sync with ShutdownWaitLength in common.i
     SHUTDOWN_WAIT_LENGTH = 2
@@ -2820,7 +2828,7 @@ class CLICommands:
         try:
             self._net.wait_for_bootstrap()
             return True
-        except TimeoutException:
+        except ChutneyTimeoutError:
             return False
 
     def stop(self) -> None:
