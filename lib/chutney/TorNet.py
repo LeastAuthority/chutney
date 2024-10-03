@@ -2934,12 +2934,12 @@ def __main__():
     except ValueError:
         print("Wrong number of arguments.")
         print(usage())
-        sys.exit(-1)
+        sys.exit(1)
     try:
         main(action, network_cfg)
     except ChutneyError as e:
         traceback.print_exception(e, limit=0)
-        sys.exit(-1)
+        sys.exit(1)
     sys.exit(0)
 
 if __name__ == '__main__':
