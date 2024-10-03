@@ -2286,7 +2286,7 @@ class Network(object):
         self._nextnodenum = 0
         self.dir = ""
 
-    def addNode(self, node: Node):
+    def addNode(self, node: Node) -> None:
         """Add `node` to the network. `node` must have been created with this `Network`."""
         assert node._network is self, "Node was created from a different Network"
         node.setNodenum(self._nextnodenum)
@@ -2364,7 +2364,7 @@ class Network(object):
         nodeslink.symlink_to(newnodesdir)
         self.dir = newnodesdir
 
-    def _checkConfig(self):
+    def _checkConfig(self) -> None:
         for n in self._nodes:
             n.getBuilder().checkConfig(self)
 
