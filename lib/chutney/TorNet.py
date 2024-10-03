@@ -13,7 +13,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import errno
 import importlib
@@ -450,7 +450,7 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, network: "Network", parent: "Node" = None, **kwargs):
+    def __init__(self, network: "Network", parent: Optional["Node"] = None, **kwargs):
         """Create a new Node.
 
            Initial fields in this Node's environment are set from `kwargs`.

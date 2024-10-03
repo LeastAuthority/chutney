@@ -131,12 +131,20 @@ tor-debian-integration:
     # 120 is what e.g. bootstrap-network.sh uses.
     # Give even a bit more than that since we're not using retries (as test-network.sh does)
     CHUTNEY_START_TIME: 300
+    # We use pip to install a fairly recent version of mypy to avoid working
+    # around bugs in older versions. (e.g. the one in debian bullseye's package
+    # has an incorrect type stub for importlib.abc.Traversable.joinpath).
+    #
+    # Most recent as of 2024-10-3
+    MYPY_VERSION: 1.11.2
   cache:
     key: $CI_JOB_NAME_SLUG-apt
     paths:
       - apt-cache
   before_script:
     - *apt-template
+    # This is where pip installs binaries.
+    - export PATH="$PATH:$HOME/.local/bin"
   artifacts:
     expire_in: 1 week
     when: on_failure
@@ -196,5 +204,6 @@ mypy:
   script:
   - apt-get install
       python3
-      mypy
+      python3-pip
+  - python3 -m pip install --user mypy=="$MYPY_VERSION"
   - mypy lib
