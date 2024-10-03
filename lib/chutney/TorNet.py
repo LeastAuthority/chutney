@@ -2353,6 +2353,7 @@ class Network(object):
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
            and host information we have, and prints the result.
+           Raises `ChutneyError` if anythign is missing.
         """
         missing_any = False
         for r in self._requirements:
@@ -2364,7 +2365,7 @@ class Network(object):
                 missing_any = True
 
         if missing_any:
-            sys.exit(1)
+            raise ChutneyError("Missing requirements to run this network")
 
     def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
