@@ -539,7 +539,7 @@ class NodeBuilder(_NodeCommon):
         """Called on each nodes after all nodes configure."""
         raise NotImplementedError()
 
-    def isSupported(self, net):
+    def isSupported(self, net) -> bool:
         """Return true if this node appears to have everything it needs;
            false otherwise."""
         raise NotImplementedError()
@@ -691,7 +691,7 @@ class LocalNodeBuilder(NodeBuilder):
         # self.net.addNode(self)
         pass
 
-    def isSupported(self, net):
+    def isSupported(self, net) -> bool:
         """Return true if this node appears to have everything it needs;
            false otherwise."""
 
@@ -705,6 +705,9 @@ class LocalNodeBuilder(NodeBuilder):
                 return False
             if not tor_gencert_exists(self._env['tor-gencert']):
                 print("No binary found for tor-gencert %r"%self._env['tor-gencert'])
+                return False
+
+        return True
 
     def _makeDataDir(self):
         """Create the data directory (with keys subdirectory) for this node.
@@ -2354,11 +2357,11 @@ class Network(object):
         missing_any = False
         for r in self._requirements:
             if not KNOWN_REQUIREMENTS[r]():
-                print(("Can't run this network: %s is missing."))
+                print(f"Can't run this network: {r} is missing.")
                 missing_any = True
         for n in self._nodes:
             if not n.getBuilder().isSupported(self):
-                missing_any = False
+                missing_any = True
 
         if missing_any:
             sys.exit(1)
