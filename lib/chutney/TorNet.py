@@ -2201,7 +2201,7 @@ class TorEnviron(chutney.Templating.Environ):
         return self['nick']  # OMG TEH SECURE!
 
     def _get_torrc_template_path(self, my):
-        return [importlib.resources.files("chutney").joinpath('data', 'torrc_templates')]
+        return [importlib.resources.files("chutney").joinpath('data').joinpath('torrc_templates')]
 
     def _get_lockfile(self, my):
         return Path(self['dir'], 'lock')

@@ -406,7 +406,7 @@ if __name__ == '__main__':
         print("done")
     else:
         for fn in sys.argv[1:]:
-            path = importlib.resources.files("chutney").joinpath('data', 'torrc_templates', fn)
+            path = importlib.resources.files("chutney").joinpath('data').joinpath('torrc_templates').joinpath(fn)
             with open(path, 'r') as f:
                 t = Template(f.read())
                 print(fn, t.freevars())
