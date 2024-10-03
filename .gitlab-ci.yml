@@ -190,3 +190,11 @@ shellcheck:
   - apt-get install
       shellcheck
   - ./tests/shellcheck-tests.sh
+
+mypy:
+  <<: *debian-template
+  script:
+  - apt-get install
+      python3
+      mypy
+  - mypy lib
