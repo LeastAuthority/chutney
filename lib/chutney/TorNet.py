@@ -2295,12 +2295,12 @@ class Network(object):
         if node._env['bridgeauthority']:
             self._dfltEnv['hasbridgeauth'] = True
 
-    def addNodes(self, nodes: [Node]):
+    def addNodes(self, nodes: List[Node]) -> None:
         """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
         for node in nodes:
             self.addNode(node)
 
-    def _addRequirement(self, requirement):
+    def _addRequirement(self, requirement) -> None:
         requirement = requirement.upper()
         if requirement not in KNOWN_REQUIREMENTS:
             raise RuntimeError(("Unrecognized requirement %r"%requirement))
