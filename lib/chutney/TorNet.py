@@ -466,7 +466,7 @@ class Node(object):
             parent_env = parent._env
         else:
             parent_env = network._dfltEnv
-        self._env = TorEnviron(parent_env, **kwargs)
+        self._env: TorEnviron = TorEnviron(parent_env, **kwargs)
         self._builder = None
         self._controller = None
 
