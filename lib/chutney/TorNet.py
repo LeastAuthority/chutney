@@ -52,7 +52,32 @@ class ChutneyError(Exception):
     pass
 
 class ChutneyMissingBinaryError(ChutneyError):
-    pass
+    def __init__(self, name:str, cmdline:List[str], help:str):
+        self._name=name
+        self._cmdline=cmdline
+        self._help=help
+
+    @staticmethod
+    def for_missing_tor(tor_name:str, cmdline:List[str]) -> "ChutneyMissingBinaryError":
+        """Create an exception for a missing tor binary, with help for how to fix it.
+        """
+        help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
+                        "'{1}'. If using test-network.sh, set the 'TOR_DIR' " +
+                        "environment variable to the directory containing '{1}'.")
+        help_msg = ""
+        if tor_name == "tor":
+            help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
+        elif tor_name == "tor-gencert":
+            help_msg = help_msg_fmt.format("CHUTNEY_TOR_GENCERT", tor_name)
+        else:
+            raise ValueError("Unknown tor_name: '{}'".format(tor_name))
+        return ChutneyMissingBinaryError(tor_name, cmdline, help_msg)
+
+    def __str__(self) -> str:
+        return (f"Cannot find the {self._name} binary"
+            + f" at '{self._cmdline[0]}'"
+            + f" for the command line '{' '.join(self._cmdline)}'."
+            + f" {self._help}")
 
 class ChutneyTimeoutError(ChutneyError):
     pass
@@ -233,32 +258,13 @@ def get_new_absolute_nodes_path(now=time.time()):
         newdir = Path("%s.%d" % (newdirbase, i))
     return newdir
 
-def _warnMissingTor(tor_path, cmdline, tor_name="tor"):
-    """Log a warning that the binary canonically named tor_name can't be found
-       at tor_path while running cmdline. Suggest the appropriate
-       environmental variable to set to resolve the issue.
-    """
-    help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
-                    "'{1}'. If using test-network.sh, set the 'TOR_DIR' " +
-                    "environment variable to the directory containing '{1}'.")
-    help_msg = ""
-    if tor_name == "tor":
-        help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
-    elif tor_name == "tor-gencert":
-        help_msg = help_msg_fmt.format("CHUTNEY_TOR_GENCERT", tor_name)
-    else:
-        raise ValueError("Unknown tor_name: '{}'".format(tor_name))
-    print(("Cannot find the {} binary at '{}' for the command line '{}'. {}")
-          .format(tor_name, tor_path, " ".join(cmdline), help_msg))
-
-def run_tor(cmdline, exit_on_missing=True):
+def run_tor(cmdline: List[str]) -> str:
     """Run the tor command line cmdline, which must start with the path or
        name of a tor binary.
 
        Returns the combined stdout and stderr of the process.
 
-       If exit_on_missing is true, warn and exit if the tor binary is missing.
-       Otherwise, raise a MissingBinaryException.
+       raises `ChutneyMissingBinaryException` if the tor binary is missing.
     """
     if not debug_flag:
         cmdline.append("--hush")
@@ -267,29 +273,11 @@ def run_tor(cmdline, exit_on_missing=True):
                                             stderr=subprocess.STDOUT,
                                             universal_newlines=True)
         debug(stdouterr)
-    except OSError as e:
-        # only catch file not found error
-        if e.errno == errno.ENOENT:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline)
-                sys.exit(1)
-            else:
-                raise ChutneyMissingBinaryError()
-        else:
-            raise
-    except subprocess.CalledProcessError as e:
-        # only catch file not found error
-        if e.returncode == 127:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline)
-                sys.exit(1)
-            else:
-                raise ChutneyMissingBinaryError()
-        else:
-            raise
+    except FileNotFoundError as e:
+        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline)
     return stdouterr
 
-def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
+def launch_process(cmdline: List[str], tor_name:str="tor", stdin:Optional[int]=None) -> subprocess.Popen:
     """Launch the command line cmdline, which must start with the path or
        name of a binary. Use tor_name as the canonical name of the binary in
        logs. Pass stdin to the Popen constructor.
@@ -311,19 +299,11 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
                              stderr=subprocess.STDOUT,
                              universal_newlines=True,
                              bufsize=-1)
-    except OSError as e:
-        # only catch file not found error
-        if e.errno == errno.ENOENT:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline, tor_name=tor_name)
-                sys.exit(1)
-            else:
-                raise ChutneyMissingBinaryError()
-        else:
-            raise
+    except FileNotFoundError as e:
+        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline)
     return p
 
-def run_tor_gencert(cmdline, passphrase):
+def run_tor_gencert(cmdline: List[str], passphrase: str) -> str:
     """Run the tor-gencert command line cmdline, which must start with the
        path or name of a tor-gencert binary.
        Then send passphrase to the stdin of the process.
@@ -343,7 +323,7 @@ def run_tor_gencert(cmdline, passphrase):
 def tor_exists(tor):
     """Return true iff this tor binary exists."""
     try:
-        run_tor([tor, "--hush", "--version"], exit_on_missing=False)
+        run_tor([tor, "--hush", "--version"])
         return True
     except ChutneyMissingBinaryError:
         return False
@@ -352,7 +332,7 @@ def tor_exists(tor):
 def tor_gencert_exists(gencert):
     """Return true iff this tor-gencert binary exists."""
     try:
-        p = launch_process([gencert, "--help"], exit_on_missing=False)
+        p = launch_process([gencert, "--help"])
         p.wait()
         return True
     except ChutneyMissingBinaryError:
@@ -790,9 +770,8 @@ class LocalNodeBuilder(NodeBuilder):
         stdouterr = run_tor(cmdline)
         fingerprint = "".join((stdouterr.rstrip().split('\n')[-1]).split()[1:])
         if not re.match(r'^[A-F0-9]{40}$', fingerprint):
-            print("Error when getting fingerprint using '{0}'. It output '{1}'."
+            raise ChutneyError("Error when getting fingerprint using '{0}'. It output '{1}'."
                   .format(repr(" ".join(cmdline)), repr(stdouterr)))
-            sys.exit(1)
         self._env['fingerprint'] = fingerprint
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
