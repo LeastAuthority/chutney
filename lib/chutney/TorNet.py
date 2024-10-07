@@ -2003,8 +2003,8 @@ _DEFAULT_TOR_ENVIRON = chutney.Templating.Environ(parent=None, **{
     # orport_base, dirport_base, controlport_base, socksport_base,
     # extorport_base, ptport_base: the initial port numbers used by nodenum 0.
     # Each additional node adds 1 to the port numbers.
-    'orport_base': 5000,
-    'dirport_base': 7000,
+    'orport_base': 5100,
+    'dirport_base': 7100,
     'controlport_base': 8000,
     'socksport_base': 9000,
     'extorport_base' : 9500,
