@@ -7,12 +7,16 @@
 #  restrict, so long as you retain the above notice(s) and this license
 #  in all redistributed copies and derived works.  There is no warranty.
 
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
 from pathlib import Path
+from typing import List, Optional
 
 import errno
 import importlib
@@ -27,6 +31,7 @@ import time
 import base64
 
 from chutney.Debug import debug_flag, debug
+from chutney.network_tests import NetworkTestFailure
 
 import chutney.Host
 import chutney.Templating
@@ -41,8 +46,61 @@ _TORRC_OPTIONS = None
 TORRC_OPTION_WARN_LIMIT = 10
 torrc_option_warn_count =  0
 
-class MissingBinaryException(Exception):
+class ChutneyError(Exception):
+    """Base class for "normal" errors originating from this module
+
+    i.e. any public functions in this module raising an exception that *isn't*
+    a subclass of this indicates a programming error in this module.
+    """
     pass
+
+class ChutneyMissingBinaryError(ChutneyError):
+    def __init__(self, name:str, cmdline:List[str], help:str):
+        self._name=name
+        self._cmdline=cmdline
+        self._help=help
+
+    @staticmethod
+    def for_missing_tor(tor_name:str, cmdline:List[str]) -> ChutneyMissingBinaryError:
+        """Create an exception for a missing tor binary, with help for how to fix it.
+        """
+        help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
+                        "'{1}'. If using test-network.sh, set the 'TOR_DIR' " +
+                        "environment variable to the directory containing '{1}'.")
+        help_msg = ""
+        if tor_name == "tor":
+            help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
+        elif tor_name == "tor-gencert":
+            help_msg = help_msg_fmt.format("CHUTNEY_TOR_GENCERT", tor_name)
+        else:
+            raise ValueError("Unknown tor_name: '{}'".format(tor_name))
+        return ChutneyMissingBinaryError(tor_name, cmdline, help_msg)
+
+    def __str__(self) -> str:
+        return (f"Cannot find the {self._name} binary"
+            + f" at '{self._cmdline[0]}'"
+            + f" for the command line '{' '.join(self._cmdline)}'."
+            + f" {self._help}")
+
+class ChutneyTimeoutError(ChutneyError):
+    pass
+
+class ChutneyErrorGroup(ChutneyError):
+    """A list of errors.
+
+    For use in methods like `start` where we want to continue after the first error,
+    but collect all of the errors.
+
+    Analogous to python 3.11's `ExceptionGroup`
+    """
+
+    def __init__(self, description: str, errs: List[ChutneyError]):
+        self._description = description
+        self._errs = errs
+        ChutneyError.__init__(self, description, errs)
+
+    def __str__(self) -> str:
+        return self._description + ' [\n  ' + '\n  '.join([str(e) for e in self._errs]) + '\n]\n'
 
 def getenv_type(env_var, default, type_, type_name=None):
     """
@@ -203,63 +261,26 @@ def get_new_absolute_nodes_path(now=time.time()):
         newdir = Path("%s.%d" % (newdirbase, i))
     return newdir
 
-def _warnMissingTor(tor_path, cmdline, tor_name="tor"):
-    """Log a warning that the binary canonically named tor_name can't be found
-       at tor_path while running cmdline. Suggest the appropriate
-       environmental variable to set to resolve the issue.
-    """
-    help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
-                    "'{1}'. If using test-network.sh, set the 'TOR_DIR' " +
-                    "environment variable to the directory containing '{1}'.")
-    help_msg = ""
-    if tor_name == "tor":
-        help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
-    elif tor_name == "tor-gencert":
-        help_msg = help_msg_fmt.format("CHUTNEY_TOR_GENCERT", tor_name)
-    else:
-        raise ValueError("Unknown tor_name: '{}'".format(tor_name))
-    print(("Cannot find the {} binary at '{}' for the command line '{}'. {}")
-          .format(tor_name, tor_path, " ".join(cmdline), help_msg))
-
-def run_tor(cmdline, exit_on_missing=True):
+def run_tor(cmdline: List[str]) -> str:
     """Run the tor command line cmdline, which must start with the path or
        name of a tor binary.
 
        Returns the combined stdout and stderr of the process.
 
-       If exit_on_missing is true, warn and exit if the tor binary is missing.
-       Otherwise, raise a MissingBinaryException.
+       raises `ChutneyMissingBinaryException` if the tor binary is missing.
     """
     if not debug_flag:
-        cmdline.append("--quiet")
+        cmdline.append("--hush")
     try:
         stdouterr = subprocess.check_output(cmdline,
                                             stderr=subprocess.STDOUT,
                                             universal_newlines=True)
         debug(stdouterr)
-    except OSError as e:
-        # only catch file not found error
-        if e.errno == errno.ENOENT:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline)
-                sys.exit(1)
-            else:
-                raise MissingBinaryException()
-        else:
-            raise
-    except subprocess.CalledProcessError as e:
-        # only catch file not found error
-        if e.returncode == 127:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline)
-                sys.exit(1)
-            else:
-                raise MissingBinaryException()
-        else:
-            raise
+    except FileNotFoundError as e:
+        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline)
     return stdouterr
 
-def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
+def launch_process(cmdline: List[str], tor_name:str="tor", stdin:Optional[int]=None) -> subprocess.Popen:
     """Launch the command line cmdline, which must start with the path or
        name of a binary. Use tor_name as the canonical name of the binary in
        logs. Pass stdin to the Popen constructor.
@@ -268,7 +289,7 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
     """
     if tor_name == "tor":
         if not debug_flag:
-            cmdline.append("--quiet")
+            cmdline.append("--hush")
     elif tor_name == "tor-gencert":
         if debug_flag:
             cmdline.append("-v")
@@ -281,19 +302,11 @@ def launch_process(cmdline, tor_name="tor", stdin=None, exit_on_missing=True):
                              stderr=subprocess.STDOUT,
                              universal_newlines=True,
                              bufsize=-1)
-    except OSError as e:
-        # only catch file not found error
-        if e.errno == errno.ENOENT:
-            if exit_on_missing:
-                _warnMissingTor(cmdline[0], cmdline, tor_name=tor_name)
-                sys.exit(1)
-            else:
-                raise MissingBinaryException()
-        else:
-            raise
+    except FileNotFoundError as e:
+        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline)
     return p
 
-def run_tor_gencert(cmdline, passphrase):
+def run_tor_gencert(cmdline: List[str], passphrase: str) -> str:
     """Run the tor-gencert command line cmdline, which must start with the
        path or name of a tor-gencert binary.
        Then send passphrase to the stdin of the process.
@@ -313,19 +326,19 @@ def run_tor_gencert(cmdline, passphrase):
 def tor_exists(tor):
     """Return true iff this tor binary exists."""
     try:
-        run_tor([tor, "--quiet", "--version"], exit_on_missing=False)
+        run_tor([tor, "--hush", "--version"])
         return True
-    except MissingBinaryException:
+    except ChutneyMissingBinaryError:
         return False
 
 @chutney.Util.memoized
 def tor_gencert_exists(gencert):
     """Return true iff this tor-gencert binary exists."""
     try:
-        p = launch_process([gencert, "--help"], exit_on_missing=False)
+        p = launch_process([gencert, "--help"])
         p.wait()
         return True
-    except MissingBinaryException:
+    except ChutneyMissingBinaryError:
         return False
 
 @chutney.Util.memoized
@@ -378,7 +391,7 @@ def get_tor_modules(tor):
     cmdline = [
         tor,
         "--list-modules",
-        "--quiet"
+        "--hush"
         ]
     try:
         mods = run_tor(cmdline)
@@ -420,7 +433,7 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, network: "Network", parent: "Node" = None, **kwargs):
+    def __init__(self, network: Network, parent: Optional[Node] = None, **kwargs):
         """Create a new Node.
 
            Initial fields in this Node's environment are set from `kwargs`.
@@ -436,7 +449,7 @@ class Node(object):
             parent_env = parent._env
         else:
             parent_env = network._dfltEnv
-        self._env = TorEnviron(parent_env, **kwargs)
+        self._env: TorEnviron = TorEnviron(parent_env, **kwargs)
         self._builder = None
         self._controller = None
 
@@ -529,7 +542,7 @@ class NodeBuilder(_NodeCommon):
         """Called on each nodes after all nodes configure."""
         raise NotImplementedError()
 
-    def isSupported(self, net):
+    def isSupported(self, net) -> bool:
         """Return true if this node appears to have everything it needs;
            false otherwise."""
         raise NotImplementedError()
@@ -552,9 +565,8 @@ class NodeController(_NodeCommon):
            node is running, false otherwise.
         """
 
-    def start(self):
-        """Try to start this node; return True if we succeeded or it was
-           already running, False if we failed."""
+    def start(self) -> None:
+        """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
         raise NotImplementedError()
 
     def stop(self, sig=signal.SIGINT):
@@ -682,7 +694,7 @@ class LocalNodeBuilder(NodeBuilder):
         # self.net.addNode(self)
         pass
 
-    def isSupported(self, net):
+    def isSupported(self, net) -> bool:
         """Return true if this node appears to have everything it needs;
            false otherwise."""
 
@@ -696,6 +708,9 @@ class LocalNodeBuilder(NodeBuilder):
                 return False
             if not tor_gencert_exists(self._env['tor-gencert']):
                 print("No binary found for tor-gencert %r"%self._env['tor-gencert'])
+                return False
+
+        return True
 
     def _makeDataDir(self):
         """Create the data directory (with keys subdirectory) for this node.
@@ -761,9 +776,8 @@ class LocalNodeBuilder(NodeBuilder):
         stdouterr = run_tor(cmdline)
         fingerprint = "".join((stdouterr.rstrip().split('\n')[-1]).split()[1:])
         if not re.match(r'^[A-F0-9]{40}$', fingerprint):
-            print("Error when getting fingerprint using '{0}'. It output '{1}'."
+            raise ChutneyError("Error when getting fingerprint using '{0}'. It output '{1}'."
                   .format(repr(" ".join(cmdline)), repr(stdouterr)))
-            sys.exit(1)
         self._env['fingerprint'] = fingerprint
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
@@ -1157,13 +1171,12 @@ class LocalNodeController(NodeController):
             print("{:12} is not running".format(nick))
             return False
 
-    def start(self):
-        """Try to start this node; return True if we succeeded or it was
-           already running, False if we failed."""
+    def start(self) -> None:
+        """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
 
         if self.isRunning():
             print("{:12} is already running".format(self._env['nick']))
-            return True
+            return
         tor_path = self._env['tor']
         torrc = self._getTorrcFname()
         cmdline = [
@@ -1172,12 +1185,19 @@ class LocalNodeController(NodeController):
             ]
         p = launch_process(cmdline)
         if self.waitOnLaunch():
-            # this requires that RunAsDaemon is set
+            # this requires that RunAsDaemon is set.
             (stdouterr, empty_stderr) = p.communicate()
             debug(stdouterr)
             assert empty_stderr is None
+            # We expect the parent process to have exited with code 0.
+            if p.returncode != 0:
+                raise ChutneyError(
+                    f"Couldn't launch {self._env['nick']:12}"
+                    + f" command '{' '.join(cmdline)}': "
+                    + f" exit {p.returncode},"
+                    + f" output '{stdouterr}'")
         else:
-            # this does not require RunAsDaemon to be set, but is slower.
+            # this requires RunAsDaemon to *not* be set, and is slower.
             #
             # poll() only catches failures before the call itself
             # so let's sleep a little first
@@ -1186,27 +1206,16 @@ class LocalNodeController(NodeController):
             #
             # avoid writing a newline or space when polling
             # so output comes out neatly
-            sys.stdout.write('.')
-            sys.stdout.flush()
+            print('.', end='', flush=True)
             time.sleep(self._env['poll_launch_time'])
             p.poll()
-        if p.returncode is not None and p.returncode != 0:
-            if self._env['poll_launch_time'] is None:
-                print(("Couldn't launch {:12} command '{}': " +
-                       "exit {}, output '{}'")
-                      .format(self._env['nick'],
-                              " ".join(cmdline),
-                              p.returncode,
-                              stdouterr))
-            else:
-                print(("Couldn't poll {:12} command '{}' " +
-                       "after waiting {} seconds for launch: " +
-                       "exit {}").format(self._env['nick'],
-                                         " ".join(cmdline),
-                                         self._env['poll_launch_time'],
-                                         p.returncode))
-            return False
-        return True
+            if p.returncode is not None:
+                # Process unexpectedly exited
+                raise ChutneyError(
+                    f"'{self._env['nick']:12}' unexpectedly exited with code {p.returncode}."
+                    + f" command '{' '.join(cmdline)}'"
+                    + f" after waiting {self._env['poll_launch_time']} seconds for launch")
+
 
     def stop(self, sig=signal.SIGINT):
         """Try to stop this node by sending it the signal 'sig'."""
@@ -2177,7 +2186,7 @@ class TorEnviron(chutney.Templating.Environ):
         return self['nick']  # OMG TEH SECURE!
 
     def _get_torrc_template_path(self, my):
-        return [importlib.resources.files("chutney").joinpath('data', 'torrc_templates')]
+        return [importlib.resources.files("chutney").joinpath('data').joinpath('torrc_templates')]
 
     def _get_lockfile(self, my):
         return Path(self['dir'], 'lock')
@@ -2262,7 +2271,7 @@ class Network(object):
         self._nextnodenum = 0
         self.dir = ""
 
-    def addNode(self, node: Node):
+    def addNode(self, node: Node) -> None:
         """Add `node` to the network. `node` must have been created with this `Network`."""
         assert node._network is self, "Node was created from a different Network"
         node.setNodenum(self._nextnodenum)
@@ -2271,12 +2280,12 @@ class Network(object):
         if node._env['bridgeauthority']:
             self._dfltEnv['hasbridgeauth'] = True
 
-    def addNodes(self, nodes: [Node]):
+    def addNodes(self, nodes: List[Node]) -> None:
         """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
         for node in nodes:
             self.addNode(node)
 
-    def _addRequirement(self, requirement):
+    def _addRequirement(self, requirement) -> None:
         requirement = requirement.upper()
         if requirement not in KNOWN_REQUIREMENTS:
             raise RuntimeError(("Unrecognized requirement %r"%requirement))
@@ -2340,25 +2349,26 @@ class Network(object):
         nodeslink.symlink_to(newnodesdir)
         self.dir = newnodesdir
 
-    def _checkConfig(self):
+    def _checkConfig(self) -> None:
         for n in self._nodes:
             n.getBuilder().checkConfig(self)
 
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
            and host information we have, and prints the result.
+           Raises `ChutneyError` if anythign is missing.
         """
         missing_any = False
         for r in self._requirements:
             if not KNOWN_REQUIREMENTS[r]():
-                print(("Can't run this network: %s is missing."))
+                print(f"Can't run this network: {r} is missing.")
                 missing_any = True
         for n in self._nodes:
             if not n.getBuilder().isSupported(self):
-                missing_any = False
+                missing_any = True
 
         if missing_any:
-            sys.exit(1)
+            raise ChutneyError("Missing requirements to run this network")
 
     def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
@@ -2454,20 +2464,24 @@ bridges = '''
         self.stop()
         self.start()
 
-    # TODO: raise an exception on errors.
-    def start(self) -> bool:
-        """Start all our network's nodes and return True on no errors."""
+    def start(self) -> None:
+        """Start all our network's nodes. Raises an `ChutneyErrorGroup` on errors"""
         # format polling correctly - avoid printing a newline
-        sys.stdout.write("Starting nodes")
-        sys.stdout.flush()
-        rv = all([n.getController().start() for n in self._nodes
-                  if n._env['launch_phase'] ==
-                  self._dfltEnv['CUR_LAUNCH_PHASE']])
+        print("Starting nodes", end="")
+        errs = []
+        for n in self._nodes:
+            if n._env['launch_phase'] != self._dfltEnv['CUR_LAUNCH_PHASE']:
+                continue
+            try:
+                n.getController().start()
+            except ChutneyError as e:
+                errs.append(e)
+        if len(errs) > 0:
+            raise ChutneyErrorGroup("Some nodes couldn't start", errs)
         # now print a newline unconditionally - this stops poll()ing
         # output from being squashed together, at the cost of a blank
         # line in wait()ing output
         print("")
-        return rv
 
     def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
@@ -2544,14 +2558,13 @@ bridges = '''
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    # TODO: raise an exception on timeout.
-    def wait_for_bootstrap(self) -> bool:
-        """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap. Returns True on success, or False on timeout.
+    def wait_for_bootstrap(self, limit_secs:int=getenv_int("CHUTNEY_START_TIME", 60)) -> None:
+        """
+        Wait for the network to bootstrap. Raises `TimeoutException` on timeout.
         """
         print("Waiting for nodes to bootstrap...\n")
         start = time.time()
-        limit = start + getenv_int("CHUTNEY_START_TIME", 60)
+        limit = start + limit_secs
         next_print_status = start + Network.PRINT_NETWORK_STATUS_DELAY
         bootstrap_upto = self._dfltEnv['CUR_LAUNCH_PHASE']
 
@@ -2623,7 +2636,7 @@ bridges = '''
                     time.sleep(sleep_time)
                     now = time.time()
                     elapsed = now - start
-                return True
+                return
             if now >= limit:
                 break
             if now >= next_print_status:
@@ -2638,7 +2651,7 @@ bridges = '''
                     print("start: {} limit: {}".format(start, limit))
                     print("next_print_status: {} now: {}"
                           .format(next_print_status, time.time()))
-                    return False
+                    raise ChutneyTimeoutError()
                 else:
                     self.print_bootstrap_status(controllers,
                                                 most_recent_desc_status,
@@ -2663,13 +2676,13 @@ bridges = '''
                 print("start: {} limit: {}".format(start, limit))
                 print("next_print_status: {} now: {}"
                       .format(next_print_status, time.time()))
-                return False
+                raise ChutneyTimeoutError()
 
         self.print_bootstrap_status(controllers,
                                     most_recent_desc_status,
                                     elapsed=elapsed,
                                     msg="Bootstrap failed")
-        return False
+        raise ChutneyTimeoutError()
 
     # Keep in sync with ShutdownWaitLength in common.i
     SHUTDOWN_WAIT_LENGTH = 2
@@ -2741,15 +2754,85 @@ bridges = '''
                            any_tor_was_running,
                            True)
 
+class CLICommands:
+    """
+    Methods invokable from CLI.
+
+    All methods that don't start with `_` are invocable from the command-line.
+    """
+    def __init__(self, network: Network):
+        self._net = network
+
     def print_phases(self) -> None:
         """Print the total number of phases in which the network is
            initialized, configured, or bootstrapped."""
         def max_phase(key):
-            return max(int(n._env[key]) for n in self._nodes)
+            return max(int(n._env[key]) for n in self._net._nodes)
         cfg_max = max_phase("config_phase")
         launch_max = max_phase("launch_phase")
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
+
+    def final_cleanup(self,
+                      wrote_dot,
+                      any_tor_was_running,
+                      cleanup_runfiles) -> None:
+        '''Perform final cleanup actions, based on the arguments:
+             - wrote_dot: end a series of logged dots with a newline
+             - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
+             - cleanup_runfiles: delete old lockfiles from crashed tors
+                                 rename old pid files from stopped tors
+        '''
+        self._net.final_cleanup(wrote_dot, any_tor_was_running, cleanup_runfiles)
+
+    def create_new_nodes_dir(self) -> None:
+        """Create a new directory with a unique name, and symlink it to nodes
+        """
+        self._net.create_new_nodes_dir()
+
+    def supported(self) -> None:
+        """Check whether this network is supported by the set of binaries
+           and host information we have, and prints the result.
+        """
+        self._net.supported()
+
+    def configure(self) -> None:
+        """Invoked from command line: Configure and prepare the network to be
+           started.
+        """
+        self._net.configure()
+
+    def status(self) -> bool:
+        """Print how many nodes are running and how many are expected, and
+           return True if all nodes are running.
+        """
+        return self._net.status()
+
+    def restart(self) -> None:
+        """Invoked from command line: Stop and subsequently start our
+           network's nodes.
+        """
+        self._net.restart()
+
+    def start(self) -> None:
+        """Start all our network's nodes and return True on no errors."""
+        return self._net.start()
+
+    def hup(self) -> bool:
+        """Send SIGHUP to all our network's running nodes and return True on no
+           errors.
+        """
+        return self._net.hup()
+
+    def wait_for_bootstrap(self) -> None:
+        """Invoked from tools/test-network.sh to wait for the network to
+           bootstrap.
+        """
+        self._net.wait_for_bootstrap()
+
+    def stop(self) -> None:
+        """Stop our network's running tor nodes."""
+        self._net.stop()
 
 def getTests():
     chutney_tests_path = importlib.resources.files("chutney.network_tests")
@@ -2761,17 +2844,11 @@ def getTests():
 def usage():
     return "\n".join(["Usage: chutney {command/test} {networkfile}",
                       "Known commands are: %s" % (
-                          " ".join(x for x in dir(Network)
+                          " ".join(x for x in dir(CLICommands)
                                    if not x.startswith("_"))),
                       "Known tests are: %s" % (
                           " ".join(getTests()))
                       ])
-
-
-def exit_on_error(err_msg):
-    print("Error: {0}\n".format(err_msg))
-    print(usage())
-    sys.exit(1)
 
 
 def runConfigFile(verb, data):
@@ -2803,36 +2880,53 @@ def runConfigFile(verb, data):
         except AttributeError as e:
             print("Error running test {!r}: {}".format(verb, e))
             return False
-        return run_test(network)
+        try:
+            run_test(network)
+        except NetworkTestFailure as e:
+            raise ChutneyError(f"Test '{verb}' failed") from e
+        return
+
+    cli_cmds = CLICommands(network)
 
     # tell the user we don't know what their verb meant
-    if not hasattr(network, verb):
-        print(usage(network))
+    if not hasattr(cli_cmds, verb):
+        print(usage())
         print("Error: I don't know how to %s." % verb)
         return
 
-    return getattr(network, verb)()
+    return getattr(cli_cmds, verb)()
 
-def parseArgs(argv):
-    """Parse and return commandline arguments."""
-    if len(argv) < 3:
-        exit_on_error("Not enough arguments given.")
-    if not os.path.isfile(argv[2]):
-        exit_on_error("Cannot find networkfile: {0}.".format(argv[2]))
-    return {'network_cfg': argv[2], 'action': argv[1]}
+def main(action, network_cfg) -> None:
+    """A slightly more hermetic main could be called reasonably from python
 
-def main(action, network_cfg):
-    """A slightly more hermetic main could be called reasonably from python"""
-    f = open(network_cfg)
-    result = runConfigFile(action, f.read())
+    Raises an exception derived from `ChutneyError` on failure.
+    """
+    try:
+        with open(network_cfg) as f:
+            network_cfg_contents = f.read()
+    except OSError as e:
+        raise ChutneyError(f"Couldn't read network config file {network_cfg}") from e
+    result = runConfigFile(action, network_cfg_contents)
     if result is False:
-        return -1
-    return 0
+        # TODO: eliminate this case. Have all commands
+        # return a more informative error instead of `False`
+        raise ChutneyError("Unspecified failure")
 
 def __main__():
     """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
-    kwargs = parseArgs(sys.argv)
-    sys.exit(main(**kwargs))
+    import traceback
+    try:
+        (action, network_cfg) = sys.argv[1:]
+    except ValueError:
+        print("Wrong number of arguments.")
+        print(usage())
+        sys.exit(1)
+    try:
+        main(action, network_cfg)
+    except ChutneyError as e:
+        traceback.print_exception(e, limit=0)
+        sys.exit(1)
+    sys.exit(0)
 
 if __name__ == '__main__':
     __main__()

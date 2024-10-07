@@ -8,12 +8,14 @@ import chutney
 import chutney.TorNet
 import chutney.Traffic
 
+from . import NetworkTestFailure
+
 # Try to verify twice each consensus, but don't verify too fast
 V3_AUTH_VOTING_INTERVAL = chutney.TorNet.V3_AUTH_VOTING_INTERVAL
 VERIFY_ATTEMPT_INTERVAL = V3_AUTH_VOTING_INTERVAL/2.0 - 1.0
 TIMEOUT_INTERVAL = max(VERIFY_ATTEMPT_INTERVAL - 1.0, 5.0)
 
-def run_test(network: chutney.TorNet.Network) -> bool:
+def run_test(network: chutney.TorNet.Network) -> None:
     wait_time = network._dfltEnv['bootstrap_time']
     start_time = time.time()
     end_time = start_time + wait_time
@@ -39,7 +41,7 @@ def run_test(network: chutney.TorNet.Network) -> bool:
     print("Transmission: %s" % ("Success" if status else "Failure"))
     if not status:
         print("Set CHUTNEY_DEBUG to diagnose.")
-    return status
+        raise NetworkTestFailure("All attempts failed")
 
 
 def _verify_traffic(network, timeout=5.0):
