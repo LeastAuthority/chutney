@@ -7,6 +7,9 @@
 #  restrict, so long as you retain the above notice(s) and this license
 #  in all redistributed copies and derived works.  There is no warranty.
 
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
@@ -58,7 +61,7 @@ class ChutneyMissingBinaryError(ChutneyError):
         self._help=help
 
     @staticmethod
-    def for_missing_tor(tor_name:str, cmdline:List[str]) -> "ChutneyMissingBinaryError":
+    def for_missing_tor(tor_name:str, cmdline:List[str]) -> ChutneyMissingBinaryError:
         """Create an exception for a missing tor binary, with help for how to fix it.
         """
         help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
@@ -430,7 +433,7 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, network: "Network", parent: Optional["Node"] = None, **kwargs):
+    def __init__(self, network: Network, parent: Optional[Node] = None, **kwargs):
         """Create a new Node.
 
            Initial fields in this Node's environment are set from `kwargs`.
