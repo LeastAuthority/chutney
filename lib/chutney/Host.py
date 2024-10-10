@@ -7,7 +7,7 @@ import socket
 import chutney.Util
 
 @chutney.Util.memoized
-def is_ipv6_supported():
+def is_ipv6_supported() -> bool:
     """Return true iff ipv6 is supported on this host."""
     try:
         s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
