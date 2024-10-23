@@ -6,6 +6,13 @@
 #  restrict, so long as you retain the above notice(s) and this license
 #  in all redistributed copies and derived works.  There is no warranty.
 
+# TODO: Remove these
+# mypy: no-check-untyped-defs
+# mypy: no-disallow-untyped-defs
+# mypy: no-disallow-incomplete-defs
+# mypy: no-disallow-untyped-calls
+# mypy: no-warn-return-any
+
 """
   This module contins a general-purpose specialization-based
   templating mechanism.  Chutney uses it for string-substitution to
