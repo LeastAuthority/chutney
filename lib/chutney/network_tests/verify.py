@@ -19,15 +19,15 @@ from . import NetworkTestFailure
 
 # Try to verify twice each consensus, but don't verify too fast
 V3_AUTH_VOTING_INTERVAL = chutney.TorNet.V3_AUTH_VOTING_INTERVAL
-VERIFY_ATTEMPT_INTERVAL = V3_AUTH_VOTING_INTERVAL/2.0 - 1.0
+VERIFY_ATTEMPT_INTERVAL = V3_AUTH_VOTING_INTERVAL / 2.0 - 1.0
 TIMEOUT_INTERVAL = max(VERIFY_ATTEMPT_INTERVAL - 1.0, 5.0)
 
+
 def run_test(network: chutney.TorNet.Network) -> None:
-    wait_time = network._dfltEnv['bootstrap_time']
+    wait_time = network._dfltEnv["bootstrap_time"]
     start_time = time.time()
     end_time = start_time + wait_time
-    print("Verifying data transmission: (retrying for up to %d seconds)"
-          % wait_time)
+    print("Verifying data transmission: (retrying for up to %d seconds)" % wait_time)
     status = False
     # Keep on retrying the verify until it succeeds or times out
     now = start_time
@@ -55,7 +55,7 @@ def _verify_traffic(network, timeout=5.0):
     """Verify (parts of) the network by sending traffic through it
     and verify what is received."""
     # TODO: IPv6 SOCKSPorts, SOCKSPorts with IPv6Traffic, and IPv6 Exits
-    LISTEN_ADDR = network._dfltEnv['ip']
+    LISTEN_ADDR = network._dfltEnv["ip"]
     LISTEN_PORT = 4747  # FIXME: Do better! Note the default exit policy.
     # HSs must have a HiddenServiceDir with
     # "HiddenServicePort <HS_PORT> <CHUTNEY_LISTEN_ADDRESS>:<LISTEN_PORT>"
@@ -65,13 +65,13 @@ def _verify_traffic(network, timeout=5.0):
     # each time the source connects.
     # We create a source-sink pair for each (bridge) client to an exit,
     # and a source-sink pair for a (bridge) client to each hidden service
-    DATALEN = network._dfltEnv['data_bytes']
+    DATALEN = network._dfltEnv["data_bytes"]
     # Print a dot each time a sink verifies this much data
     DOTDATALEN = 5 * 1024 * 1024  # Octets
     # Calculate the amount of random data we should use
     randomlen = _calculate_randomlen(DATALEN)
     reps = _calculate_reps(DATALEN, randomlen)
-    connection_count = network._dfltEnv['connection_count']
+    connection_count = network._dfltEnv["connection_count"]
     # sanity check
     if reps == 0:
         DATALEN = 0
@@ -81,31 +81,35 @@ def _verify_traffic(network, timeout=5.0):
         dot_reps = _calculate_reps(DOTDATALEN, randomlen)
         # make sure we get at least one dot per transmission
         dot_reps = min(reps, dot_reps)
-        with open('/dev/urandom', 'rb') as randfp:
+        with open("/dev/urandom", "rb") as randfp:
             tmpdata = randfp.read(randomlen)
     else:
         dot_reps = 0
         tmpdata = {}
     # now make the connections
     bind_to = (LISTEN_ADDR, LISTEN_PORT)
-    tt = chutney.Traffic.TrafficTester(bind_to,
-                                       data=tmpdata,
-                                       timeout=timeout,
-                                       repetitions=reps,
-                                       dot_repetitions=dot_reps)
+    tt = chutney.Traffic.TrafficTester(
+        bind_to,
+        data=tmpdata,
+        timeout=timeout,
+        repetitions=reps,
+        dot_repetitions=dot_reps,
+    )
     # _env does not implement get() due to its fallback to parent behaviour
-    client_list = filter(lambda n:
-                         n._env['tag'].startswith('c') or
-                         n._env['tag'].startswith('bc') or
-                         ('client' in n._env.keys() and n._env['client'] == 1),
-                         network._nodes)
-    exit_list = filter(lambda n:
-                       ('exit' in n._env.keys() and n._env['exit'] == 1),
-                       network._nodes)
-    hs_list = filter(lambda n:
-                     n._env['tag'].startswith('h') or
-                     ('hs' in n._env.keys() and n._env['hs'] == 1),
-                     network._nodes)
+    client_list = filter(
+        lambda n: n._env["tag"].startswith("c")
+        or n._env["tag"].startswith("bc")
+        or ("client" in n._env.keys() and n._env["client"] == 1),
+        network._nodes,
+    )
+    exit_list = filter(
+        lambda n: ("exit" in n._env.keys() and n._env["exit"] == 1), network._nodes
+    )
+    hs_list = filter(
+        lambda n: n._env["tag"].startswith("h")
+        or ("hs" in n._env.keys() and n._env["hs"] == 1),
+        network._nodes,
+    )
     # Make sure these lists are actually lists.  (It would probably
     # be better to do list comprehensions here.)
     client_list = list(client_list)
@@ -124,14 +128,29 @@ def _verify_traffic(network, timeout=5.0):
     # if a node is used in two paths, we count it twice
     # this is a lower bound, as cannabilised circuits are one node longer
     total_path_node_count = 0
-    total_path_node_count += _configure_exits(tt, bind_to, tmpdata, reps,
-                                              client_list, exit_list,
-                                              LISTEN_ADDR, LISTEN_PORT,
-                                              connection_count)
-    total_path_node_count += _configure_hs(tt, tmpdata, reps, client_list,
-                                           hs_list, HS_PORT, LISTEN_ADDR,
-                                           LISTEN_PORT, connection_count,
-                                           network._dfltEnv['hs_multi_client'])
+    total_path_node_count += _configure_exits(
+        tt,
+        bind_to,
+        tmpdata,
+        reps,
+        client_list,
+        exit_list,
+        LISTEN_ADDR,
+        LISTEN_PORT,
+        connection_count,
+    )
+    total_path_node_count += _configure_hs(
+        tt,
+        tmpdata,
+        reps,
+        client_list,
+        hs_list,
+        HS_PORT,
+        LISTEN_ADDR,
+        LISTEN_PORT,
+        connection_count,
+        network._dfltEnv["hs_multi_client"],
+    )
     print("Transmitting Data:")
     start_time = time.time()
     status = tt.run()
@@ -149,7 +168,7 @@ def _verify_traffic(network, timeout=5.0):
 # much data in Python has its own performance impacts, so we provide
 # a smaller amount of random data instead, and repeat it to DATALEN
 def _calculate_randomlen(datalen):
-    MAX_RANDOMLEN = 128 * 1024   # Octets.
+    MAX_RANDOMLEN = 128 * 1024  # Octets.
     if datalen > MAX_RANDOMLEN:
         return MAX_RANDOMLEN
     else:
@@ -171,20 +190,30 @@ def _calculate_reps(datalen, replen):
 # via 4 nodes (including the client) to an arbitrary exit
 # Each client binds directly to <CHUTNEY_LISTEN_ADDRESS>:LISTEN_PORT
 # via an Exit relay
-def _configure_exits(tt, bind_to, tmpdata, reps, client_list, exit_list,
-                     LISTEN_ADDR, LISTEN_PORT, connection_count):
+def _configure_exits(
+    tt,
+    bind_to,
+    tmpdata,
+    reps,
+    client_list,
+    exit_list,
+    LISTEN_ADDR,
+    LISTEN_PORT,
+    connection_count,
+):
     CLIENT_EXIT_PATH_NODES = 4
     exit_path_node_count = 0
     if len(exit_list) > 0:
-        exit_path_node_count += (len(client_list) *
-                                 CLIENT_EXIT_PATH_NODES *
-                                 connection_count)
+        exit_path_node_count += (
+            len(client_list) * CLIENT_EXIT_PATH_NODES * connection_count
+        )
         for op in client_list:
-            print("  Exit to %s:%d via client %s:%s"
-                  % (LISTEN_ADDR, LISTEN_PORT,
-                     'localhost', op._env['socksport']))
+            print(
+                "  Exit to %s:%d via client %s:%s"
+                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op._env["socksport"])
+            )
             for _ in range(connection_count):
-                proxy = ('localhost', int(op._env['socksport']))
+                proxy = ("localhost", int(op._env["socksport"]))
                 tt.add_client(bind_to, proxy)
     return exit_path_node_count
 
@@ -195,11 +224,20 @@ def _configure_exits(tt, bind_to, tmpdata, reps, client_list, exit_list,
 # (including the client and hs) to each hidden service
 # Instead of binding directly to LISTEN_PORT via an Exit relay,
 # we bind to hs_hostname:HS_PORT via a hidden service connection
-def _configure_hs(tt, tmpdata, reps, client_list, hs_list, HS_PORT,
-                  LISTEN_ADDR, LISTEN_PORT, connection_count, hs_multi_client):
+def _configure_hs(
+    tt,
+    tmpdata,
+    reps,
+    client_list,
+    hs_list,
+    HS_PORT,
+    LISTEN_ADDR,
+    LISTEN_PORT,
+    connection_count,
+    hs_multi_client,
+):
     CLIENT_HS_PATH_NODES = 8
-    hs_path_node_count = (len(hs_list) * CLIENT_HS_PATH_NODES *
-                          connection_count)
+    hs_path_node_count = len(hs_list) * CLIENT_HS_PATH_NODES * connection_count
     # Each client in hs_client_list connects to each hs
     if hs_multi_client:
         hs_client_list = client_list
@@ -209,14 +247,21 @@ def _configure_hs(tt, tmpdata, reps, client_list, hs_list, HS_PORT,
         hs_client_list = client_list[:1]
     # Setup the connections from each client in hs_client_list to each hs
     for hs in hs_list:
-        hs_bind_to = (hs._env['hs_hostname'], HS_PORT)
+        hs_bind_to = (hs._env["hs_hostname"], HS_PORT)
         for client in hs_client_list:
-            print("  HS to %s:%d (%s:%d) via client %s:%s"
-                  % (hs._env['hs_hostname'], HS_PORT,
-                     LISTEN_ADDR, LISTEN_PORT,
-                     'localhost', client._env['socksport']))
+            print(
+                "  HS to %s:%d (%s:%d) via client %s:%s"
+                % (
+                    hs._env["hs_hostname"],
+                    HS_PORT,
+                    LISTEN_ADDR,
+                    LISTEN_PORT,
+                    "localhost",
+                    client._env["socksport"],
+                )
+            )
             for _ in range(connection_count):
-                proxy = ('localhost', int(client._env['socksport']))
+                proxy = ("localhost", int(client._env["socksport"]))
                 tt.add_client(hs_bind_to, proxy)
 
     return hs_path_node_count
@@ -232,22 +277,17 @@ def _configure_hs(tt, tmpdata, reps, client_list, hs_list, HS_PORT,
 # * tor performance is CPU-limited
 # This be used to estimate the bandwidth capacity of a CPU-bound
 # tor relay running on this machine
-def _report_bandwidth(data_length, total_path_node_count, start_time,
-                      end_time):
+def _report_bandwidth(data_length, total_path_node_count, start_time, end_time):
     # otherwise, if we sent at least 5 MB cumulative total, and
     # it took us at least a second to send, report bandwidth
     MIN_BWDATA = 5 * 1024 * 1024  # Octets.
-    MIN_ELAPSED_TIME = 1.0        # Seconds.
+    MIN_ELAPSED_TIME = 1.0  # Seconds.
     cumulative_data_sent = total_path_node_count * data_length
     elapsed_time = end_time - start_time
-    if (cumulative_data_sent >= MIN_BWDATA and
-            elapsed_time >= MIN_ELAPSED_TIME):
+    if cumulative_data_sent >= MIN_BWDATA and elapsed_time >= MIN_ELAPSED_TIME:
         # Report megabytes per second
-        BWDIVISOR = 1024*1024
-        single_stream_bandwidth = (data_length / elapsed_time / BWDIVISOR)
-        overall_bandwidth = (cumulative_data_sent / elapsed_time /
-                             BWDIVISOR)
-        print("Single Stream Bandwidth: %.2f MBytes/s"
-              % single_stream_bandwidth)
-        print("Overall tor Bandwidth: %.2f MBytes/s"
-              % overall_bandwidth)
+        BWDIVISOR = 1024 * 1024
+        single_stream_bandwidth = data_length / elapsed_time / BWDIVISOR
+        overall_bandwidth = cumulative_data_sent / elapsed_time / BWDIVISOR
+        print("Single Stream Bandwidth: %.2f MBytes/s" % single_stream_bandwidth)
+        print("Overall tor Bandwidth: %.2f MBytes/s" % overall_bandwidth)

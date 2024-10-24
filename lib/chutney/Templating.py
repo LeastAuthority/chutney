@@ -105,15 +105,15 @@ _KeyError = KeyError
 
 
 class _DictWrapper(object):
-
     """Base class to implement a dictionary-like object with delegation.
-       To use it, implement the _getitem method, and pass the optional
-       'parent' argument to the constructor.
+    To use it, implement the _getitem method, and pass the optional
+    'parent' argument to the constructor.
 
-       Lookups are satisfied first by calling _getitem().  If that
-       fails with KeyError but the parent is present, lookups delegate
-       to _parent.
+    Lookups are satisfied first by calling _getitem().  If that
+    fails with KeyError but the parent is present, lookups delegate
+    to _parent.
     """
+
     # Fields
     # _parent: the parent object that lookups delegate to.
 
@@ -128,9 +128,9 @@ class _DictWrapper(object):
 
     def lookup(self, key, my):
         """As self[key], but parents are told when doing their lookups that
-           the lookup is relative to a specialized environment 'my'.  This
-           is helpful when a parent environment has a value that depends
-           on other values.
+        the lookup is relative to a specialized environment 'my'.  This
+        is helpful when a parent environment has a value that depends
+        on other values.
         """
         try:
             return self._getitem(key, my)
@@ -154,69 +154,69 @@ class _DictWrapper(object):
 
 
 class Environ(_DictWrapper):
-
     """An 'Environ' is used to define a set of key-value mappings with a
-       fall-back parent Environ.  When looking for keys in the
-       Environ, any keys not found in this Environ are searched for in
-       the parent.
+    fall-back parent Environ.  When looking for keys in the
+    Environ, any keys not found in this Environ are searched for in
+    the parent.
 
-       >>> animal = Environ(mobile=True,legs=4,can_program=False,
-                            can_meow=False)
-       >>> biped = Environ(animal,legs=2)
-       >>> cat = Environ(animal,can_meow=True)
-       >>> human = Environ(biped,feathers=False,can_program=True)
-       >>> chicken = Environ(biped,feathers=True)
-       >>> human['legs']
-       2
-       >>> human['can_meow']
-       False
-       >>> human['can_program']
-       True
-       >>> cat['legs']
-       4
-       >>> cat['can_meow']
-       True
+    >>> animal = Environ(mobile=True,legs=4,can_program=False,
+                         can_meow=False)
+    >>> biped = Environ(animal,legs=2)
+    >>> cat = Environ(animal,can_meow=True)
+    >>> human = Environ(biped,feathers=False,can_program=True)
+    >>> chicken = Environ(biped,feathers=True)
+    >>> human['legs']
+    2
+    >>> human['can_meow']
+    False
+    >>> human['can_program']
+    True
+    >>> cat['legs']
+    4
+    >>> cat['can_meow']
+    True
 
-       You can extend Environ to support values calculated at run-time by
-       defining methods with names in the format _get_KEY():
+    You can extend Environ to support values calculated at run-time by
+    defining methods with names in the format _get_KEY():
 
-       >>> class HomeEnv(Environ):
-       ...    def __init__(self, p=None, **kw):
-       ...       Environ.__init__(self, p, **kw)
-       ...    def _get_dotemacs(self, my):
-       ...       return os.path.join(my['homedir'], ".emacs")
-       >>> h = HomeEnv(homedir="/tmp")
-       >>> h['dotemacs']
-       '/tmp/.emacs'
+    >>> class HomeEnv(Environ):
+    ...    def __init__(self, p=None, **kw):
+    ...       Environ.__init__(self, p, **kw)
+    ...    def _get_dotemacs(self, my):
+    ...       return os.path.join(my['homedir'], ".emacs")
+    >>> h = HomeEnv(homedir="/tmp")
+    >>> h['dotemacs']
+    '/tmp/.emacs'
 
-       The 'my' argument passed to these functions is the top-level
-       dictionary that we're using for our lookup.  This is useful
-       when defining values that depend on other values which might in
-       turn be overridden:
+    The 'my' argument passed to these functions is the top-level
+    dictionary that we're using for our lookup.  This is useful
+    when defining values that depend on other values which might in
+    turn be overridden:
 
-       >>> class Animal(Environ):
-       ...    def __init__(self, p=None, **kw):
-       ...       Environ.__init__(self, p, **kw)
-       ...    def _get_limbs(self, my):
-       ...       return my['legs'] + my['arms']
-       >>> a = Animal(legs=2,arms=2)
-       >>> spider = Environ(a, legs=8,arms=0)
-       >>> squid = Environ(a, legs=0,arms=10)
-       >>> squid['limbs']
-       10
-       >>> spider['limbs']
-       8
+    >>> class Animal(Environ):
+    ...    def __init__(self, p=None, **kw):
+    ...       Environ.__init__(self, p, **kw)
+    ...    def _get_limbs(self, my):
+    ...       return my['legs'] + my['arms']
+    >>> a = Animal(legs=2,arms=2)
+    >>> spider = Environ(a, legs=8,arms=0)
+    >>> squid = Environ(a, legs=0,arms=10)
+    >>> squid['limbs']
+    10
+    >>> spider['limbs']
+    8
 
-       Note that if _get_limbs() had been defined as
-          'return self['legs']+self['arms']',
-       both spider['limbs'] and squid['limbs'] would be given
-       (incorrectly) as 4.
+    Note that if _get_limbs() had been defined as
+       'return self['legs']+self['arms']',
+    both spider['limbs'] and squid['limbs'] would be given
+    (incorrectly) as 4.
     """
+
     # Fields
     # _dict: dictionary holding the contents of this Environ that are
     #   not inherited from the parent and are not computed on the fly.
 
-    def __init__(self, parent:Optional[Environ]=None, **kw: Any):
+    def __init__(self, parent: Optional[Environ] = None, **kw: Any):
         _DictWrapper.__init__(self, parent)
         self._dict = kw
 
@@ -246,13 +246,14 @@ class Environ(_DictWrapper):
         s.update(name[5:] for name in dir(self) if name.startswith("_get_"))
         return s
 
-class IncluderDict(_DictWrapper):
 
+class IncluderDict(_DictWrapper):
     """Helper to implement ${include:} template substitution.  Acts as a
-       dictionary that maps include:foo to the contents of foo (relative to
-       a search path if foo is a relative path), and delegates everything else
-       to a parent.
+    dictionary that maps include:foo to the contents of foo (relative to
+    a search path if foo is a relative path), and delegates everything else
+    to a parent.
     """
+
     # Fields
     # _includePath: a list of directories to consider when searching
     #   for files given as relative paths.
@@ -261,8 +262,8 @@ class IncluderDict(_DictWrapper):
 
     def __init__(self, parent, includePath=(".",)):
         """Create a new IncluderDict.  Non-include entries are delegated to
-           parent.  Non-absolute paths are searched for relative to the
-           paths listed in includePath.
+        parent.  Non-absolute paths are searched for relative to the
+        paths listed in includePath.
         """
         _DictWrapper.__init__(self, parent)
         self._includePath = includePath
@@ -272,9 +273,9 @@ class IncluderDict(_DictWrapper):
         if not key.startswith("include:"):
             raise KeyError(key)
 
-        filename = Path(key[len("include:"):])
+        filename = Path(key[len("include:") :])
         if filename.is_absolute():
-            with filename.open(mode='r') as f:
+            with filename.open(mode="r") as f:
                 stat = os.fstat(f.fileno())
                 if stat.st_mtime > self._st_mtime:
                     self._st_mtime = stat.st_mtime
@@ -283,7 +284,7 @@ class IncluderDict(_DictWrapper):
         for elt in self._includePath:
             fullname = Path(elt, filename)
             if fullname.exists():
-                with fullname.open(mode='r') as f:
+                with fullname.open(mode="r") as f:
                     stat = os.fstat(f.fileno())
                     if stat.st_mtime > self._st_mtime:
                         self._st_mtime = stat.st_mtime
@@ -294,22 +295,24 @@ class IncluderDict(_DictWrapper):
     def getUpdateTime(self):
         return self._st_mtime
 
+
 class PathDict(_DictWrapper):
     """
-       Implements ${path:} patterns, which map ${path:foo} to the location
-       of 'foo' in the PATH environment variable.
+    Implements ${path:} patterns, which map ${path:foo} to the location
+    of 'foo' in the PATH environment variable.
     """
+
     def __init__(self, parent, path=None):
         _DictWrapper.__init__(self, parent)
         if path is None:
-            path = os.getenv('PATH').split(":")
+            path = os.getenv("PATH").split(":")
         self._path = path
 
     def _getitem(self, key, my):
         if not key.startswith("path:"):
             raise KeyError(key)
 
-        key = key[len("path:"):]
+        key = key[len("path:") :]
 
         for location in self._path:
             p = Path(location, key)
@@ -322,24 +325,24 @@ class PathDict(_DictWrapper):
 
         raise KeyError(key)
 
-class _BetterTemplate(string.Template):
 
+class _BetterTemplate(string.Template):
     """Subclass of the standard string.Template that allows a wider range of
-       characters in variable names.
+    characters in variable names.
     """
 
-    idpattern = r'[a-z0-9:_/\.\-\/]+'
+    idpattern = r"[a-z0-9:_/\.\-\/]+"
 
     def __init__(self, template):
         string.Template.__init__(self, template)
 
 
 class _FindVarsHelper(object):
-
     """Helper dictionary for finding the free variables in a template.
-       It answers all requests for key lookups affirmatively, and remembers
-       what it was asked for.
+    It answers all requests for key lookups affirmatively, and remembers
+    what it was asked for.
     """
+
     # Fields
     # _dflts: a dictionary of default values to treat specially
     # _vars: a set of all the keys that we've been asked to look up so far.
@@ -360,15 +363,14 @@ class _FindVarsHelper(object):
 
 
 class Template(object):
-
     """A Template is a string pattern that allows repeated variable
-       substitutions.  These syntaxes are supported:
-          $var -- expands to the value of var
-          ${var} -- expands to the value of var
-          $$ -- expands to a single $
-          ${include:filename} -- expands to the contents of filename
+    substitutions.  These syntaxes are supported:
+       $var -- expands to the value of var
+       ${var} -- expands to the value of var
+       $$ -- expands to a single $
+       ${include:filename} -- expands to the contents of filename
 
-       Substitutions are performed iteratively until no more are possible.
+    Substitutions are performed iteratively until no more are possible.
     """
 
     # Okay, actually, we stop after this many substitutions to avoid
@@ -380,7 +382,7 @@ class Template(object):
     # _includePath: a list of directories to search when including a file
     #    by relative path.
 
-    def __init__(self, pattern: str, includePath:Iterable[str]=(".",)):
+    def __init__(self, pattern: str, includePath: Iterable[str] = (".",)):
         self._pat = pattern
         self._includePath = includePath
 
@@ -394,7 +396,7 @@ class Template(object):
 
     def format(self, values) -> str:
         """Return a string containing this template, filled in with the
-           values in the mapping 'values'.
+        values in the mapping 'values'.
         """
         values = IncluderDict(values, self._includePath)
         values = PathDict(values)
@@ -409,15 +411,23 @@ class Template(object):
             if nIterations > self.MAX_ITERATIONS:
                 raise ValueError("Too many iterations in expanding template!")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import importlib.resources
     import sys
+
     if len(sys.argv) == 1:
         import doctest
+
         doctest.testmod()
         print("done")
     else:
         for fn in sys.argv[1:]:
-            path = importlib.resources.files("chutney").joinpath('data').joinpath('torrc_templates').joinpath(fn)
+            path = (
+                importlib.resources.files("chutney")
+                .joinpath("data")
+                .joinpath("torrc_templates")
+                .joinpath(fn)
+            )
             t = Template(path.read_text())
             print(fn, t.freevars())

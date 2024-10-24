@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 import socket
 import chutney.Util
 
+
 @chutney.Util.memoized
 def is_ipv6_supported() -> bool:
     """Return true iff ipv6 is supported on this host."""
@@ -20,5 +21,3 @@ def is_ipv6_supported() -> bool:
         return True
     except socket.error:
         return False
-
-

@@ -42,23 +42,34 @@ import asynchat
 
 from chutney.Debug import debug_flag, debug
 
+
 def note(s):
-    sys.stderr.write("NOTE: %s\n"%s)
+    sys.stderr.write("NOTE: %s\n" % s)
+
+
 def warn(s):
-    sys.stderr.write("WARN: %s\n"%s)
+    sys.stderr.write("WARN: %s\n" % s)
+
 
 UNIQ_CTR = 0
+
+
 def uniq(s):
     global UNIQ_CTR
     UNIQ_CTR += 1
-    return "%s-%s"%(s,UNIQ_CTR)
+    return "%s-%s" % (s, UNIQ_CTR)
+
 
 if sys.version_info[0] >= 3:
+
     def byte_to_int(b):
         return b
+
 else:
+
     def byte_to_int(b):
         return ord(b)
+
 
 def addr_to_family(addr):
     for family in [socket.AF_INET, socket.AF_INET6]:
@@ -70,6 +81,7 @@ def addr_to_family(addr):
 
     return socket.AF_INET
 
+
 def socks_cmd(addr_port):
     """
     Return a SOCKS command for connecting to addr_port.
@@ -79,21 +91,21 @@ def socks_cmd(addr_port):
     """
     ver = 4  # Only SOCKSv4 for now.
     cmd = 1  # Stream connection.
-    user = b'\x00'
-    dnsname = ''
+    user = b"\x00"
+    dnsname = ""
     host, port = addr_port
     try:
         addr = socket.inet_aton(host)
     except socket.error:
-        addr = b'\x00\x00\x00\x01'
-        dnsname = '%s\x00' % host
+        addr = b"\x00\x00\x00\x01"
+        dnsname = "%s\x00" % host
     debug("Socks 4a request to %s:%d" % (host, port))
     if type(dnsname) != type(b""):
         dnsname = dnsname.encode("ascii")
-    return struct.pack('!BBH', ver, cmd, port) + addr + user + dnsname
+    return struct.pack("!BBH", ver, cmd, port) + addr + user + dnsname
+
 
 class TestSuite(object):
-
     """Keep a tab on how many tests are pending, how many have failed
     and how many have succeeded."""
 
@@ -108,33 +120,33 @@ class TestSuite(object):
         self.teststatus[testname] = status
 
     def add(self, name):
-        note("Registering %s"%name)
+        note("Registering %s" % name)
         if name not in self.tests:
-            debug("Registering %s"%name)
+            debug("Registering %s" % name)
             self.not_done += 1
-            self.tests[name] = 'not done'
+            self.tests[name] = "not done"
         else:
             warn("... already registered!")
 
     def success(self, name):
-        note("Success for %s"%name)
-        if self.tests[name] == 'not done':
-            debug("Succeeded %s"%name)
-            self.tests[name] = 'success'
+        note("Success for %s" % name)
+        if self.tests[name] == "not done":
+            debug("Succeeded %s" % name)
+            self.tests[name] = "success"
             self.not_done -= 1
             self.successes += 1
         else:
-            warn("... status was %s"%self.tests.get(name))
+            warn("... status was %s" % self.tests.get(name))
 
     def failure(self, name):
-        note("Failure for %s"%name)
-        if self.tests[name] == 'not done':
-            debug("Failed %s"%name)
-            self.tests[name] = 'failure'
+        note("Failure for %s" % name)
+        if self.tests[name] == "not done":
+            debug("Failed %s" % name)
+            self.tests[name] = "failure"
             self.not_done -= 1
             self.failures += 1
         else:
-            warn("... status was %s"%self.tests.get(name))
+            warn("... status was %s" % self.tests.get(name))
 
     def failure_count(self):
         return self.failures
@@ -143,8 +155,13 @@ class TestSuite(object):
         return self.not_done == 0
 
     def status(self):
-        return('%s: %d/%d/%d' % (self.tests, self.not_done, self.successes,
-                                 self.failures))
+        return "%s: %d/%d/%d" % (
+            self.tests,
+            self.not_done,
+            self.successes,
+            self.failures,
+        )
+
 
 class Listener(asyncore.dispatcher):
     "A TCP listener, binding, listening and accepting new connections."
@@ -165,19 +182,23 @@ class Listener(asyncore.dispatcher):
         pair = self.accept()
         if pair is not None:
             newsock, endpoint = pair
-            debug("new client from %s:%s (fd=%d)" %
-                  (endpoint[0], endpoint[1], newsock.fileno()))
+            debug(
+                "new client from %s:%s (fd=%d)"
+                % (endpoint[0], endpoint[1], newsock.fileno())
+            )
             self.tt.add_responder(newsock)
 
     def fileno(self):
         return self.socket.fileno()
 
+
 class DataSource(object):
     """A data source generates some number of bytes of data, and then
-       returns None.
+    returns None.
 
-       For convenience, it conforms to the 'producer' api.
+    For convenience, it conforms to the 'producer' api.
     """
+
     def __init__(self, data, repetitions=1):
         self.data = data
         self.repetitions = repetitions
@@ -195,8 +216,10 @@ class DataSource(object):
 
         return None
 
+
 class DataChecker(object):
     """A data checker verifies its input against bytes in a stream."""
+
     def __init__(self, source):
         self.source = source
         self.pending = b""
@@ -228,8 +251,10 @@ class DataChecker(object):
                         self.succeeded = True
                     return
 
+
 class Sink(asynchat.async_chat):
     "A data sink, reading from its peer and verifying the data."
+
     def __init__(self, sock, tt):
         asynchat.async_chat.__init__(self, sock, map=tt.socket_map)
         self.set_terminator(None)
@@ -238,7 +263,7 @@ class Sink(asynchat.async_chat):
         self.testname = uniq("recv-data")
 
     def get_test_names(self):
-        return [ self.testname ]
+        return [self.testname]
 
     def collect_incoming_data(self, inp):
         # shortcut read when we don't ever expect any data
@@ -257,8 +282,10 @@ class Sink(asynchat.async_chat):
     def fileno(self):
         return self.socket.fileno()
 
+
 class CloseSourceProducer:
     """Helper: when this producer is returned, a source is successful."""
+
     def __init__(self, source):
         self.source = source
 
@@ -267,9 +294,11 @@ class CloseSourceProducer:
         self.source.sent_ok()
         return b""
 
+
 class Source(asynchat.async_chat):
     """A data source, connecting to a TCP server, optionally over a
     SOCKS proxy, sending data."""
+
     NOT_CONNECTED = 0
     CONNECTING = 1
     CONNECTING_THROUGH_PROXY = 2
@@ -278,21 +307,21 @@ class Source(asynchat.async_chat):
     def __init__(self, tt, server, proxy=None):
         asynchat.async_chat.__init__(self, map=tt.socket_map)
         self.data_source = tt.data_source.copy()
-        self.inbuf = b''
+        self.inbuf = b""
         self.proxy = proxy
         self.server = server
         self.tt = tt
         self.testname = uniq("send-data")
 
         self.set_terminator(None)
-        dest = (self.proxy or self.server)
+        dest = self.proxy or self.server
         self.create_socket(addr_to_family(dest[0]), socket.SOCK_STREAM)
-        debug("socket %d connecting to %r..."%(self.fileno(),dest))
+        debug("socket %d connecting to %r..." % (self.fileno(), dest))
         self.state = self.CONNECTING
         self.connect(dest)
 
     def get_test_names(self):
-        return [ self.testname ]
+        return [self.testname]
 
     def sent_ok(self):
         self.tt.success(self.testname)
@@ -313,15 +342,17 @@ class Source(asynchat.async_chat):
         self.inbuf += data
         if self.state == self.CONNECTING_THROUGH_PROXY:
             if len(self.inbuf) >= 8:
-                if self.inbuf[:2] == b'\x00\x5a':
+                if self.inbuf[:2] == b"\x00\x5a":
                     self.note("proxy handshake successful")
                     self.state = self.CONNECTED
                     debug("successfully connected (fd=%d)" % self.fileno())
                     self.inbuf = self.inbuf[8:]
                     self.push_output()
                 else:
-                    debug("proxy handshake failed (0x%x)! (fd=%d)" %
-                          (byte_to_int(self.inbuf[1]), self.fileno()))
+                    debug(
+                        "proxy handshake failed (0x%x)! (fd=%d)"
+                        % (byte_to_int(self.inbuf[1]), self.fileno())
+                    )
                     self.state = self.NOT_CONNECTED
                     self.close()
 
@@ -334,6 +365,7 @@ class Source(asynchat.async_chat):
     def fileno(self):
         return self.socket.fileno()
 
+
 class EchoServer(asynchat.async_chat):
     def __init__(self, sock, tt):
         asynchat.async_chat.__init__(self, sock, map=tt.socket_map)
@@ -343,6 +375,7 @@ class EchoServer(asynchat.async_chat):
 
     def collect_incoming_data(self, data):
         self.push(data)
+
 
 class EchoClient(Source):
     def __init__(self, tt, server, proxy=None):
@@ -355,7 +388,7 @@ class EchoClient(Source):
         self.tt.tests.note(self.testname_check, s)
 
     def get_test_names(self):
-        return [ self.testname, self.testname_check ]
+        return [self.testname, self.testname_check]
 
     def collect_incoming_data(self, data):
         if self.state == self.CONNECTING_THROUGH_PROXY:
@@ -378,6 +411,7 @@ class EchoClient(Source):
             self.tt.failure(self.testname_check)
             self.close()
 
+
 class TrafficTester(object):
     """
     Hang on select.select() and dispatch to Sources and Sinks.
@@ -387,13 +421,15 @@ class TrafficTester(object):
     Return True if all tests succeed, else False.
     """
 
-    def __init__(self,
-                 endpoint,
-                 data=b"",
-                 timeout=3,
-                 repetitions=1,
-                 dot_repetitions=0,
-                 chat_type="Echo"):
+    def __init__(
+        self,
+        endpoint,
+        data=b"",
+        timeout=3,
+        repetitions=1,
+        dot_repetitions=0,
+        chat_type="Echo",
+    ):
         if chat_type == "Echo":
             self.client_class = EchoClient
             self.responder_class = EchoServer
@@ -440,33 +476,36 @@ class TrafficTester(object):
     def run(self):
         start = now = time.time()
         end = time.time() + self.timeout
-        DUMP_TEST_STATUS_INTERVAL=0.5
-        dump_at = start+DUMP_TEST_STATUS_INTERVAL
+        DUMP_TEST_STATUS_INTERVAL = 0.5
+        dump_at = start + DUMP_TEST_STATUS_INTERVAL
         while now < end and not self.tests.all_done():
             # run only one iteration at a time, with a nice short timeout, so we
             # can actually detect completion and timeouts.
             asyncore.loop(5.0, False, self.socket_map, 1)
             now = time.time()
             if now > dump_at:
-                debug("Test status: %s"%self.tests.status())
+                debug("Test status: %s" % self.tests.status())
                 dump_at += DUMP_TEST_STATUS_INTERVAL
 
         if not debug_flag:
-            sys.stdout.write('\n')
+            sys.stdout.write("\n")
             sys.stdout.flush()
-        debug("Done with run(); all_done == %s and failure_count == %s"
-              %(self.tests.all_done(), self.tests.failure_count()))
+        debug(
+            "Done with run(); all_done == %s and failure_count == %s"
+            % (self.tests.all_done(), self.tests.failure_count())
+        )
 
-        note("Status:\n%s"%self.tests.teststatus)
+        note("Status:\n%s" % self.tests.teststatus)
 
         self.listener.close()
 
         return self.tests.all_done() and self.tests.failure_count() == 0
 
+
 def main():
     """Test the TrafficTester by sending and receiving some data."""
     DATA = b"a foo is a bar" * 1000
-    bind_to = ('localhost', int(sys.argv[1]))
+    bind_to = ("localhost", int(sys.argv[1]))
 
     tt = TrafficTester(bind_to, DATA)
     # Don't use a proxy for self-testing, so that we avoid tor entirely
@@ -477,5 +516,6 @@ def main():
         return 0
     return 255
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

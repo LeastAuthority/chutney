@@ -19,6 +19,7 @@ import sys
 # about what's going wrong in your system.
 debug_flag = os.environ.get("CHUTNEY_DEBUG", "") != ""
 
+
 def debug(s: str) -> None:
     "Print a debug message on stdout if debug_flag is True."
     if debug_flag:
@@ -36,5 +37,6 @@ def main() -> int:
     # (and they make python exit with a non-zero exit status)
     return 0
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())
