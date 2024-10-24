@@ -27,6 +27,9 @@ classifiers = [
     "Private :: Do Not Upload",
 ]
 license = {file = "LICENSE"}
+dependencies = [
+  'typeguard==4.3.0',
+]
 
 [project.urls]
 Homepage = "https://gitlab.torproject.org/tpo/core/chutney"
