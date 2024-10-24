@@ -203,14 +203,21 @@ shellcheck:
       shellcheck
   - ./tests/shellcheck-tests.sh
 
-mypy:
+python-lint:
   <<: *debian-template
+  variables:
+    # Most recent as of 2024-10-24
+    BLACK_VERSION: 24.10.0
   script:
   - apt-get install
       python3
       python3-pip
-  - python3 -m pip install --user mypy=="$MYPY_VERSION"
   # We don't really need chutney itself installed, but we do need
   # its dependencies so that mypy can see their relevant types.
   - python3 -m pip install --user .
+
+  - python3 -m pip install --user mypy=="$MYPY_VERSION"
   - mypy lib
+
+  - python3 -m pip install --user black=="$BLACK_VERSION"
+  - black --check --diff lib
