@@ -204,6 +204,8 @@ python-lint:
     BLACK_VERSION: 24.10.0
     # Most recent as of 2024-10-3
     MYPY_VERSION: 1.11.2
+    # Most recent as of 2024-10-28
+    FLAKE8_VERSION: 7.1.1
   script:
   - apt-get install
       python3
@@ -217,3 +219,6 @@ python-lint:
 
   - python3 -m pip install --user black=="$BLACK_VERSION"
   - black --check --diff lib
+
+  - python3 -m pip install --user flake8=="$FLAKE8_VERSION"
+  - flake8 lib
