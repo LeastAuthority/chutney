@@ -20,6 +20,13 @@
 #
 # For example code, see main() below.
 
+# TODO: Remove these
+# mypy: no-check-untyped-defs
+# mypy: no-disallow-untyped-defs
+# mypy: no-disallow-incomplete-defs
+# mypy: no-disallow-untyped-calls
+# mypy: no-warn-return-any
+
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function

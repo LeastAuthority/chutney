@@ -6,6 +6,13 @@
 #  restrict, so long as you retain the above notice(s) and this license
 #  in all redistributed copies and derived works.  There is no warranty.
 
+# TODO: Remove these
+# mypy: no-check-untyped-defs
+# mypy: no-disallow-untyped-defs
+# mypy: no-disallow-incomplete-defs
+# mypy: no-disallow-untyped-calls
+# mypy: no-warn-return-any
+
 """
   This module contins a general-purpose specialization-based
   templating mechanism.  Chutney uses it for string-substitution to
@@ -81,7 +88,12 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Iterable, Any, Optional
 
 import string
 import os
@@ -204,7 +216,7 @@ class Environ(_DictWrapper):
     # _dict: dictionary holding the contents of this Environ that are
     #   not inherited from the parent and are not computed on the fly.
 
-    def __init__(self, parent=None, **kw):
+    def __init__(self, parent:Optional[Environ]=None, **kw: Any):
         _DictWrapper.__init__(self, parent)
         self._dict = kw
 
@@ -368,11 +380,11 @@ class Template(object):
     # _includePath: a list of directories to search when including a file
     #    by relative path.
 
-    def __init__(self, pattern, includePath=(".",)):
+    def __init__(self, pattern: str, includePath:Iterable[str]=(".",)):
         self._pat = pattern
         self._includePath = includePath
 
-    def freevars(self, defaults=None):
+    def freevars(self, defaults=None) -> set[str]:
         """Return a set containing all the free variables in this template"""
         if defaults is None:
             defaults = {}
@@ -380,7 +392,7 @@ class Template(object):
         self.format(d)
         return d._vars
 
-    def format(self, values):
+    def format(self, values) -> str:
         """Return a string containing this template, filled in with the
            values in the mapping 'values'.
         """

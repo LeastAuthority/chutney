@@ -19,13 +19,13 @@ import sys
 # about what's going wrong in your system.
 debug_flag = os.environ.get("CHUTNEY_DEBUG", "") != ""
 
-def debug(s):
+def debug(s: str) -> None:
     "Print a debug message on stdout if debug_flag is True."
     if debug_flag:
         print("DEBUG: %s" % s)
 
 
-def main():
+def main() -> int:
     global debug_flag
     debug("This message should appear if $CHUTNEY_DEBUG is true.")
     debug_flag = True
