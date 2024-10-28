@@ -214,11 +214,19 @@ python-lint:
   # its dependencies so that mypy can see their relevant types.
   - python3 -m pip install --user .
 
+  - FAILURES=""
+
   - python3 -m pip install --user mypy=="$MYPY_VERSION"
-  - mypy lib
+  - if ! mypy lib; then FAILURES+=" mypy"; fi
 
   - python3 -m pip install --user black=="$BLACK_VERSION"
-  - black --check --diff lib
+  - if ! black --check --diff lib; then FAILURES+=" black"; fi
 
   - python3 -m pip install --user flake8=="$FLAKE8_VERSION"
-  - flake8 lib
+  - if ! flake8 lib; then FAILURES+=" flake8"; fi
+
+  - |
+    if [ -n "$FAILURES" ]; then
+      echo "Failed linters: $FAILURES";
+      exit 1;
+    fi
