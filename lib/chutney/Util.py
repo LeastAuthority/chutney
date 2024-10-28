@@ -4,7 +4,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from collections.abc import Iterable
-from typing import Callable, TypeVar, Any, cast
+from typing import Callable, TypeVar, Any
 from typing_extensions import ParamSpec
 
 P = ParamSpec("P")

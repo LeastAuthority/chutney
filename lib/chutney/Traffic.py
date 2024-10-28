@@ -100,7 +100,7 @@ def socks_cmd(addr_port):
         addr = b"\x00\x00\x00\x01"
         dnsname = "%s\x00" % host
     debug("Socks 4a request to %s:%d" % (host, port))
-    if type(dnsname) != type(b""):
+    if type(dnsname) is not type(b""):
         dnsname = dnsname.encode("ascii")
     return struct.pack("!BBH", ver, cmd, port) + addr + user + dnsname
 

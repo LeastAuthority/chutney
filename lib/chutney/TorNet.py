@@ -34,7 +34,7 @@ import base64
 from chutney.Debug import debug_flag, debug
 from chutney.Templating import Environ
 from chutney.network_tests import NetworkTestFailure
-from collections.abc import Collection, MutableSet
+from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type
 
@@ -137,10 +137,14 @@ def getenv_type(
     type_: Callable[[str], T],
     type_name: Optional[str] = None,
 ) -> Optional[T]: ...
+
+
 @overload
 def getenv_type(
     env_var: str, default: T, type_: Callable[[str], T], type_name: Optional[str] = None
 ) -> T: ...
+
+
 def getenv_type(
     env_var: str,
     default: Optional[T],
@@ -173,8 +177,12 @@ def getenv_type(
 
 @overload
 def getenv_int(env_var: str, default: None) -> Optional[int]: ...
+
+
 @overload
 def getenv_int(env_var: str, default: int) -> int: ...
+
+
 def getenv_int(env_var: str, default: Optional[int]) -> Optional[int]:
     """
     Return the value of the environment variable 'envar' as an int,
@@ -345,7 +353,7 @@ def run_tor(cmdline: List[str]) -> str:
         )
         debug(stdouterr)
     except FileNotFoundError as e:
-        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline)
+        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
     return stdouterr
 
 
@@ -376,7 +384,7 @@ def launch_process(
             bufsize=-1,
         )
     except FileNotFoundError as e:
-        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline)
+        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline) from e
     return p
 
 
@@ -963,10 +971,19 @@ class LocalNodeBuilder(NodeBuilder):
                 "v3id": v3id,
             }
             arti_lines = (
-                """    {{rsa_identity = "{fp}", ed_identity = "{ed_fp}", orports = [{orports}]}},\n""".format(
-                    **elts
+                (
+                    "    {"
+                    + f'rsa_identity = "{elts["fp"]}"'
+                    + f', ed_identity = "{elts["ed_fp"]}"'
+                    + f', orports = [{elts["orports"]}]'
+                    + "},\n"
                 ),
-                """    {{name = "{nick}", v3ident = "{v3id}"}},\n""".format(**elts),
+                (
+                    "    {"
+                    + f'name = "{elts["nick"]}"'
+                    + f', v3ident = "{elts["v3id"]}"'
+                    + "},\n"
+                ),
             )
         return (authlines, arti_lines)
 
@@ -2294,7 +2311,8 @@ class TorEnviron(Environ):
 
     def __init__(self, parent: Environ = _DEFAULT_TOR_ENVIRON, **kwargs: Any):
         """
-        Create a `TorEnviron` with the given `parent` environment, and `kwargs` adding and overriding mappings.
+        Create a `TorEnviron` with the given `parent` environment, and `kwargs`
+        adding and overriding mappings.
 
         `parent`, if specified, must be an instance of `TorEnviron`.
         """
