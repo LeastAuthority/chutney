@@ -3101,6 +3101,7 @@ def usage() -> str:
             "Known commands are: %s"
             % (" ".join(x for x in dir(CLICommands) if not x.startswith("_"))),
             "Known tests are: %s" % (" ".join(getTests())),
+            "Known networks are: %s" % (" ".join(getNetworks())),
         ]
     )
 
@@ -3158,19 +3159,23 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
     return res
 
 
+_NETWORKS: Traversable = (
+    importlib.resources.files("chutney").joinpath("data").joinpath("networks")
+)
+
+
+def getNetworks() -> list[str]:
+    """Get names of built-in networks."""
+    return [s.name for s in _NETWORKS.iterdir()]
+
+
 def getNetworkCfg(network_cfg: str) -> str:
     """Get contents of a network config script. `network_cfg` should be the name of a built-in
     network, or path to a file."""
 
     # First look for built-in network with matching `name`
     try:
-        return (
-            importlib.resources.files("chutney")
-            .joinpath("data")
-            .joinpath("networks")
-            .joinpath(network_cfg)
-            .read_text()
-        )
+        return _NETWORKS.joinpath(network_cfg).read_text()
     except FileNotFoundError:
         # We'll try it as a path, below.
         pass
