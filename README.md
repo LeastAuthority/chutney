@@ -133,27 +133,27 @@ chutney environmental variables documented below:
 ## Standard Actions
 
 ``` shell
-./chutney configure networks/basic
-./chutney start networks/basic
-./chutney status networks/basic
-./chutney wait_for_bootstrap networks/basic
-./chutney verify networks/basic
-./chutney hup networks/basic
-./chutney stop networks/basic
+./chutney configure basic
+./chutney start basic
+./chutney status basic
+./chutney wait_for_bootstrap basic
+./chutney verify basic
+./chutney hup basic
+./chutney stop basic
 ```
 
 ## Bandwidth Tests
 
 ``` shell
-./chutney configure networks/basic-min
-./chutney start networks/basic-min
-./chutney status networks/basic-min
+./chutney configure basic-min
+./chutney start basic-min
+./chutney status basic-min
 ```
 
 Send 100MB of data per client connection:
 ``` shell
-CHUTNEY_DATA_BYTES=104857600 ./chutney verify networks/basic-min
-./chutney stop networks/basic-min
+CHUTNEY_DATA_BYTES=104857600 ./chutney verify basic-min
+./chutney stop basic-min
 ```
 
 If chutney sends at least `5 MB` of data, and it takes at least one second,
@@ -169,16 +169,16 @@ network performance is infinite.
 ## Connection Tests
 
 ``` shell
-./chutney configure networks/basic-025
-./chutney start networks/basic-025
-./chutney status networks/basic-025
+./chutney configure basic-025
+./chutney start basic-025
+./chutney status basic-025
 ```
 
 Make 5 simultaneous connections from each client through a random exit
 
 ``` shell
-CHUTNEY_CONNECTIONS=5 ./chutney verify networks/basic-025
-./chutney stop networks/basic-025
+CHUTNEY_CONNECTIONS=5 ./chutney verify basic-025
+./chutney stop basic-025
 ```
 
 Run 5 sequential verification rounds
@@ -190,16 +190,16 @@ CHUTNEY_ROUNDS=5 ./tools/test-network.sh --flavour basic
 ## HS Connection Tests
 
 ``` shell
-./chutney configure networks/hs-025
-./chutney start networks/hs-025
-./chutney status networks/hs-025
+./chutney configure hs-025
+./chutney start hs-025
+./chutney status hs-025
 ```
 
 Make a connection from each client to each hs Default behavior is one client
 connects to each HS: 
 ``` shell
-CHUTNEY_HS_MULTI_CLIENT=1 ./chutney verify networks/hs-025
-./chutney stop networks/hs-025
+CHUTNEY_HS_MULTI_CLIENT=1 ./chutney verify hs-025
+./chutney stop hs-025
 ```
 
 
@@ -382,11 +382,16 @@ to 1 on Linux, and 0 on other platforms.
 
 ## The configuration files
 
-`networks/basic` holds the configuration for the network you're configuring
-above. It refers to some torrc template files in `torrc_templates/`.
+`lib/chutney/networks/basic` holds the configuration for the network you're
+configuring above. Any of the built-in networks in `lib/chutney/networks/` can
+be referenced by their basename (e.g. `basic`). Alternatively you can provide a
+path to a configuration file, which isn't required to be one of chutney's
+built-in files.
 
-Chutney uses a templating system to produce torrc files from the templates.
-These torrc files can be modified using various chutney options.
+The configuration files refer to torrc template files in
+`lib/chutney/data/torrc_templates/`. Chutney uses a templating system to
+produce torrc files from the templates. These torrc files can be modified using
+various chutney options.
 
 ## The working files
 
