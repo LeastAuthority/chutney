@@ -3158,16 +3158,37 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
     return res
 
 
+def getNetworkCfg(network_cfg: str) -> str:
+    """Get contents of a network config script. `network_cfg` should be the name of a built-in
+    network, or path to a file."""
+
+    # First look for built-in network with matching `name`
+    try:
+        return (
+            importlib.resources.files("chutney")
+            .joinpath("data")
+            .joinpath("networks")
+            .joinpath(network_cfg)
+            .read_text()
+        )
+    except FileNotFoundError:
+        # We'll try it as a path, below.
+        pass
+    try:
+        with open(network_cfg) as f:
+            return f.read()
+    except OSError as e:
+        raise ChutneyError(
+            f"'{network_cfg}' matches neither a built-in network name nor a readable file"
+        ) from e
+
+
 def main(action: str, network_cfg: str) -> None:
     """A slightly more hermetic main could be called reasonably from python
 
     Raises an exception derived from `ChutneyError` on failure.
     """
-    try:
-        with open(network_cfg) as f:
-            network_cfg_contents = f.read()
-    except OSError as e:
-        raise ChutneyError(f"Couldn't read network config file {network_cfg}") from e
+    network_cfg_contents = getNetworkCfg(network_cfg)
     result = runConfigFile(action, network_cfg_contents)
     if result is False:
         # TODO: eliminate this case. Have all commands
