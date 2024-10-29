@@ -10,6 +10,7 @@
 # [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
 # stringification.
 from __future__ import annotations
+
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
@@ -33,7 +34,7 @@ import base64
 from chutney.Debug import debug_flag, debug
 from chutney.Templating import Environ
 from chutney.network_tests import NetworkTestFailure
-from collections.abc import Collection, MutableSet
+from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type
 
@@ -48,7 +49,8 @@ _TOR_VERSIONS = None
 _TORRC_OPTIONS = None
 
 TORRC_OPTION_WARN_LIMIT = 10
-torrc_option_warn_count =  0
+torrc_option_warn_count = 0
+
 
 class ChutneyError(Exception):
     """Base class for "normal" errors originating from this module
@@ -56,21 +58,24 @@ class ChutneyError(Exception):
     i.e. any public functions in this module raising an exception that *isn't*
     a subclass of this indicates a programming error in this module.
     """
+
     pass
 
+
 class ChutneyMissingBinaryError(ChutneyError):
-    def __init__(self, name:str, cmdline:List[str], help:str):
-        self._name=name
-        self._cmdline=cmdline
-        self._help=help
+    def __init__(self, name: str, cmdline: List[str], help: str):
+        self._name = name
+        self._cmdline = cmdline
+        self._help = help
 
     @staticmethod
-    def for_missing_tor(tor_name:str, cmdline:List[str]) -> ChutneyMissingBinaryError:
-        """Create an exception for a missing tor binary, with help for how to fix it.
-        """
-        help_msg_fmt = ("Set the '{0}' environment variable to the path of " +
-                        "'{1}'. If using test-network.sh, set the 'TOR_DIR' " +
-                        "environment variable to the directory containing '{1}'.")
+    def for_missing_tor(tor_name: str, cmdline: List[str]) -> ChutneyMissingBinaryError:
+        """Create an exception for a missing tor binary, with help for how to fix it."""
+        help_msg_fmt = (
+            "Set the '{0}' environment variable to the path of "
+            + "'{1}'. If using test-network.sh, set the 'TOR_DIR' "
+            + "environment variable to the directory containing '{1}'."
+        )
         help_msg = ""
         if tor_name == "tor":
             help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
@@ -81,13 +86,17 @@ class ChutneyMissingBinaryError(ChutneyError):
         return ChutneyMissingBinaryError(tor_name, cmdline, help_msg)
 
     def __str__(self) -> str:
-        return (f"Cannot find the {self._name} binary"
+        return (
+            f"Cannot find the {self._name} binary"
             + f" at '{self._cmdline[0]}'"
             + f" for the command line '{' '.join(self._cmdline)}'."
-            + f" {self._help}")
+            + f" {self._help}"
+        )
+
 
 class ChutneyTimeoutError(ChutneyError):
     pass
+
 
 class ChutneyErrorGroup(ChutneyError):
     """A list of errors.
@@ -104,27 +113,51 @@ class ChutneyErrorGroup(ChutneyError):
         ChutneyError.__init__(self, description, errs)
 
     def __str__(self) -> str:
-        return self._description + ' [\n  ' + '\n  '.join([str(e) for e in self._errs]) + '\n]\n'
+        return (
+            self._description
+            + " [\n  "
+            + "\n  ".join([str(e) for e in self._errs])
+            + "\n]\n"
+        )
+
 
 class ChutneyInternalError(ChutneyError):
     """Indicates a bug in Chutney"""
+
     pass
 
-T = TypeVar('T')
-@overload
-def getenv_type(env_var: str, default: None, type_:Callable[[str], T], type_name:Optional[str]=None) -> Optional[T]:
-    ...
-@overload
-def getenv_type(env_var: str, default: T, type_:Callable[[str], T], type_name:Optional[str]=None) -> T:
-    ...
-def getenv_type(env_var: str, default: Optional[T], type_:Callable[[str], T], type_name:Optional[str]=None) -> Optional[T]:
-    """
-       Return the value of the environment variable 'envar' as type_,
-       or 'default' if no such variable exists.
 
-       Raise ValueError using type_name if the environment variable is set,
-       but type_() raises a ValueError on its value. (If type_name is None
-       or empty, the ValueError uses type_'s string representation instead.)
+T = TypeVar("T")
+
+
+@overload
+def getenv_type(
+    env_var: str,
+    default: None,
+    type_: Callable[[str], T],
+    type_name: Optional[str] = None,
+) -> Optional[T]: ...
+
+
+@overload
+def getenv_type(
+    env_var: str, default: T, type_: Callable[[str], T], type_name: Optional[str] = None
+) -> T: ...
+
+
+def getenv_type(
+    env_var: str,
+    default: Optional[T],
+    type_: Callable[[str], T],
+    type_name: Optional[str] = None,
+) -> Optional[T]:
+    """
+    Return the value of the environment variable 'envar' as type_,
+    or 'default' if no such variable exists.
+
+    Raise ValueError using type_name if the environment variable is set,
+    but type_() raises a ValueError on its value. (If type_name is None
+    or empty, the ValueError uses type_'s string representation instead.)
     """
     strval = os.environ.get(env_var)
     if strval is None:
@@ -134,33 +167,40 @@ def getenv_type(env_var: str, default: Optional[T], type_:Callable[[str], T], ty
     except ValueError:
         if not type_name:
             type_name = str(type_)
-        raise ValueError(("Invalid value for environment variable '{}': "
-                          "expected {}, but got '{}'")
-                         .format(env_var, type_name, strval))
+        raise ValueError(
+            (
+                "Invalid value for environment variable '{}': "
+                "expected {}, but got '{}'"
+            ).format(env_var, type_name, strval)
+        )
+
 
 @overload
-def getenv_int(env_var: str, default: None) -> Optional[int]:
-    ...
+def getenv_int(env_var: str, default: None) -> Optional[int]: ...
+
+
 @overload
-def getenv_int(env_var: str, default: int) -> int:
-    ...
+def getenv_int(env_var: str, default: int) -> int: ...
+
+
 def getenv_int(env_var: str, default: Optional[int]) -> Optional[int]:
     """
-       Return the value of the environment variable 'envar' as an int,
-       or 'default' if no such variable exists.
+    Return the value of the environment variable 'envar' as an int,
+    or 'default' if no such variable exists.
 
-       Raise ValueError if the environment variable is set, but is not an int.
+    Raise ValueError if the environment variable is set, but is not an int.
     """
-    return getenv_type(env_var, default, int, type_name='an int')
+    return getenv_type(env_var, default, int, type_name="an int")
+
 
 def getenv_bool(env_var: str, default: bool) -> bool:
     """
-       Return the value of the environment variable 'envar' as a bool,
-       or 'default' if no such variable exists.
+    Return the value of the environment variable 'envar' as a bool,
+    or 'default' if no such variable exists.
 
-       Unlike bool(), converts 0, "False", and "No" to False.
+    Unlike bool(), converts 0, "False", and "No" to False.
 
-       Raise ValueError if the environment variable is set, but is not a bool.
+    Raise ValueError if the environment variable is set, but is not a bool.
     """
     # TODO: consider simplifying this and:
     # * rejecting ints other than 0 or 1
@@ -174,62 +214,68 @@ def getenv_bool(env_var: str, default: bool) -> bool:
         # If the env var weren't set, the int path above would have succeeded,
         # returning the default.
         assert strval is not None
-        if strval.lower() in ['false', 'no']:
+        if strval.lower() in ["false", "no"]:
             return False
         else:
-            return getenv_type(env_var, default, bool, type_name='a bool')
+            return getenv_type(env_var, default, bool, type_name="a bool")
 
-def mkdir_p(*d:Union[str, Path], mode:int=448) -> None:
+
+def mkdir_p(*d: Union[str, Path], mode: int = 448) -> None:
     """Create directory 'd' and all of its parents as needed.  Unlike
-       os.makedirs, does not give an error if d already exists.
+    os.makedirs, does not give an error if d already exists.
 
-       448 is the decimal representation of the octal number 0700. Since
-       python2 only supports 0700 and python3 only supports 0o700, we can use
-       neither.
+    448 is the decimal representation of the octal number 0700. Since
+    python2 only supports 0700 and python3 only supports 0o700, we can use
+    neither.
 
-       Note that python2 and python3 differ in how they create the
-       permissions for the intermediate directories.  In python3, 'mode'
-       only sets the mode for the last directory created.
+    Note that python2 and python3 differ in how they create the
+    permissions for the intermediate directories.  In python3, 'mode'
+    only sets the mode for the last directory created.
     """
     Path(*d).mkdir(mode=mode, parents=True, exist_ok=True)
 
-def make_datadir_subdirectory(datadir: Union[str, Path], subdir: Union[str, Path]) -> None:
+
+def make_datadir_subdirectory(
+    datadir: Union[str, Path], subdir: Union[str, Path]
+) -> None:
     """
-       Create a datadirectory (if necessary) and a subdirectory of
-       that datadirectory.  Ensure that both are mode 700.
+    Create a datadirectory (if necessary) and a subdirectory of
+    that datadirectory.  Ensure that both are mode 700.
     """
     mkdir_p(datadir)
     mkdir_p(datadir, subdir)
 
+
 def get_absolute_chutney_path() -> Path:
     """
-       Returns the absolute path of the directory containing the chutney
-       executable script.
+    Returns the absolute path of the directory containing the chutney
+    executable script.
     """
     # use the current directory as the default
     # (./chutney already sets CHUTNEY_PATH using the path to the script)
     # use tools/test-network.sh if you want chutney to try really hard to find
     # itself
-    relative_chutney_path = Path(os.environ.get('CHUTNEY_PATH', os.getcwd()))
+    relative_chutney_path = Path(os.environ.get("CHUTNEY_PATH", os.getcwd()))
     return relative_chutney_path.resolve()
+
 
 def get_absolute_net_path() -> Path:
     """
-       Returns the absolute path of the "net" directory that chutney should
-       use to store "node*" directories containing torrcs and tor runtime data.
+    Returns the absolute path of the "net" directory that chutney should
+    use to store "node*" directories containing torrcs and tor runtime data.
 
-       If the CHUTNEY_DATA_DIR environmental variable is an absolute path, it
-       is returned unmodified, regardless of whether the path actually exists.
-       (Chutney creates any directories that do not exist.)
+    If the CHUTNEY_DATA_DIR environmental variable is an absolute path, it
+    is returned unmodified, regardless of whether the path actually exists.
+    (Chutney creates any directories that do not exist.)
 
-       Otherwise, if it is a relative path, and there is an existing directory
-       with that name in the directory containing the chutney executable
-       script, return that path (this check exists for legacy reasons).
+    Otherwise, if it is a relative path, and there is an existing directory
+    with that name in the directory containing the chutney executable
+    script, return that path (this check exists for legacy reasons).
 
-       Finally, return the path relative to the current working directory,
-       regardless of whether the path actually exists.
+    Finally, return the path relative to the current working directory,
+    regardless of whether the path actually exists.
     """
-    data_dir = Path(os.environ.get('CHUTNEY_DATA_DIR', 'net'))
+    data_dir = Path(os.environ.get("CHUTNEY_DATA_DIR", "net"))
     if data_dir.is_absolute():
         # if we are given an absolute path, we should use it
         # regardless of whether the directory exists
@@ -247,31 +293,33 @@ def get_absolute_net_path() -> Path:
     # or not the path actually exists
     return relative_net_path.resolve()
 
+
 def get_absolute_nodes_path() -> Path:
     """
-       Returns the absolute path of the "nodes" symlink that points to the
-       "nodes*" directory that chutney should use to store the current
-       network's torrcs and tor runtime data.
+    Returns the absolute path of the "nodes" symlink that points to the
+    "nodes*" directory that chutney should use to store the current
+    network's torrcs and tor runtime data.
 
-       This path is also used as a prefix for the unique nodes directory
-       names.
+    This path is also used as a prefix for the unique nodes directory
+    names.
 
-       See get_new_absolute_nodes_path() for more details.
+    See get_new_absolute_nodes_path() for more details.
     """
-    return Path(get_absolute_net_path(), 'nodes')
+    return Path(get_absolute_net_path(), "nodes")
 
-def get_new_absolute_nodes_path(now:float=time.time()) -> Path:
+
+def get_new_absolute_nodes_path(now: float = time.time()) -> Path:
     """
-       Returns the absolute path of a unique "nodes*" directory that chutney
-       should use to store the current network's torrcs and tor runtime data.
+    Returns the absolute path of a unique "nodes*" directory that chutney
+    should use to store the current network's torrcs and tor runtime data.
 
-       The nodes directory suffix is based on the current timestamp,
-       incremented if necessary to avoid collisions with existing directories.
+    The nodes directory suffix is based on the current timestamp,
+    incremented if necessary to avoid collisions with existing directories.
 
-       (The existing directory check contains known race conditions: running
-       multiple simultaneous chutney instances on the same "net" directory is
-       not supported. The uniqueness check is only designed to avoid
-       collisions if the clock is set backwards.)
+    (The existing directory check contains known race conditions: running
+    multiple simultaneous chutney instances on the same "net" directory is
+    not supported. The uniqueness check is only designed to avoid
+    collisions if the clock is set backwards.)
     """
     # automatically chosen to prevent path collisions, and result in an ordered
     # series of directory path names
@@ -288,31 +336,35 @@ def get_new_absolute_nodes_path(now:float=time.time()) -> Path:
         newdir = Path("%s.%d" % (newdirbase, i))
     return newdir
 
+
 def run_tor(cmdline: List[str]) -> str:
     """Run the tor command line cmdline, which must start with the path or
-       name of a tor binary.
+    name of a tor binary.
 
-       Returns the combined stdout and stderr of the process.
+    Returns the combined stdout and stderr of the process.
 
-       raises `ChutneyMissingBinaryException` if the tor binary is missing.
+    raises `ChutneyMissingBinaryException` if the tor binary is missing.
     """
     if not debug_flag:
         cmdline.append("--hush")
     try:
-        stdouterr = subprocess.check_output(cmdline,
-                                            stderr=subprocess.STDOUT,
-                                            universal_newlines=True)
+        stdouterr = subprocess.check_output(
+            cmdline, stderr=subprocess.STDOUT, universal_newlines=True
+        )
         debug(stdouterr)
     except FileNotFoundError as e:
-        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline)
+        raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
     return stdouterr
 
-def launch_process(cmdline: List[str], tor_name:str="tor", stdin:Optional[int]=None) -> subprocess.Popen[str]:
-    """Launch the command line cmdline, which must start with the path or
-       name of a binary. Use tor_name as the canonical name of the binary in
-       logs. Pass stdin to the Popen constructor.
 
-       Returns the Popen object for the launched process.
+def launch_process(
+    cmdline: List[str], tor_name: str = "tor", stdin: Optional[int] = None
+) -> subprocess.Popen[str]:
+    """Launch the command line cmdline, which must start with the path or
+    name of a binary. Use tor_name as the canonical name of the binary in
+    logs. Pass stdin to the Popen constructor.
+
+    Returns the Popen object for the launched process.
     """
     if tor_name == "tor":
         if not debug_flag:
@@ -323,31 +375,33 @@ def launch_process(cmdline: List[str], tor_name:str="tor", stdin:Optional[int]=N
     else:
         raise ValueError("Unknown tor_name: '{}'".format(tor_name))
     try:
-        p = subprocess.Popen(cmdline,
-                             stdin=stdin,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT,
-                             universal_newlines=True,
-                             bufsize=-1)
+        p = subprocess.Popen(
+            cmdline,
+            stdin=stdin,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=-1,
+        )
     except FileNotFoundError as e:
-        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline)
+        raise ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline) from e
     return p
+
 
 def run_tor_gencert(cmdline: List[str], passphrase: str) -> str:
     """Run the tor-gencert command line cmdline, which must start with the
-       path or name of a tor-gencert binary.
-       Then send passphrase to the stdin of the process.
+    path or name of a tor-gencert binary.
+    Then send passphrase to the stdin of the process.
 
-       Returns the combined stdout and stderr of the process.
+    Returns the combined stdout and stderr of the process.
     """
-    p = launch_process(cmdline,
-                        tor_name="tor-gencert",
-                        stdin=subprocess.PIPE)
+    p = launch_process(cmdline, tor_name="tor-gencert", stdin=subprocess.PIPE)
     (stdouterr, empty_stderr) = p.communicate(passphrase + "\n")
     debug(stdouterr)
     assert p.returncode == 0  # XXXX BAD!
     assert empty_stderr is None
     return stdouterr
+
 
 @chutney.Util.memoized
 def tor_exists(tor: str) -> bool:
@@ -357,6 +411,7 @@ def tor_exists(tor: str) -> bool:
         return True
     except ChutneyMissingBinaryError:
         return False
+
 
 @chutney.Util.memoized
 def tor_gencert_exists(gencert: str) -> bool:
@@ -368,10 +423,11 @@ def tor_gencert_exists(gencert: str) -> bool:
     except ChutneyMissingBinaryError:
         return False
 
+
 @chutney.Util.memoized
 def get_tor_version(tor: str) -> str:
     """Return the version of the tor binary.
-       Versions are cached for each unique tor path.
+    Versions are cached for each unique tor path.
     """
     cmdline = [
         tor,
@@ -386,14 +442,15 @@ def get_tor_version(tor: str) -> str:
     tor_version = tor_version.replace("version ", "")
     tor_version = tor_version.replace(").", ")")
     # check we received a tor version, and nothing else
-    assert re.match(r'^[-+.() A-Za-z0-9]+$', tor_version)
+    assert re.match(r"^[-+.() A-Za-z0-9]+$", tor_version)
 
     return tor_version
+
 
 @chutney.Util.memoized
 def get_torrc_options(tor: str) -> list[str]:
     """Return the torrc options supported by the tor binary.
-       Options are cached for each unique tor path.
+    Options are cached for each unique tor path.
     """
     cmdline = [
         tor,
@@ -401,25 +458,22 @@ def get_torrc_options(tor: str) -> list[str]:
     ]
     opts = run_tor(cmdline)
     # check we received a list of options, and nothing else
-    assert re.match(r'(^\w+$)+', opts, flags=re.MULTILINE)
+    assert re.match(r"(^\w+$)+", opts, flags=re.MULTILINE)
     torrc_opts = opts.split()
 
     return torrc_opts
 
+
 @chutney.Util.memoized
 def get_tor_modules(tor: str) -> dict[str, bool]:
     """Check the list of compile-time modules advertised by the given
-       'tor' binary, and return a map from module name to a boolean
-       describing whether it is supported.
+    'tor' binary, and return a map from module name to a boolean
+    describing whether it is supported.
 
-       Unlisted modules are ones that Tor did not treat as compile-time
-       optional modules.
+    Unlisted modules are ones that Tor did not treat as compile-time
+    optional modules.
     """
-    cmdline = [
-        tor,
-        "--list-modules",
-        "--hush"
-        ]
+    cmdline = [tor, "--list-modules", "--hush"]
     try:
         mods = run_tor(cmdline)
     except subprocess.CalledProcessError:
@@ -428,28 +482,30 @@ def get_tor_modules(tor: str) -> dict[str, bool]:
 
     supported = {}
     for line in mods.split("\n"):
-        m = re.match(r'^(\S+): (yes|no)', line)
+        m = re.match(r"^(\S+): (yes|no)", line)
         if not m:
             continue
-        supported[m.group(1)] = (m.group(2) == "yes")
+        supported[m.group(1)] = m.group(2) == "yes"
 
     return supported
 
-def tor_has_module(tor:str, modname:str, default:bool=True) -> bool:
+
+def tor_has_module(tor: str, modname: str, default: bool = True) -> bool:
     """Return true iff the given tor binary supports a given compile-time
-       module.  If the module is not listed, return 'default'.
+    module.  If the module is not listed, return 'default'.
     """
     return get_tor_modules(tor).get(modname, default)
 
+
 class Node(object):
-
     """A Node represents a Tor node or a set of Tor nodes.  It's created
-       in a network configuration file.
+    in a network configuration file.
 
-       This class is responsible for holding the user's selected node
-       configuration, and figuring out how the node needs to be
-       configured and launched.
+    This class is responsible for holding the user's selected node
+    configuration, and figuring out how the node needs to be
+    configured and launched.
     """
+
     # Fields:
     # _parent
     # _env
@@ -463,13 +519,13 @@ class Node(object):
     def __init__(self, network: Network, parent: Optional[Node] = None, **kwargs: Any):
         """Create a new Node.
 
-           Initial fields in this Node's environment are set from `kwargs`.
-           Any fields not found there will be searched for in `parent`, if
-           present, or else in `network`.
+        Initial fields in this Node's environment are set from `kwargs`.
+        Any fields not found there will be searched for in `parent`, if
+        present, or else in `network`.
 
-           Note that the created `Node` won't actually be instantiated in
-           `network` until e.g. `network.addNode` is called. This is to support
-           "template nodes", as used with `Node.getN`.
+        Note that the created `Node` won't actually be instantiated in
+        `network` until e.g. `network.addNode` is called. This is to support
+        "template nodes", as used with `Node.getN`.
         """
         self._network = network
         if parent:
@@ -481,22 +537,21 @@ class Node(object):
         self._controller: Optional[LocalNodeController] = None
 
     def getN(self, N: int) -> list[Node]:
-        """Generate 'N' nodes of the same configuration as this node.
-        """
+        """Generate 'N' nodes of the same configuration as this node."""
         return [Node(network=self._network, parent=self) for _ in range(N)]
 
     def specialize(self, **kwargs: Any) -> Node:
         """Return a new Node based on this node's value as its defaults,
-           but with the values from 'kwargs' (if any) overriding them.
+        but with the values from 'kwargs' (if any) overriding them.
         """
         return Node(network=self._network, parent=self, **kwargs)
 
     def set_runtime(self, key: str, fn: Callable[[TorEnviron], Any]) -> None:
         """Specify a runtime function that gets invoked to find the
-           runtime value of a key.  It should take a single argument, which
-           will be an environment.
+        runtime value of a key.  It should take a single argument, which
+        will be an environment.
         """
-        setattr(self._env, "_get_"+key, fn)
+        setattr(self._env, "_get_" + key, fn)
 
     ######
     # Chutney uses these:
@@ -505,8 +560,8 @@ class Node(object):
     # this is a `LocalNodeBuilder`, though.
     def getBuilder(self) -> LocalNodeBuilder:
         """Return a NodeBuilder instance to set up this node (that is, to
-           write all the files that need to be in place so that this
-           node can be run by a NodeController).
+        write all the files that need to be in place so that this
+        node can be run by a NodeController).
         """
         if self._builder is None:
             self._builder = LocalNodeBuilder(self._env)
@@ -516,7 +571,7 @@ class Node(object):
     # this is a `LocalNodeController`, though.
     def getController(self) -> LocalNodeController:
         """Return a NodeController instance to control this node (that is,
-           to start it, stop it, see if it's running, etc.)
+        to start it, stop it, see if it's running, etc.)
         """
         if self._controller is None:
             self._controller = LocalNodeController(self._network, self._env)
@@ -524,20 +579,21 @@ class Node(object):
 
     def setNodenum(self, num: int) -> None:
         """Assign a value to the 'nodenum' element of this node.  Each node
-           in a network gets its own nodenum.
+        in a network gets its own nodenum.
         """
-        self._env['nodenum'] = num
+        self._env["nodenum"] = num
+
 
 class _NodeCommon(object):
-
     """Internal helper class for functionality shared by some NodeBuilders
-       and some NodeControllers."""
+    and some NodeControllers."""
+
     # XXXX maybe this should turn into a mixin.
 
     def __init__(self, env: TorEnviron):
         self._env = env
 
-    def expand(self, pat:str, includePath:Iterable[str]=(".",)) -> str:
+    def expand(self, pat: str, includePath: Iterable[str] = (".",)) -> str:
         return chutney.Templating.Template(pat, includePath).format(self._env)
 
     def _getTorrcFname(self) -> str:
@@ -546,22 +602,20 @@ class _NodeCommon(object):
 
 
 class NodeBuilder(_NodeCommon):
-
     """Abstract base class.  A NodeBuilder is responsible for doing all the
-       one-time prep needed to set up a node in a network.
+    one-time prep needed to set up a node in a network.
     """
 
     def __init__(self, env: TorEnviron):
         _NodeCommon.__init__(self, env)
 
     def checkConfig(self, net: Network) -> None:
-        """Try to format our torrc; raise an exception if we can't.
-        """
+        """Try to format our torrc; raise an exception if we can't."""
         raise NotImplementedError()
 
     def preConfig(self, net: Network) -> None:
         """Called on all nodes before any nodes configure: generates keys as
-           needed.
+        needed.
         """
         raise NotImplementedError()
 
@@ -575,25 +629,24 @@ class NodeBuilder(_NodeCommon):
 
     def isSupported(self, net: Network) -> bool:
         """Return true if this node appears to have everything it needs;
-           false otherwise."""
+        false otherwise."""
         raise NotImplementedError()
 
 
 class NodeController(_NodeCommon):
-
     """Abstract base class.  A NodeController is responsible for running a
-       node on the network.
+    node on the network.
     """
 
     def __init__(self, env: TorEnviron):
         _NodeCommon.__init__(self, env)
 
-    def check(self, listRunning:bool=True, listNonRunning:bool=False) -> bool:
+    def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
         """See if this node is running, stopped, or crashed.  If it's running
-           and listRunning is set, print a short statement.  If it's
-           stopped and listNonRunning is set, then print a short statement.
-           If it's crashed, print a statement.  Return True if the
-           node is running, false otherwise.
+        and listRunning is set, print a short statement.  If it's
+        stopped and listNonRunning is set, then print a short statement.
+        If it's crashed, print a statement.  Return True if the
+        node is running, false otherwise.
         """
         raise NotImplementedError()
 
@@ -601,9 +654,10 @@ class NodeController(_NodeCommon):
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
         raise NotImplementedError()
 
-    def stop(self, sig:int=signal.SIGINT) -> None:
+    def stop(self, sig: int = signal.SIGINT) -> None:
         """Try to stop this node by sending it the signal 'sig'."""
         raise NotImplementedError()
+
 
 class LocalNodeBuilder(NodeBuilder):
 
@@ -637,11 +691,11 @@ class LocalNodeBuilder(NodeBuilder):
         NodeBuilder.__init__(self, env)
         self._env = env
 
-    def _createTorrcFile(self, checkOnly:bool=False) -> None:
+    def _createTorrcFile(self, checkOnly: bool = False) -> None:
         """Write the torrc file for this node, disabling any options
-           that are not supported by env's tor binary using comments.
-           If checkOnly, just make sure that the formatting is indeed
-           possible.
+        that are not supported by env's tor binary using comments.
+        If checkOnly, just make sure that the formatting is indeed
+        possible.
         """
         global torrc_option_warn_count
 
@@ -653,12 +707,12 @@ class LocalNodeBuilder(NodeBuilder):
             return
         # now filter the options we're about to write, commenting out
         # the options that the current tor binary doesn't support
-        tor = self._env['tor']
+        tor = self._env["tor"]
         tor_version = get_tor_version(tor)
         torrc_opts = get_torrc_options(tor)
         # check if each option is supported before writing it
         # Unsupported option values may need special handling.
-        with open(fn_out, 'w') as f:
+        with open(fn_out, "w") as f:
             # we need to do case-insensitive option comparison
             lower_opts = [opt.lower() for opt in torrc_opts]
             # keep ends when splitting lines, so we can write them out
@@ -667,52 +721,56 @@ class LocalNodeBuilder(NodeBuilder):
                 # check if the first word on the line is a supported option,
                 # preserving empty lines and comment lines
                 sline = line.strip()
-                if (len(sline) == 0 or
-                        sline[0] == '#' or
-                        sline.split()[0].lower() in lower_opts):
+                if (
+                    len(sline) == 0
+                    or sline[0] == "#"
+                    or sline.split()[0].lower() in lower_opts
+                ):
                     pass
                 else:
-                    warn_msg = (("The tor binary at {} does not support " +
-                                "the option in the torrc line:\n{}")
-                                .format(tor, line.strip()))
+                    warn_msg = (
+                        "The tor binary at {} does not support "
+                        + "the option in the torrc line:\n{}"
+                    ).format(tor, line.strip())
                     if torrc_option_warn_count < TORRC_OPTION_WARN_LIMIT:
                         print(warn_msg)
                         torrc_option_warn_count += 1
                     else:
                         debug(warn_msg)
                     # always dump the full output to the torrc file
-                    line = ("# {} version {} does not support: {}"
-                            .format(tor, tor_version, line))
+                    line = "# {} version {} does not support: {}".format(
+                        tor, tor_version, line
+                    )
                 f.writelines([line])
 
     def _getTorrcTemplate(self) -> chutney.Templating.Template:
         """Return the template used to write the torrc for this node."""
-        template_path = self._env['torrc_template_path']
-        return chutney.Templating.Template("$${include:$torrc}",
-                                           includePath=template_path)
+        template_path = self._env["torrc_template_path"]
+        return chutney.Templating.Template(
+            "$${include:$torrc}", includePath=template_path
+        )
 
     def _getFreeVars(self) -> Collection[str]:
         """Return a set of the free variables in the torrc template for this
-           node.
+        node.
         """
         template = self._getTorrcTemplate()
         return template.freevars(self._env)
 
     def checkConfig(self, net: Network) -> None:
-        """Try to format our torrc; raise an exception if we can't.
-        """
+        """Try to format our torrc; raise an exception if we can't."""
         self._createTorrcFile(checkOnly=True)
 
     def preConfig(self, net: Network) -> None:
         """Called on all nodes before any nodes configure: generates keys and
-           hidden service directories as needed.
+        hidden service directories as needed.
         """
         self._makeDataDir()
-        if self._env['authority']:
+        if self._env["authority"]:
             self._genAuthorityKey()
-        if self._env['relay']:
+        if self._env["relay"]:
             self._genRouterKey()
-        if self._env['hs']:
+        if self._env["hs"]:
             self._makeHiddenServiceDir()
 
     def config(self, net: Network) -> None:
@@ -727,98 +785,113 @@ class LocalNodeBuilder(NodeBuilder):
 
     def isSupported(self, net: Network) -> bool:
         """Return true if this node appears to have everything it needs;
-           false otherwise."""
+        false otherwise."""
 
-        if not tor_exists(self._env['tor']):
-            print("No binary found for %r"%self._env['tor'])
+        if not tor_exists(self._env["tor"]):
+            print("No binary found for %r" % self._env["tor"])
             return False
 
-        if self._env['authority']:
-            if not tor_has_module(self._env['tor'], "dirauth"):
-                print("No dirauth support in %r"%self._env['tor'])
+        if self._env["authority"]:
+            if not tor_has_module(self._env["tor"], "dirauth"):
+                print("No dirauth support in %r" % self._env["tor"])
                 return False
-            if not tor_gencert_exists(self._env['tor-gencert']):
-                print("No binary found for tor-gencert %r"%self._env['tor-gencert'])
+            if not tor_gencert_exists(self._env["tor-gencert"]):
+                print("No binary found for tor-gencert %r" % self._env["tor-gencert"])
                 return False
 
         return True
 
     def _makeDataDir(self) -> None:
-        """Create the data directory (with keys subdirectory) for this node.
-        """
-        datadir = check_type(self._env['dir'], Path)
+        """Create the data directory (with keys subdirectory) for this node."""
+        datadir = check_type(self._env["dir"], Path)
         make_datadir_subdirectory(datadir, "keys")
 
     def _makeHiddenServiceDir(self) -> None:
         """Create the hidden service subdirectory for this node.
 
-          The directory name is stored under the 'hs_directory' environment
-          key. It is combined with the 'dir' data directory key to yield the
-          path to the hidden service directory.
+        The directory name is stored under the 'hs_directory' environment
+        key. It is combined with the 'dir' data directory key to yield the
+        path to the hidden service directory.
         """
-        datadir = self._env['dir']
-        make_datadir_subdirectory(datadir, self._env['hs_directory'])
+        datadir = self._env["dir"]
+        make_datadir_subdirectory(datadir, self._env["hs_directory"])
 
     def _genAuthorityKey(self) -> None:
         """Generate an authority identity and signing key for this authority,
-           if they do not already exist."""
-        datadir = self._env['dir']
-        tor_gencert = self._env['tor_gencert']
-        lifetime = self._env['auth_cert_lifetime']
-        idfile = Path(datadir, 'keys', "authority_identity_key")
-        skfile = Path(datadir, 'keys', "authority_signing_key")
-        certfile = Path(datadir, 'keys', "authority_certificate")
+        if they do not already exist."""
+        datadir = self._env["dir"]
+        tor_gencert = self._env["tor_gencert"]
+        lifetime = self._env["auth_cert_lifetime"]
+        idfile = Path(datadir, "keys", "authority_identity_key")
+        skfile = Path(datadir, "keys", "authority_signing_key")
+        certfile = Path(datadir, "keys", "authority_certificate")
         addr = self.expand("${ip}:${dirport}")
-        passphrase = self._env['auth_passphrase']
+        passphrase = self._env["auth_passphrase"]
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
         cmdline = [
             tor_gencert,
-            '--create-identity-key',
-            '--passphrase-fd', '0',
-            '-i', str(idfile),
-            '-s', str(skfile),
-            '-c', str(certfile),
-            '-m', str(lifetime),
-            '-a', addr,
-            ]
+            "--create-identity-key",
+            "--passphrase-fd",
+            "0",
+            "-i",
+            str(idfile),
+            "-s",
+            str(skfile),
+            "-c",
+            str(certfile),
+            "-m",
+            str(lifetime),
+            "-a",
+            addr,
+        ]
         # nicknames are testNNNaa[OLD], but we want them to look tidy
-        print("Creating identity key for {:12} with {}"
-              .format(self._env['nick'], cmdline[0]))
-        debug("Identity key path '{}', command '{}'"
-              .format(idfile, " ".join(cmdline)))
+        print(
+            "Creating identity key for {:12} with {}".format(
+                self._env["nick"], cmdline[0]
+            )
+        )
+        debug("Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline)))
         run_tor_gencert(cmdline, passphrase)
 
     def _genRouterKey(self) -> None:
         """Generate an identity key for this router, unless we already have,
-           and set up the 'fingerprint' entry in the Environ.
+        and set up the 'fingerprint' entry in the Environ.
         """
-        datadir = self._env['dir']
-        tor = self._env['tor']
+        datadir = self._env["dir"]
+        tor = self._env["tor"]
         torrc = self._getTorrcFname()
         cmdline = [
             tor,
             "--ignore-missing-torrc",
-            "-f", torrc,
-            "--orport", "1",
-            "--datadirectory", datadir,
+            "-f",
+            torrc,
+            "--orport",
+            "1",
+            "--datadirectory",
+            datadir,
             "--list-fingerprint",
-            ]
+        ]
         stdouterr = run_tor(cmdline)
-        fingerprint = "".join((stdouterr.rstrip().split('\n')[-1]).split()[1:])
-        if not re.match(r'^[A-F0-9]{40}$', fingerprint):
-            raise ChutneyError("Error when getting fingerprint using '{0}'. It output '{1}'."
-                  .format(repr(" ".join(cmdline)), repr(stdouterr)))
-        self._env['fingerprint'] = fingerprint
+        fingerprint = "".join((stdouterr.rstrip().split("\n")[-1]).split()[1:])
+        if not re.match(r"^[A-F0-9]{40}$", fingerprint):
+            raise ChutneyError(
+                "Error when getting fingerprint using '{0}'. It output '{1}'.".format(
+                    repr(" ".join(cmdline)), repr(stdouterr)
+                )
+            )
+        self._env["fingerprint"] = fingerprint
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
         if os.path.exists(ed_fn):
             s = open(ed_fn).read().strip().split()[1]
-            self._env['fingerprint_ed25519'] = s
+            self._env["fingerprint_ed25519"] = s
         else:
-            self._env['fingerprint_ed25519'] = ""
+            self._env["fingerprint_ed25519"] = ""
 
-    def _getAltAuthLines(self, hasbridgeauth:bool=False) -> tuple[str, tuple[str, str]]:
+    def _getAltAuthLines(
+        self, hasbridgeauth: bool = False
+    ) -> tuple[str, tuple[str, str]]:
         """Return a set of lines to configure other nodes to use this Node as
         an authority.  For C tor, this is a combination of
         AternateDirAuthority and AlternateBridgeAuthority.  For Arti,
@@ -830,13 +903,13 @@ class LocalNodeBuilder(NodeBuilder):
 
         If this node not an authority, the returned strings are empty.
         """
-        if not self._env['authority']:
-            return ("",("", ""))
+        if not self._env["authority"]:
+            return ("", ("", ""))
 
-        datadir = self._env['dir']
-        certfile = Path(datadir, 'keys', "authority_certificate")
+        datadir = self._env["dir"]
+        certfile = Path(datadir, "keys", "authority_certificate")
         v3id = None
-        with certfile.open(mode='r') as f:
+        with certfile.open(mode="r") as f:
             for line in f:
                 if line.startswith("fingerprint"):
                     v3id = line.split()[1].strip()
@@ -844,11 +917,11 @@ class LocalNodeBuilder(NodeBuilder):
 
         assert v3id is not None
 
-        if self._env['bridgeauthority']:
+        if self._env["bridgeauthority"]:
             # Bridge authorities return AlternateBridgeAuthority with
             # the 'bridge' flag set.
             options = ("AlternateBridgeAuthority",)
-            self._env['dirserver_flags'] += " bridge"
+            self._env["dirserver_flags"] += " bridge"
             arti = False
         else:
             # Directory authorities return AlternateDirAuthority with
@@ -859,39 +932,59 @@ class LocalNodeBuilder(NodeBuilder):
                 options = ("AlternateDirAuthority",)
             else:
                 options = ("DirAuthority",)
-            self._env['dirserver_flags'] += " v3ident=%s" % v3id
+            self._env["dirserver_flags"] += " v3ident=%s" % v3id
             arti = True
 
         authlines = ""
         for authopt in options:
             authlines += "%s %s orport=%s" % (
-                authopt, self._env['nick'], self._env['orport'])
+                authopt,
+                self._env["nick"],
+                self._env["orport"],
+            )
             # It's ok to give an authority's IPv6 address to an IPv4-only
             # client or relay: it will and must ignore it
             # and yes, the orport is the same on IPv4 and IPv6
-            if self._env['ipv6_addr'] is not None:
-                authlines += " ipv6=%s:%s" % (self._env['ipv6_addr'],
-                                              self._env['orport'])
+            if self._env["ipv6_addr"] is not None:
+                authlines += " ipv6=%s:%s" % (
+                    self._env["ipv6_addr"],
+                    self._env["orport"],
+                )
             authlines += " %s %s:%s %s\n" % (
-                self._env['dirserver_flags'], self._env['ip'],
-                self._env['dirport'], self._env['fingerprint'])
+                self._env["dirserver_flags"],
+                self._env["ip"],
+                self._env["dirport"],
+                self._env["fingerprint"],
+            )
 
         # generate arti configuartion if supported
-        arti_lines = ("","")
+        arti_lines = ("", "")
         if arti:
-            addrs = '"%s:%s"' % (self._env['ip'], self._env['orport'])
-            if self._env['ipv6_addr'] is not None:
-                addrs += ', "%s:%s"' % (self._env['ipv6_addr'],
-                                        self._env['orport'])
-            elts = { "fp": self._env['fingerprint'].replace(" ", ""),
-                     "ed_fp": self._env['fingerprint_ed25519'],
-                     "orports": addrs,
-                     "nick": self._env['nick'],
-                     "v3id": v3id }
+            addrs = '"%s:%s"' % (self._env["ip"], self._env["orport"])
+            if self._env["ipv6_addr"] is not None:
+                addrs += ', "%s:%s"' % (self._env["ipv6_addr"], self._env["orport"])
+            elts = {
+                "fp": self._env["fingerprint"].replace(" ", ""),
+                "ed_fp": self._env["fingerprint_ed25519"],
+                "orports": addrs,
+                "nick": self._env["nick"],
+                "v3id": v3id,
+            }
             arti_lines = (
-                    """    {{rsa_identity = "{fp}", ed_identity = "{ed_fp}", orports = [{orports}]}},\n""".format(**elts),
-                    """    {{name = "{nick}", v3ident = "{v3id}"}},\n""".format(**elts),
-                    )
+                (
+                    "    {"
+                    + f'rsa_identity = "{elts["fp"]}"'
+                    + f', ed_identity = "{elts["ed_fp"]}"'
+                    + f', orports = [{elts["orports"]}]'
+                    + "},\n"
+                ),
+                (
+                    "    {"
+                    + f'name = "{elts["nick"]}"'
+                    + f', v3ident = "{elts["v3id"]}"'
+                    + "},\n"
+                ),
+            )
         return (authlines, arti_lines)
 
     def _getBridgeLines(self) -> tuple[str, str]:
@@ -899,32 +992,36 @@ class LocalNodeBuilder(NodeBuilder):
         First element is the line in torrc format, and 2nd is the same line in raw/arti format.
         Non-bridge relays return ("", "").
         """
-        if not self._env['bridge']:
+        if not self._env["bridge"]:
             return ("", "")
 
-        if self._env['pt_bridge']:
-            port = self._env['ptport']
-            transport = self._env['pt_transport']
-            extra = self._env['pt_extra']
+        if self._env["pt_bridge"]:
+            port = self._env["ptport"]
+            transport = self._env["pt_transport"]
+            extra = self._env["pt_extra"]
         else:
             # the orport is the same on IPv4 and IPv6
-            port = self._env['orport']
+            port = self._env["orport"]
             transport = ""
             extra = ""
 
         BRIDGE_LINE_TEMPLATE = "%s %s:%s %s %s\n"
 
-        bridgelines = BRIDGE_LINE_TEMPLATE % (transport,
-                                              self._env['ip'],
-                                              port,
-                                              self._env['fingerprint'],
-                                              extra)
-        if self._env['ipv6_addr'] is not None:
-            bridgelines += BRIDGE_LINE_TEMPLATE % (transport,
-                                                   self._env['ipv6_addr'],
-                                                   port,
-                                                   self._env['fingerprint'],
-                                                   extra)
+        bridgelines = BRIDGE_LINE_TEMPLATE % (
+            transport,
+            self._env["ip"],
+            port,
+            self._env["fingerprint"],
+            extra,
+        )
+        if self._env["ipv6_addr"] is not None:
+            bridgelines += BRIDGE_LINE_TEMPLATE % (
+                transport,
+                self._env["ipv6_addr"],
+                port,
+                self._env["fingerprint"],
+                extra,
+            )
         return ("Bridge " + bridgelines, bridgelines)
 
 
@@ -939,87 +1036,93 @@ class LocalNodeController(NodeController):
 
     def _loadEd25519Id(self) -> Optional[str]:
         """
-           Read the ed25519 identity key for this router, encode it using
-           base64, strip trailing padding, and return it.
+        Read the ed25519 identity key for this router, encode it using
+        base64, strip trailing padding, and return it.
 
-           If the file does not exist, returns None.
+        If the file does not exist, returns None.
 
-           Raises a ValueError if the file appears to be corrupt.
+        Raises a ValueError if the file appears to be corrupt.
         """
-        datadir = self._env['dir']
-        key_file = Path(datadir, 'keys', 'ed25519_master_id_public_key')
+        datadir = self._env["dir"]
+        key_file = Path(datadir, "keys", "ed25519_master_id_public_key")
         # If we're called early during bootstrap, the file won't have been
         # created yet. (And some very old tor versions don't have ed25519.)
         if not key_file.exists():
-            debug(("File {} does not exist. Are you running a very old tor "
-                   "version?").format(key_file))
+            debug(
+                (
+                    "File {} does not exist. Are you running a very old tor " "version?"
+                ).format(key_file)
+            )
             return None
 
         EXPECTED_ED25519_FILE_SIZE = 64
         key_file_size = key_file.stat().st_size
         if key_file_size != EXPECTED_ED25519_FILE_SIZE:
             raise ValueError(
-                ("The current size of the file is {} bytes, which is not"
-                 "matching the expected value of {} bytes")
-                .format(key_file_size, EXPECTED_ED25519_FILE_SIZE))
+                (
+                    "The current size of the file is {} bytes, which is not"
+                    "matching the expected value of {} bytes"
+                ).format(key_file_size, EXPECTED_ED25519_FILE_SIZE)
+            )
 
-        with key_file.open(mode='rb') as f:
+        with key_file.open(mode="rb") as f:
             ED25519_KEY_POSITION = 32
             f.seek(ED25519_KEY_POSITION)
             rest_file = f.read()
             encoded_value = base64.b64encode(rest_file)
             # tor strips trailing base64 padding
-            ed25519_id = encoded_value.decode('utf-8').replace('=', '')
+            ed25519_id = encoded_value.decode("utf-8").replace("=", "")
             EXPECTED_ED25519_BASE64_KEY_SIZE = 43
             key_base64_size = len(ed25519_id)
-            if (key_base64_size != EXPECTED_ED25519_BASE64_KEY_SIZE):
+            if key_base64_size != EXPECTED_ED25519_BASE64_KEY_SIZE:
                 raise ValueError(
-                    ("The current length of the key is {}, which is not "
-                     "matching the expected length of {}")
-                    .format(key_base64_size,
-                            EXPECTED_ED25519_BASE64_KEY_SIZE))
+                    (
+                        "The current length of the key is {}, which is not "
+                        "matching the expected length of {}"
+                    ).format(key_base64_size, EXPECTED_ED25519_BASE64_KEY_SIZE)
+                )
             return ed25519_id
 
     def getNick(self) -> str:
         """Return the nickname for this node."""
-        return check_type(self._env['nick'], str)
+        return check_type(self._env["nick"], str)
 
     def getBridge(self) -> int:
         """Return the bridge (relay) flag for this node."""
         try:
-            return check_type(self._env['bridge'], int)
+            return check_type(self._env["bridge"], int)
         except KeyError:
             return 0
 
     def getEd25519Id(self) -> Optional[str]:
         """Return the base64-encoded ed25519 public key of this node."""
         try:
-            return check_type(self._env['ed25519_id'], str)
+            return check_type(self._env["ed25519_id"], str)
         except KeyError:
             ed25519_id = self._loadEd25519Id()
             # cache a copy for later
             if ed25519_id is not None:
-                self._env['ed25519_id'] = ed25519_id
+                self._env["ed25519_id"] = ed25519_id
             return ed25519_id
 
     def getBridgeClient(self) -> bool:
         """Return the bridge client flag for this node."""
         try:
-            return bool(check_type(self._env['bridgeclient'], Union[int, bool]))
+            return bool(check_type(self._env["bridgeclient"], Union[int, bool]))
         except KeyError:
             return False
 
     def getBridgeAuthority(self) -> bool:
         """Return the bridge authority flag for this node."""
         try:
-            return bool(check_type(self._env['bridgeauthority'], Union[int, bool]))
+            return bool(check_type(self._env["bridgeauthority"], Union[int, bool]))
         except KeyError:
             return False
 
     def getAuthority(self) -> bool:
         """Return the authority flag for this node."""
         try:
-            return bool(check_type(self._env['authority'], Union[int, bool]))
+            return bool(check_type(self._env["authority"], Union[int, bool]))
         except KeyError:
             return False
 
@@ -1033,26 +1136,26 @@ class LocalNodeController(NodeController):
 
     def getDirServer(self) -> bool:
         """Return the relay flag for this node.
-           The relay flag is set on authorities, relays, and bridges.
+        The relay flag is set on authorities, relays, and bridges.
         """
         try:
-            return bool(check_type(self._env['relay'], Union[int, bool]))
+            return bool(check_type(self._env["relay"], Union[int, bool]))
         except KeyError:
             return False
 
     def getConsensusRelay(self) -> bool:
         """Is this node published in the consensus?
-           True for authorities and relays; False for bridges and clients.
+        True for authorities and relays; False for bridges and clients.
         """
         return self.getDirServer() and not self.getBridge()
 
     def isOnionService(self) -> bool:
         """Is this node an onion service?"""
-        if self._env['tag'].startswith('h'):
+        if self._env["tag"].startswith("h"):
             return True
 
         try:
-            return bool(check_type(self._env['hs'], Union[int, bool]))
+            return bool(check_type(self._env["hs"], Union[int, bool]))
         except KeyError:
             return False
 
@@ -1061,14 +1164,14 @@ class LocalNodeController(NodeController):
 
     def getMinStartTime(self) -> int:
         """Returns the minimum start time before verifying, regardless of
-           whether the network has bootstrapped, or the dir info has been
-           distributed.
+        whether the network has bootstrapped, or the dir info has been
+        distributed.
 
-           The default can be overridden by the $CHUTNEY_MIN_START_TIME env
-           var.
+        The default can be overridden by the $CHUTNEY_MIN_START_TIME env
+        var.
         """
         # User overrode the dynamic time
-        env_min_time = getenv_int('CHUTNEY_MIN_START_TIME', None)
+        env_min_time = getenv_int("CHUTNEY_MIN_START_TIME", None)
         if env_min_time is not None:
             return env_min_time
         return LocalNodeController.MIN_START_TIME_DEFAULT
@@ -1078,18 +1181,18 @@ class LocalNodeController(NodeController):
     #
     # This version prefix compares less than all 0.4-series, and any
     # future version series (for example, 0.5, 1.0, and 22.0)
-    MIN_TOR_VERSION_FOR_TIMING_FIX = 'Tor 0.4'
+    MIN_TOR_VERSION_FOR_TIMING_FIX = "Tor 0.4"
 
     def isLegacyTorVersion(self) -> bool:
         """Is the current Tor version 0.3.5 or earlier?"""
-        tor = self._env['tor']
+        tor = self._env["tor"]
         tor_version = get_tor_version(tor)
         min_version = LocalNodeController.MIN_TOR_VERSION_FOR_TIMING_FIX
 
         # We could compare the version components, but this works for now
         # (And if it's a custom Tor implementation, it shouldn't have this
         # particular timing bug.)
-        if tor_version.startswith('Tor ') and tor_version < min_version:
+        if tor_version.startswith("Tor ") and tor_version < min_version:
             return True
         else:
             return False
@@ -1109,10 +1212,10 @@ class LocalNodeController(NodeController):
 
     def getUncheckedDirInfoWaitTime(self) -> float:
         """Returns the amount of time to wait before verifying, after the
-           network has bootstrapped, and the dir info has been distributed.
+        network has bootstrapped, and the dir info has been distributed.
 
-           Based on whether this node has unchecked directory info, or other
-           known timing issues.
+        Based on whether this node has unchecked directory info, or other
+        known timing issues.
         """
         if self.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
@@ -1125,22 +1228,22 @@ class LocalNodeController(NodeController):
 
     def getPid(self) -> Optional[int]:
         """Read the pidfile, and return the pid of the running process.
-           Returns None if there is no pid in the file.
+        Returns None if there is no pid in the file.
         """
-        pidfile = Path(self._env['pidfile'])
+        pidfile = Path(self._env["pidfile"])
         if not pidfile.exists():
             return None
 
-        with pidfile.open(mode='r') as f:
+        with pidfile.open(mode="r") as f:
             try:
                 return int(f.read())
             except ValueError:
                 return None
 
-    def isRunning(self, pid:Optional[int]=None) -> bool:
+    def isRunning(self, pid: Optional[int] = None) -> bool:
         """Return true iff this node is running.  (If 'pid' is provided, we
-           assume that the pid provided is the one of this node.  Otherwise
-           we call getPid().
+        assume that the pid provided is the one of this node.  Otherwise
+        we call getPid().
         """
         if pid is None:
             pid = self.getPid()
@@ -1158,42 +1261,45 @@ class LocalNodeController(NodeController):
         # XXXX check if this is really tor!
         return True
 
-    def check(self, listRunning:bool=True, listNonRunning:bool=False)->bool:
+    def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
         """See if this node is running, stopped, or crashed.  If it's running
-           and listRunning is set, print a short statement.  If it's
-           stopped and listNonRunning is set, then print a short statement.
-           If it's crashed, print a statement.  Return True if the
-           node is running, false otherwise.
+        and listRunning is set, print a short statement.  If it's
+        stopped and listNonRunning is set, then print a short statement.
+        If it's crashed, print a statement.  Return True if the
+        node is running, false otherwise.
         """
         # XXX Split this into "check" and "print" parts.
         pid = self.getPid()
-        nick = self._env['nick']
-        datadir = self._env['dir']
+        nick = self._env["nick"]
+        datadir = self._env["dir"]
         corefile = None
         if pid:
             corefile = "core.%d" % pid
-        tor_version = get_tor_version(self._env['tor'])
+        tor_version = get_tor_version(self._env["tor"])
         if self.isRunning(pid):
             if listRunning:
                 # PIDs are typically 65535 or less
-                print("{:12} is running with PID {:5}: {}"
-                      .format(nick, pid, tor_version))
+                print(
+                    "{:12} is running with PID {:5}: {}".format(nick, pid, tor_version)
+                )
             return True
         elif corefile and Path(datadir, corefile).exists():
             if listNonRunning:
-                print("{:12} seems to have crashed, and left core file {}: {}"
-                      .format(nick, corefile, tor_version))
+                print(
+                    "{:12} seems to have crashed, and left core file {}: {}".format(
+                        nick, corefile, tor_version
+                    )
+                )
             return False
         else:
             if listNonRunning:
-                print("{:12} is stopped: {}"
-                      .format(nick, tor_version))
+                print("{:12} is stopped: {}".format(nick, tor_version))
             return False
 
     def hup(self) -> bool:
         """Send a SIGHUP to this node, if it's running."""
         pid = self.getPid()
-        nick = self._env['nick']
+        nick = self._env["nick"]
         if pid is not None and self.isRunning(pid):
             print("Sending sighup to {}".format(nick))
             os.kill(pid, signal.SIGHUP)
@@ -1206,14 +1312,15 @@ class LocalNodeController(NodeController):
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
 
         if self.isRunning():
-            print("{:12} is already running".format(self._env['nick']))
+            print("{:12} is already running".format(self._env["nick"]))
             return
-        tor_path = self._env['tor']
+        tor_path = self._env["tor"]
         torrc = self._getTorrcFname()
         cmdline = [
             tor_path,
-            "-f", torrc,
-            ]
+            "-f",
+            torrc,
+        ]
         p = launch_process(cmdline)
         if self.waitOnLaunch():
             # this requires that RunAsDaemon is set.
@@ -1226,7 +1333,8 @@ class LocalNodeController(NodeController):
                     f"Couldn't launch {self._env['nick']:12}"
                     + f" command '{' '.join(cmdline)}': "
                     + f" exit {p.returncode},"
-                    + f" output '{stdouterr}'")
+                    + f" output '{stdouterr}'"
+                )
         else:
             # this requires RunAsDaemon to *not* be set, and is slower.
             #
@@ -1237,41 +1345,39 @@ class LocalNodeController(NodeController):
             #
             # avoid writing a newline or space when polling
             # so output comes out neatly
-            print('.', end='', flush=True)
-            time.sleep(self._env['poll_launch_time'])
+            print(".", end="", flush=True)
+            time.sleep(self._env["poll_launch_time"])
             p.poll()
             if p.returncode is not None:
                 # Process unexpectedly exited
                 raise ChutneyError(
                     f"'{self._env['nick']:12}' unexpectedly exited with code {p.returncode}."
                     + f" command '{' '.join(cmdline)}'"
-                    + f" after waiting {self._env['poll_launch_time']} seconds for launch")
+                    + f" after waiting {self._env['poll_launch_time']} seconds for launch"
+                )
 
-
-    def stop(self, sig:int=signal.SIGINT) -> None:
+    def stop(self, sig: int = signal.SIGINT) -> None:
         """Try to stop this node by sending it the signal 'sig'."""
         pid = self.getPid()
         if pid is None or not self.isRunning(pid):
-            print("{:12} is not running".format(self._env['nick']))
+            print("{:12} is not running".format(self._env["nick"]))
             return
         os.kill(pid, sig)
 
     def cleanup_lockfile(self) -> None:
         """Remove lock file if this node is no longer running."""
-        lf = Path(self._env['lockfile'])
+        lf = Path(self._env["lockfile"])
         if not self.isRunning() and lf.exists():
-            debug("Removing stale lock file for {} ..."
-                  .format(self._env['nick']))
+            debug("Removing stale lock file for {} ...".format(self._env["nick"]))
             os.remove(lf)
 
     def cleanup_pidfile(self) -> None:
         """Move PID file to pidfile.old if this node is no longer running
-           so that we don't try to stop the node again.
+        so that we don't try to stop the node again.
         """
-        pidfile = Path(self._env['pidfile'])
+        pidfile = Path(self._env["pidfile"])
         if not self.isRunning() and pidfile.exists():
-            debug("Renaming stale pid file for {} ..."
-                  .format(self._env['nick']))
+            debug("Renaming stale pid file for {} ...".format(self._env["nick"]))
             pidfile.rename(pidfile.with_suffix(".old"))
 
     def waitOnLaunch(self) -> bool:
@@ -1279,33 +1385,34 @@ class LocalNodeController(NodeController):
         # TODO: is this the best place for this code?
         # RunAsDaemon default is 0
         runAsDaemon = False
-        with open(self._getTorrcFname(), 'r') as f:
+        with open(self._getTorrcFname(), "r") as f:
             for line in f.readlines():
                 stline = line.strip()
                 # if the line isn't all whitespace or blank
                 if len(stline) > 0:
                     splline = stline.split()
                     # if the line has at least two tokens on it
-                    if (len(splline) > 0 and
-                            splline[0].lower() == "RunAsDaemon".lower() and
-                            splline[1] == "1"):
+                    if (
+                        len(splline) > 0
+                        and splline[0].lower() == "RunAsDaemon".lower()
+                        and splline[1] == "1"
+                    ):
                         # use the RunAsDaemon value from the torrc
                         # TODO: multiple values?
                         runAsDaemon = True
         if runAsDaemon:
             # we must use wait() instead of poll()
-            self._env['poll_launch_time'] = None
+            self._env["poll_launch_time"] = None
             return True
         else:
             # we must use poll() instead of wait()
-            if self._env['poll_launch_time'] is None:
-                self._env['poll_launch_time'] = \
-                    self._env['poll_launch_time_default']
+            if self._env["poll_launch_time"] is None:
+                self._env["poll_launch_time"] = self._env["poll_launch_time_default"]
             return False
 
-    def getLogfile(self, info:bool=False) -> Path:
+    def getLogfile(self, info: bool = False) -> Path:
         """Return the expected path to the logfile for this instance."""
-        datadir = check_type(self._env['dir'], Path)
+        datadir = check_type(self._env["dir"], Path)
         if info:
             logname = "info.log"
         else:
@@ -1325,27 +1432,30 @@ class LocalNodeController(NodeController):
 
     def updateLastOnionServiceDescStatus(self) -> None:
         """Look through the logs and cache the last onion service
-           descriptor status received.
+        descriptor status received.
         """
         logfname = self.getLogfile(info=True)
         if not os.path.exists(logfname):
-            self.most_recent_oniondesc_status = (LocalNodeController.MISSING_FILE_CODE,
-                    "no_logfile", "There is no logfile yet.")
+            self.most_recent_oniondesc_status = (
+                LocalNodeController.MISSING_FILE_CODE,
+                "no_logfile",
+                "There is no logfile yet.",
+            )
         percent = LocalNodeController.NO_RECORDS_CODE
         keyword = "no_message"
         message = "No onion service descriptor messages yet."
-        with open(logfname, 'r') as f:
+        with open(logfname, "r") as f:
             for line in f:
-                m_v2 = re.search(r'Launching upload for hidden service (.*)',
-                                 line)
+                m_v2 = re.search(r"Launching upload for hidden service (.*)", line)
                 if m_v2:
                     percent = LocalNodeController.ONIONDESC_PUBLISHED_CODE
                     keyword = LocalNodeController.HSV2_KEYWORD
                     message = m_v2.groups()[0]
                     break
                 # else check for HSv3
-                m_v3 = re.search(r'Service ([^\s]+ [^\s]+ descriptor of revision .*)',
-                                 line)
+                m_v3 = re.search(
+                    r"Service ([^\s]+ [^\s]+ descriptor of revision .*)", line
+                )
                 if m_v3:
                     percent = LocalNodeController.ONIONDESC_PUBLISHED_CODE
                     keyword = LocalNodeController.HSV3_KEYWORD
@@ -1355,11 +1465,11 @@ class LocalNodeController(NodeController):
 
     def getLastOnionServiceDescStatus(self) -> tuple[int, str, str]:
         """Return the last onion descriptor message fetched by
-           updateLastOnionServiceDescStatus as a 3-tuple of percentage
-           complete, the hidden service version, and message.
+        updateLastOnionServiceDescStatus as a 3-tuple of percentage
+        complete, the hidden service version, and message.
 
-           The return status depends on the last time updateLastStatus()
-           was called; that function must be called before this one.
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
         """
         rv = self.most_recent_oniondesc_status
         # Caller is required to have set this via `updateLastStatus` first.
@@ -1369,20 +1479,22 @@ class LocalNodeController(NodeController):
 
     def updateLastBootstrapStatus(self) -> None:
         """Look through the logs and cache the last bootstrap message
-           received.
+        received.
         """
         logfname = self.getLogfile()
         if not logfname.exists():
-            self.most_recent_bootstrap_status = (LocalNodeController.MISSING_FILE_CODE,
-                    "no_logfile", "There is no logfile yet.")
+            self.most_recent_bootstrap_status = (
+                LocalNodeController.MISSING_FILE_CODE,
+                "no_logfile",
+                "There is no logfile yet.",
+            )
             return
         percent = LocalNodeController.NO_RECORDS_CODE
         keyword = "no_message"
         message = "No bootstrap messages yet."
-        with logfname.open(mode='r') as f:
+        with logfname.open(mode="r") as f:
             for line in f:
-                m = re.search(r'Bootstrapped (\d+)%(?: \(([^\)]*)\))?: (.*)',
-                              line)
+                m = re.search(r"Bootstrapped (\d+)%(?: \(([^\)]*)\))?: (.*)", line)
                 if m:
                     percent_s, keyword, message = m.groups()
                     percent = int(percent_s)
@@ -1390,11 +1502,11 @@ class LocalNodeController(NodeController):
 
     def getLastBootstrapStatus(self) -> tuple[int, str, str]:
         """Return the last bootstrap message fetched by
-           updateLastBootstrapStatus as a 3-tuple of percentage
-           complete, keyword (optional), and message.
+        updateLastBootstrapStatus as a 3-tuple of percentage
+        complete, keyword (optional), and message.
 
-           The return status depends on the last time updateLastStatus()
-           was called; that function must be called before this one.
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
         """
         rv = self.most_recent_bootstrap_status
         # Caller is required to have set this via `updateLastStatus` first.
@@ -1404,17 +1516,17 @@ class LocalNodeController(NodeController):
 
     def updateLastStatus(self) -> None:
         """Update last messages this node has received, for use with
-           isBootstrapped and the getLast* functions.
+        isBootstrapped and the getLast* functions.
         """
         self.updateLastOnionServiceDescStatus()
         self.updateLastBootstrapStatus()
 
     def isBootstrapped(self) -> bool:
         """Return true iff the logfile says that this instance is
-           bootstrapped.
+        bootstrapped.
 
-           The return status depends on the last time updateLastStatus()
-           was called; that function must be called before this one.
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
         """
         pct, _, _ = self.getLastBootstrapStatus()
         if pct != LocalNodeController.SUCCESS_CODE:
@@ -1432,37 +1544,39 @@ class LocalNodeController(NodeController):
 
     def getDocTypeDisplayLimit(self) -> int:
         """Return the expected number of document types in this network."""
-        if self._network._dfltEnv['hasbridgeauth']:
+        if self._network._dfltEnv["hasbridgeauth"]:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
         else:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
 
-    def getNodeCacheDirInfoPaths(self, v2_dir_paths: bool) -> tuple[int, int, Optional[dict[str, Path]]]:
+    def getNodeCacheDirInfoPaths(
+        self, v2_dir_paths: bool
+    ) -> tuple[int, int, Optional[dict[str, Path]]]:
         """Return a 3-tuple containing:
-             * a boolean indicating whether this node is a directory server,
-               (that is, an authority, relay, or bridge),
-             * a boolean indicating whether this node is a bridge client, and
-             * a dict with the expected paths to the consensus files for this
-               node.
+          * a boolean indicating whether this node is a directory server,
+            (that is, an authority, relay, or bridge),
+          * a boolean indicating whether this node is a bridge client, and
+          * a dict with the expected paths to the consensus files for this
+            node.
 
-           If v2_dir_paths is True, returns the v3 directory paths.
-           Otherwise, returns the bridge status path.
-           If v2_dir_paths is True, but this node is not a bridge client or
-           bridge authority, returns None. (There are no paths.)
+        If v2_dir_paths is True, returns the v3 directory paths.
+        Otherwise, returns the bridge status path.
+        If v2_dir_paths is True, but this node is not a bridge client or
+        bridge authority, returns None. (There are no paths.)
 
-           Directory servers usually have both consensus flavours.
-           Clients usually have the microdesc consensus, but they may have
-           either flavour. (Or both flavours.)
-           Only the bridge authority has the bridge networkstatus.
+        Directory servers usually have both consensus flavours.
+        Clients usually have the microdesc consensus, but they may have
+        either flavour. (Or both flavours.)
+        Only the bridge authority has the bridge networkstatus.
 
-           The dict keys are:
-             * "ns_cons", "desc", and "desc_new";
-             * "md_cons", "md", and "md_new"; and
-             * "br_status".
+        The dict keys are:
+          * "ns_cons", "desc", and "desc_new";
+          * "md_cons", "md", and "md_new"; and
+          * "br_status".
         """
         to_bridge_client = self.getBridgeClient()
         to_bridge_auth = self.getBridgeAuthority()
-        datadir = self._env['dir']
+        datadir = self._env["dir"]
         to_dir_server = self.getDirServer()
 
         desc = Path(datadir, "cached-descriptors")
@@ -1475,35 +1589,38 @@ class LocalNodeController(NodeController):
             md = Path(datadir, "cached-microdescs")
             md_new = Path(datadir, "cached-microdescs.new")
 
-            paths = { 'ns_cons': ns_cons,
-                      'desc': desc,
-                      'desc_new': desc_new,
-                      'md_cons': md_cons,
-                      'md': md,
-                      'md_new': md_new }
+            paths = {
+                "ns_cons": ns_cons,
+                "desc": desc,
+                "desc_new": desc_new,
+                "md_cons": md_cons,
+                "md": md,
+                "md_new": md_new,
+            }
         # the published node is a bridge
         # bridges are only used by bridge clients and bridge authorities
         elif to_bridge_client or to_bridge_auth:
             # bridge descs are stored with relay descs
-            paths = { 'desc': desc,
-                      'desc_new': desc_new }
+            paths = {"desc": desc, "desc_new": desc_new}
             if to_bridge_auth:
                 br_status = Path(datadir, "networkstatus-bridges")
-                paths['br_status'] = br_status
+                paths["br_status"] = br_status
         else:
             # We're looking for bridges, but other nodes don't use bridges
             paths = None
 
         return (to_dir_server, to_bridge_client, paths)
 
-    def getNodePublishedDirInfoPaths(self) -> Optional[dict[str, tuple[int, int, Optional[dict[str, Path]]]]]:
+    def getNodePublishedDirInfoPaths(
+        self,
+    ) -> Optional[dict[str, tuple[int, int, Optional[dict[str, Path]]]]]:
         """Return a dict of paths to consensus files, where we expect this
-           node to be published.
+        node to be published.
 
-           The dict keys are the nicks for each node.
+        The dict keys are the nicks for each node.
 
-           See getNodeCacheDirInfoPaths() for the path data structure, and which
-           nodes appear in each type of directory.
+        See getNodeCacheDirInfoPaths() for the path data structure, and which
+        nodes appear in each type of directory.
         """
         consensus_member = self.getConsensusMember()
         bridge_member = self.getBridge()
@@ -1514,14 +1631,14 @@ class LocalNodeController(NodeController):
         if not consensus_member and not bridge_member:
             return None
 
-        launch_phase = self._network._dfltEnv['launch_phase']
+        launch_phase = self._network._dfltEnv["launch_phase"]
 
         # at this point, consensus_member == not bridge_member
         directory_files = dict()
         for node in self._network._nodes:
-            if node._env['launch_phase'] > launch_phase:
+            if node._env["launch_phase"] > launch_phase:
                 continue
-            nick = check_type(node._env['nick'], str)
+            nick = check_type(node._env["nick"], str)
             controller = node.getController()
             node_files = controller.getNodeCacheDirInfoPaths(consensus_member)
             # skip empty file lists
@@ -1533,19 +1650,15 @@ class LocalNodeController(NodeController):
 
     def getNodeDirInfoStatusPattern(self, dir_format: str) -> Optional[str]:
         """Returns a regular expression pattern for finding this node's entry
-           in a dir_format file. Returns None if the requested pattern is not
-           available.
+        in a dir_format file. Returns None if the requested pattern is not
+        available.
         """
         nickname = self.getNick()
         ed25519_key = self.getEd25519Id()
 
-        cons = dir_format in ["ns_cons",
-                              "md_cons",
-                              "br_status"]
-        desc = dir_format in ["desc",
-                              "desc_new"]
-        md = dir_format in ["md",
-                            "md_new"]
+        cons = dir_format in ["ns_cons", "md_cons", "br_status"]
+        desc = dir_format in ["desc", "desc_new"]
+        md = dir_format in ["md", "md_new"]
 
         assert cons or desc or md
 
@@ -1556,81 +1669,100 @@ class LocalNodeController(NodeController):
                 return None
             else:
                 # ns_cons and md_cons work
-                return r'^r ' + nickname + " "
+                return r"^r " + nickname + " "
         elif desc:
-            return r'^router ' + nickname + " "
+            return r"^router " + nickname + " "
         elif md:
             if ed25519_key:
-                return r'^id ed25519 ' + re.escape(ed25519_key)
+                return r"^id ed25519 " + re.escape(ed25519_key)
             else:
                 # If there is no ed25519_id, then we can't search for it
                 return None
         else:
             raise ChutneyError(f"Invalid dir_format {dir_format}")
 
-    def getFileDirInfoStatus(self, dir_format: str, dir_path: Path) -> tuple[int, Collection[str], str]:
+    def getFileDirInfoStatus(
+        self, dir_format: str, dir_path: Path
+    ) -> tuple[int, Collection[str], str]:
         """Check dir_path, a directory path used by another node, to see if
-           this node is present. The directory path is a dir_format file.
+        this node is present. The directory path is a dir_format file.
 
-           Returns a status 3-tuple containing:
-             * an integer status code:
-               * negative numbers correspond to errors,
-               * NO_PROGRESS_CODE means "not in the directory", and
-               * SUCCESS_CODE means "in the directory";
-             * a set containing dir_format; and
-             * a status message string.
+        Returns a status 3-tuple containing:
+          * an integer status code:
+            * negative numbers correspond to errors,
+            * NO_PROGRESS_CODE means "not in the directory", and
+            * SUCCESS_CODE means "in the directory";
+          * a set containing dir_format; and
+          * a status message string.
         """
         if not dir_path.exists():
-            return (LocalNodeController.MISSING_FILE_CODE,
-                    { dir_format }, "No dir file")
+            return (LocalNodeController.MISSING_FILE_CODE, {dir_format}, "No dir file")
 
         dir_pattern = self.getNodeDirInfoStatusPattern(dir_format)
 
         line_count = 0
-        with dir_path.open(mode='r') as f:
+        with dir_path.open(mode="r") as f:
             for line in f:
                 line_count = line_count + 1
                 if dir_pattern:
                     m = re.search(dir_pattern, line)
                     if m:
-                        return (LocalNodeController.SUCCESS_CODE,
-                                { dir_format }, "Dir info cached")
+                        return (
+                            LocalNodeController.SUCCESS_CODE,
+                            {dir_format},
+                            "Dir info cached",
+                        )
 
         if line_count == 0:
-            return (LocalNodeController.NO_RECORDS_CODE,
-                    { dir_format }, "Empty dir file")
+            return (LocalNodeController.NO_RECORDS_CODE, {dir_format}, "Empty dir file")
         elif dir_pattern is None:
-            return (LocalNodeController.NOT_YET_IMPLEMENTED_CODE,
-                    { dir_format }, "Not yet implemented")
+            return (
+                LocalNodeController.NOT_YET_IMPLEMENTED_CODE,
+                {dir_format},
+                "Not yet implemented",
+            )
         elif line_count < 8:
             # The minimum size of the bridge networkstatus is 3 lines,
             # and the minimum size of one bridge is 5 lines
             # Let the user know the dir file is unexpectedly small
-            return (LocalNodeController.SHORT_FILE_CODE,
-                    { dir_format }, "Very short dir file")
+            return (
+                LocalNodeController.SHORT_FILE_CODE,
+                {dir_format},
+                "Very short dir file",
+            )
         else:
-            return (LocalNodeController.NO_PROGRESS_CODE,
-                    { dir_format }, "Not in dir file")
+            return (
+                LocalNodeController.NO_PROGRESS_CODE,
+                {dir_format},
+                "Not in dir file",
+            )
 
-    def combineDirInfoStatuses(self, dir_statuses: dict[str, Optional[tuple[int, Collection[str], str]]], status_key_list: list[str],
-                               best:bool=True, ignore_missing:bool=False) -> Optional[tuple[int, Collection[str], str]]:
+    def combineDirInfoStatuses(
+        self,
+        dir_statuses: dict[str, Optional[tuple[int, Collection[str], str]]],
+        status_key_list: list[str],
+        best: bool = True,
+        ignore_missing: bool = False,
+    ) -> Optional[tuple[int, Collection[str], str]]:
         """Combine the directory statuses in dir_status, if their keys
-           appear in status_key_list. Keys may be directory formats, or
-           node nicks.
+        appear in status_key_list. Keys may be directory formats, or
+        node nicks.
 
-           If best is True, choose the best status, otherwise, choose the
-           worst status.
+        If best is True, choose the best status, otherwise, choose the
+        worst status.
 
-           If ignore_missing is True, ignore missing statuses, if there is any
-           other status available.
+        If ignore_missing is True, ignore missing statuses, if there is any
+        other status available.
 
-           If statuses are equal, combine their format sets.
+        If statuses are equal, combine their format sets.
 
-           Returns None if the status list is empty.
+        Returns None if the status list is empty.
         """
-        dir_status_list = [ dir_statuses[status_key]
-                            for status_key in dir_statuses
-                            if status_key in status_key_list ]
+        dir_status_list = [
+            dir_statuses[status_key]
+            for status_key in dir_statuses
+            if status_key in status_key_list
+        ]
 
         if len(dir_status_list) == 0:
             return None
@@ -1648,13 +1780,17 @@ class LocalNodeController(NodeController):
                 # equal status, not just the latest one
                 combined_flav = old_flav.union(new_flav)
                 dir_status = (old_status_code, combined_flav, old_msg)
-            elif (old_status_code == LocalNodeController.MISSING_FILE_CODE and
-                  ignore_missing):
+            elif (
+                old_status_code == LocalNodeController.MISSING_FILE_CODE
+                and ignore_missing
+            ):
                 # use the new status, which can't be MISSING_FILE_CODE,
                 # because they're not equal
                 dir_status = new_status
-            elif (new_status_code == LocalNodeController.MISSING_FILE_CODE and
-                  ignore_missing):
+            elif (
+                new_status_code == LocalNodeController.MISSING_FILE_CODE
+                and ignore_missing
+            ):
                 # ignore the new status
                 pass
             elif old_status_code == LocalNodeController.NOT_YET_IMPLEMENTED_CODE:
@@ -1668,31 +1804,33 @@ class LocalNodeController(NodeController):
                 dir_status = new_status
         return dir_status
 
-    def summariseCacheDirInfoStatus(self,
-                                    dir_status: dict[str, Optional[tuple[int, Collection[str], str]]],
-                                    to_dir_server:int,
-                                    to_bridge_client:int) -> Optional[tuple[int, Collection[str], str]]:
+    def summariseCacheDirInfoStatus(
+        self,
+        dir_status: dict[str, Optional[tuple[int, Collection[str], str]]],
+        to_dir_server: int,
+        to_bridge_client: int,
+    ) -> Optional[tuple[int, Collection[str], str]]:
         """Summarise the statuses for this node, among all the files used by
-           the other node.
+        the other node.
 
-           to_dir_server is True if the other node is a directory server.
-           to_bridge_client is True if the other node is a bridge client.
+        to_dir_server is True if the other node is a directory server.
+        to_bridge_client is True if the other node is a bridge client.
 
-           Combine these alternate files by choosing the best status:
-             * desc_alts: "desc" and "desc_new"
-             * md_alts: "md" and "md_new"
+        Combine these alternate files by choosing the best status:
+          * desc_alts: "desc" and "desc_new"
+          * md_alts: "md" and "md_new"
 
-           Handle these alternate formats by ignoring missing directory files,
-           then choosing the worst status:
-             * cons_all: "ns_cons" and "md_cons"
-             * desc_all: "desc"/"desc_new" and
-                          "md"/"md_new"
+        Handle these alternate formats by ignoring missing directory files,
+        then choosing the worst status:
+          * cons_all: "ns_cons" and "md_cons"
+          * desc_all: "desc"/"desc_new" and
+                       "md"/"md_new"
 
-           Add an "node_dir" status that describes the overall status, which
-           is the worst status among descriptors, consensuses, and the bridge
-           networkstatus (if relevant). Return this status.
+        Add an "node_dir" status that describes the overall status, which
+        is the worst status among descriptors, consensuses, and the bridge
+        networkstatus (if relevant). Return this status.
 
-           Returns None if no status is expected.
+        Returns None if no status is expected.
         """
         from_bridge = self.getBridge()
         # Is this node a bridge, publishing to a bridge client?
@@ -1701,18 +1839,15 @@ class LocalNodeController(NodeController):
         relay_to_bridge_client = self.getConsensusRelay() and to_bridge_client
 
         # We only need to be in one of these files to be successful
-        desc_alts = self.combineDirInfoStatuses(dir_status,
-                                                ["desc", "desc_new"],
-                                                best=True,
-                                                ignore_missing=True)
+        desc_alts = self.combineDirInfoStatuses(
+            dir_status, ["desc", "desc_new"], best=True, ignore_missing=True
+        )
         if desc_alts:
             dir_status["desc_alts"] = desc_alts
 
-        md_alts = self.combineDirInfoStatuses(dir_status,
-                                              ["md",
-                                               "md_new"],
-                                              best=True,
-                                              ignore_missing=True)
+        md_alts = self.combineDirInfoStatuses(
+            dir_status, ["md", "md_new"], best=True, ignore_missing=True
+        )
         if md_alts:
             dir_status["md_alts"] = md_alts
 
@@ -1724,26 +1859,24 @@ class LocalNodeController(NodeController):
             # Directory servers cache all flavours, so we want the worst
             # combined flavour status, and we want to treat missing files as
             # errors
-            cons_all = self.combineDirInfoStatuses(dir_status,
-                                                   ["ns_cons",
-                                                    "md_cons"],
-                                                   best=False,
-                                                   ignore_missing=False)
+            cons_all = self.combineDirInfoStatuses(
+                dir_status, ["ns_cons", "md_cons"], best=False, ignore_missing=False
+            )
         else:
             # Clients usually only fetch one flavour, so we want the best
             # combined flavour status, and we want to ignore missing files
-            cons_all = self.combineDirInfoStatuses(dir_status,
-                                                   ["ns_cons",
-                                                    "md_cons"],
-                                                   best=True,
-                                                   ignore_missing=True)
+            cons_all = self.combineDirInfoStatuses(
+                dir_status, ["ns_cons", "md_cons"], best=True, ignore_missing=True
+            )
         if cons_all:
             dir_status["cons_all"] = cons_all
 
         if bridge_to_bridge_client:
             # Bridge clients fetch bridge descriptors directly from bridges
             # Bridge clients fetch relay descriptors after fetching the consensus
-            desc_all: Optional[tuple[int, Collection[str], str]] = dir_status["desc_alts"]
+            desc_all: Optional[tuple[int, Collection[str], str]] = dir_status[
+                "desc_alts"
+            ]
         elif relay_to_bridge_client:
             # Bridge clients usually fetch microdesc consensuses and
             # microdescs, but some fetch ns consensuses and full descriptors
@@ -1760,48 +1893,46 @@ class LocalNodeController(NodeController):
                 # for bridges, but we're looking for a relay right now
                 desc_all = dir_status["md_alts"]
         elif to_dir_server:
-            desc_all = self.combineDirInfoStatuses(dir_status,
-                                                   ["desc_alts",
-                                                    "md_alts"],
-                                                   best=False,
-                                                   ignore_missing=False)
+            desc_all = self.combineDirInfoStatuses(
+                dir_status, ["desc_alts", "md_alts"], best=False, ignore_missing=False
+            )
         else:
-            desc_all = self.combineDirInfoStatuses(dir_status,
-                                                   ["desc_alts",
-                                                    "md_alts"],
-                                                   best=True,
-                                                   ignore_missing=True)
+            desc_all = self.combineDirInfoStatuses(
+                dir_status, ["desc_alts", "md_alts"], best=True, ignore_missing=True
+            )
         if desc_all:
             dir_status["desc_all"] = desc_all
 
         # Finally, get the worst status from all the combined statuses,
         # and the bridge status (if applicable)
-        node_dir = self.combineDirInfoStatuses(dir_status,
-                                               ["cons_all",
-                                                "br_status",
-                                                "desc_all"],
-                                               best=False,
-                                               ignore_missing=True)
+        node_dir = self.combineDirInfoStatuses(
+            dir_status,
+            ["cons_all", "br_status", "desc_all"],
+            best=False,
+            ignore_missing=True,
+        )
         if node_dir:
             dir_status["node_dir"] = node_dir
 
         return node_dir
 
-    def getNodeCacheDirInfoStatus(self,
-                                  other_node_files:Optional[dict[str, Path]],
-                                  to_dir_server:int,
-                                  to_bridge_client:int) -> Optional[tuple[int, Collection[str], str]]:
+    def getNodeCacheDirInfoStatus(
+        self,
+        other_node_files: Optional[dict[str, Path]],
+        to_dir_server: int,
+        to_bridge_client: int,
+    ) -> Optional[tuple[int, Collection[str], str]]:
         """Check all the directory paths used by another node, to see if this
-           node is present.
+        node is present.
 
-           to_dir_server is True if the other node is a directory server.
-           to_bridge_client is True if the other node is a bridge client.
+        to_dir_server is True if the other node is a directory server.
+        to_bridge_client is True if the other node is a bridge client.
 
-           Returns a dict containing a status 3-tuple for every relevant
-           directory format. See getFileDirInfoStatus() for more details.
+        Returns a dict containing a status 3-tuple for every relevant
+        directory format. See getFileDirInfoStatus() for more details.
 
-           Returns None if the node doesn't have any directory files
-           containing published information from this node.
+        Returns None if the node doesn't have any directory files
+        containing published information from this node.
         """
         dir_status: dict[str, Optional[tuple[int, Collection[str], str]]] = dict()
         # we don't expect the other node to have us in its files
@@ -1814,9 +1945,9 @@ class LocalNodeController(NodeController):
                 dir_status[dir_format] = new_status
 
         if len(dir_status):
-            return self.summariseCacheDirInfoStatus(dir_status,
-                                                    to_dir_server,
-                                                    to_bridge_client)
+            return self.summariseCacheDirInfoStatus(
+                dir_status, to_dir_server, to_bridge_client
+            )
         else:
             # this node must be a client, or a bridge
             # (and the other node is not a bridge authority or bridge client)
@@ -1824,26 +1955,28 @@ class LocalNodeController(NodeController):
             assert not consensus_member
             return None
 
-    def getNodeDirInfoStatusList(self) -> Optional[dict[str, Optional[tuple[int, Collection[str], str]]]]:
+    def getNodeDirInfoStatusList(
+        self,
+    ) -> Optional[dict[str, Optional[tuple[int, Collection[str], str]]]]:
         """Look through the directories on each node, and work out if
-           this node is in that directory.
+        this node is in that directory.
 
-           Returns a dict containing a status 3-tuple for each relevant node.
-           The 3-tuple contains:
-             * a status code,
-             * a list of formats with that status, and
-             * a status message string.
-           See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
-           more details.
+        Returns a dict containing a status 3-tuple for each relevant node.
+        The 3-tuple contains:
+          * a status code,
+          * a list of formats with that status, and
+          * a status message string.
+        See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
+        more details.
 
-           If this node is a directory authority, bridge authority, or relay
-           (including exits), checks v3 directory consensuses, descriptors,
-           microdesc consensuses, and microdescriptors.
+        If this node is a directory authority, bridge authority, or relay
+        (including exits), checks v3 directory consensuses, descriptors,
+        microdesc consensuses, and microdescriptors.
 
-           If this node is a bridge, checks bridge networkstatuses, and
-           descriptors on bridge authorities and bridge clients.
+        If this node is a bridge, checks bridge networkstatuses, and
+        descriptors on bridge authorities and bridge clients.
 
-           If this node is a client (including onion services), returns None.
+        If this node is a client (including onion services), returns None.
         """
         dir_files = self.getNodePublishedDirInfoPaths()
 
@@ -1853,15 +1986,15 @@ class LocalNodeController(NodeController):
         dir_statuses = dict()
         # For all the nodes we expect will have us in their directory
         for other_node_nick in dir_files:
-            (to_dir_server,
-             to_bridge_client,
-             other_node_files) = dir_files[other_node_nick]
+            (to_dir_server, to_bridge_client, other_node_files) = dir_files[
+                other_node_nick
+            ]
             if not other_node_files or not len(other_node_files):
                 # we don't expect this node to have us in its files
                 pass
-            status = self.getNodeCacheDirInfoStatus(other_node_files,
-                                               to_dir_server,
-                                               to_bridge_client)
+            status = self.getNodeCacheDirInfoStatus(
+                other_node_files, to_dir_server, to_bridge_client
+            )
             dir_statuses[other_node_nick] = status
 
         if len(dir_statuses):
@@ -1877,54 +2010,64 @@ class LocalNodeController(NodeController):
             assert not bridge_member
             return None
 
-    def summariseNodeDirInfoStatus(self, dir_status: Optional[dict[str, Optional[tuple[int, Collection[str], str]]]]) -> Optional[dict[Union[int, str], tuple[int, Collection[str], Collection[str], str]]]:
+    def summariseNodeDirInfoStatus(
+        self,
+        dir_status: Optional[dict[str, Optional[tuple[int, Collection[str], str]]]],
+    ) -> Optional[
+        dict[Union[int, str], tuple[int, Collection[str], Collection[str], str]]
+    ]:
         """Summarise the statuses for this node's descriptor, among all the
-           directory files used by all other nodes.
+        directory files used by all other nodes.
 
-           Returns a dict containing a status 4-tuple for each status code.
-           The 4-tuple contains:
-             * a status code,
-             * a list of the other nodes which have directory files with that
-               status,
-             * a list of directory file formats which have that status, and
-             * a status message string.
-           See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
-           more details.
+        Returns a dict containing a status 4-tuple for each status code.
+        The 4-tuple contains:
+          * a status code,
+          * a list of the other nodes which have directory files with that
+            status,
+          * a list of directory file formats which have that status, and
+          * a status message string.
+        See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
+        more details.
 
-           Also add an "node_all" status that describes the overall status,
-           which is the worst status among all the other nodes' directory
-           files.
+        Also add an "node_all" status that describes the overall status,
+        which is the worst status among all the other nodes' directory
+        files.
 
-           Returns None if no status is expected.
+        Returns None if no status is expected.
         """
-        node_status: dict[Union[int, str], tuple[int, Collection[str], Collection[str], str]] = dict()
+        node_status: dict[
+            Union[int, str], tuple[int, Collection[str], Collection[str], str]
+        ] = dict()
 
         # check if we expect this node to be published to other nodes
         if dir_status:
-            status_code_set = { status[0]
-                                for (other_node_nick, status) in dir_status.items()
-                                if status is not None }
+            status_code_set = {
+                status[0]
+                for (other_node_nick, status) in dir_status.items()
+                if status is not None
+            }
 
             for status_code in status_code_set:
                 other_node_nick_list = [
                     other_node_nick
                     for (other_node_nick, status) in dir_status.items()
-                    if status is not None and
-                       status[0] == status_code ]
+                    if status is not None and status[0] == status_code
+                ]
 
                 comb_status = self.combineDirInfoStatuses(
-                    dir_status,
-                    other_node_nick_list,
-                    best=False)
+                    dir_status, other_node_nick_list, best=False
+                )
 
                 if comb_status is not None:
                     (comb_code, comb_format_set, comb_msg) = comb_status
                     assert comb_code == status_code
 
-                    node_status[status_code] = (status_code,
-                                                other_node_nick_list,
-                                                comb_format_set,
-                                                comb_msg)
+                    node_status[status_code] = (
+                        status_code,
+                        other_node_nick_list,
+                        comb_format_set,
+                        comb_msg,
+                    )
 
         node_all: Optional[tuple[int, Collection[str], Collection[str], str]] = None
         if len(node_status):
@@ -1939,14 +2082,16 @@ class LocalNodeController(NodeController):
             consensus_member = self.getConsensusMember()
             bridge_member = self.getBridge()
             if consensus_member or bridge_member:
-                node_all = (LocalNodeController.INTERNAL_ERROR_CODE,
-                            set(),
-                            set(),
-                            "Expected {}{}{} dir info, but status is empty."
-                            .format("consensus" if consensus_member else "",
-                                    " and " if consensus_member
-                                            and bridge_member else "",
-                                    "bridge" if bridge_member else ""))
+                node_all = (
+                    LocalNodeController.INTERNAL_ERROR_CODE,
+                    set(),
+                    set(),
+                    "Expected {}{}{} dir info, but status is empty.".format(
+                        "consensus" if consensus_member else "",
+                        " and " if consensus_member and bridge_member else "",
+                        "bridge" if bridge_member else "",
+                    ),
+                )
             else:
                 # clients don't publish dir info
                 node_all = None
@@ -1958,11 +2103,13 @@ class LocalNodeController(NodeController):
             # client
             return None
 
-    def getNodeDirInfoStatus(self) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+    def getNodeDirInfoStatus(
+        self,
+    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
         """Return a 4-tuple describing the status of this node's descriptor,
-           in all the directory documents across the network.
+        in all the directory documents across the network.
 
-           If this node does not have a descriptor, returns None.
+        If this node does not have a descriptor, returns None.
         """
         dir_status = self.getNodeDirInfoStatusList()
         if dir_status:
@@ -1982,9 +2129,9 @@ class LocalNodeController(NodeController):
 
     def isInExpectedDirInfoDocs(self) -> Optional[bool]:
         """Return True if the descriptors for this node are in all expected
-           directory documents.
+        directory documents.
 
-           Return None if this node does not publish descriptors.
+        Return None if this node does not publish descriptors.
         """
         node_status = self.getNodeDirInfoStatus()
         if node_status:
@@ -1995,175 +2142,177 @@ class LocalNodeController(NodeController):
             # (But we shouldn't print a descriptor status for them.)
             return None
 
+
 # Default parent for `TorEnviron`
-_DEFAULT_TOR_ENVIRON = Environ(parent=None, **{
-    # authority: whether a node is an authority or bridge authority
-    'authority': False,
-    # bridgeauthority: whether a node is a bridge authority
-    'bridgeauthority': False,
-    # hasbridgeauth: whether a node has a bridge authority
-    'hasbridgeauth': False,
-    # relay: whether a node is a relay, exit, or bridge
-    'relay': False,
-    # bridge: whether a node is a bridge
-    'bridge': False,
-    # pt_bridge: whether a node is a potential bridge
-    'pt_bridge': False,
-    # pt_transport, pt_extra: a potential bridge's transport and extra-info
-    # parameters, that will be used in the Bridge torrc option
-    'pt_transport' : "",
-    'pt_extra' : "",
-    # hs: whether a node has a hidden service
-    'hs': False,
-    # hs_directory: directory (relative to datadir) to store hidden service info
-    'hs_directory': 'hidden_service',
-    # hs-hostname: cached hidden service hostname value
-    'hs-hostname': None,
-    # connlimit: value of ConnLimit torrc option
-    'connlimit': 60,
-    # net_base_dir: path to the chutney net directory
-    'net_base_dir': get_absolute_net_path(),
-    # tor: name or path of the tor binary
-    'tor': os.environ.get('CHUTNEY_TOR', 'tor'),
-    # tor-gencert: name or path of the tor-gencert binary (if present)
-    'tor-gencert': os.environ.get('CHUTNEY_TOR_GENCERT', None),
-    # auth_cert_lifetime: lifetime of authority certs, in months
-    'auth_cert_lifetime': 12,
-    # ip: primary IP address (usually IPv4) to listen on
-    'ip': os.environ.get('CHUTNEY_LISTEN_ADDRESS', '127.0.0.1'),
-    # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
-    # ipv6_addr=None to support IPv4-only systems
-    'ipv6_addr': os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6', None),
-    # Whether to disable all ipv6 functionality
-    'disableipv6': getenv_bool('CHUTNEY_DISABLE_IPV6', False),
-    # dirserver_flags: used only if authority=True
-    'dirserver_flags': 'no-v2',
-    # chutney_dir: directory of the chutney source code
-    'chutney_dir': get_absolute_chutney_path(),
-    # torrc_fname: templated path for node's torrc
-    'torrc_fname': '${dir}/torrc',
+_DEFAULT_TOR_ENVIRON = Environ(
+    parent=None,
+    **{
+        # authority: whether a node is an authority or bridge authority
+        "authority": False,
+        # bridgeauthority: whether a node is a bridge authority
+        "bridgeauthority": False,
+        # hasbridgeauth: whether a node has a bridge authority
+        "hasbridgeauth": False,
+        # relay: whether a node is a relay, exit, or bridge
+        "relay": False,
+        # bridge: whether a node is a bridge
+        "bridge": False,
+        # pt_bridge: whether a node is a potential bridge
+        "pt_bridge": False,
+        # pt_transport, pt_extra: a potential bridge's transport and extra-info
+        # parameters, that will be used in the Bridge torrc option
+        "pt_transport": "",
+        "pt_extra": "",
+        # hs: whether a node has a hidden service
+        "hs": False,
+        # hs_directory: directory (relative to datadir) to store hidden service info
+        "hs_directory": "hidden_service",
+        # hs-hostname: cached hidden service hostname value
+        "hs-hostname": None,
+        # connlimit: value of ConnLimit torrc option
+        "connlimit": 60,
+        # net_base_dir: path to the chutney net directory
+        "net_base_dir": get_absolute_net_path(),
+        # tor: name or path of the tor binary
+        "tor": os.environ.get("CHUTNEY_TOR", "tor"),
+        # tor-gencert: name or path of the tor-gencert binary (if present)
+        "tor-gencert": os.environ.get("CHUTNEY_TOR_GENCERT", None),
+        # auth_cert_lifetime: lifetime of authority certs, in months
+        "auth_cert_lifetime": 12,
+        # ip: primary IP address (usually IPv4) to listen on
+        "ip": os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1"),
+        # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
+        # ipv6_addr=None to support IPv4-only systems
+        "ipv6_addr": os.environ.get("CHUTNEY_LISTEN_ADDRESS_V6", None),
+        # Whether to disable all ipv6 functionality
+        "disableipv6": getenv_bool("CHUTNEY_DISABLE_IPV6", False),
+        # dirserver_flags: used only if authority=True
+        "dirserver_flags": "no-v2",
+        # chutney_dir: directory of the chutney source code
+        "chutney_dir": get_absolute_chutney_path(),
+        # torrc_fname: templated path for node's torrc
+        "torrc_fname": "${dir}/torrc",
+        # orport_base, dirport_base, controlport_base, socksport_base,
+        # extorport_base, ptport_base: the initial port numbers used by nodenum 0.
+        # Each additional node adds 1 to the port numbers.
+        "orport_base": 5100,
+        "dirport_base": 7100,
+        "controlport_base": 8000,
+        "socksport_base": 9000,
+        "extorport_base": 9500,
+        "ptport_base": 9900,
+        # authorities: combination of AlternateDirAuthority and
+        # AlternateBridgeAuthority torrc lines. there is no default for this option
+        "authorities": "AlternateDirAuthority bleargh bad torrc file!",
+        # bridges: potential Bridge torrc lines for this node. there is no default
+        # for this option
+        "bridges": "Bridge bleargh bad torrc file!",
+        # poll_launch_time: None means wait on launch (requires RunAsDaemon),
+        # otherwise, poll after that many seconds (can be fractional/decimal)
+        "poll_launch_time": None,
+        # poll_launch_time_default: Used when poll_launch_time is None, but
+        # RunAsDaemon is not set Set low so that we don't interfere with the
+        # voting interval
+        "poll_launch_time_default": 0.1,
+        # data_bytes: the number of bytes of random data we send on each connection
+        "data_bytes": getenv_int("CHUTNEY_DATA_BYTES", 10 * 1024),
+        # connection_count: the number of times each client will connect
+        "connection_count": getenv_int("CHUTNEY_CONNECTIONS", 1),
+        # hs_multi_client: If 1, every client connects to every HS. If 0, one client
+        # connects to each HS. (Clients choose an exit at random, so this doesn't
+        # apply to exits.)
+        "hs_multi_client": getenv_int("CHUTNEY_HS_MULTI_CLIENT", 0),
+        # bootstrap_time: How long in seconds we should verify (and similar
+        # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
+        # compatibility with old versions of test-network.sh
+        "bootstrap_time": getenv_int(
+            "CHUTNEY_BOOTSTRAP_TIME", getenv_int("BOOTSTRAP_TIME", 60)
+        ),
+        # controlling_pid: the PID of the controlling script
+        # (for __OwningControllerProcess)
+        "controlling_pid": getenv_int("CHUTNEY_CONTROLLING_PID", 0),
+        # dns_conf: a DNS config file (for ServerDNSResolvConfFile)
+        "dns_conf": (
+            os.environ.get("CHUTNEY_DNS_CONF", "/etc/resolv.conf")
+            if "CHUTNEY_DNS_CONF" in os.environ
+            else None
+        ),
+        # config_phase, launch_phase: The phase at which this instance needs to be
+        # configured/launched, if we're doing multiphase configuration/launch.
+        "config_phase": 1,
+        "launch_phase": 1,
+        "CUR_CONFIG_PHASE": getenv_int("CHUTNEY_CONFIG_PHASE", 1),
+        "CUR_LAUNCH_PHASE": getenv_int("CHUTNEY_LAUNCH_PHASE", 1),
+        "CUR_BOOTSTRAP_PHASE": getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1),
+        # sandbox: the Sandbox torrc option value
+        # defaults to 1 on Linux, and 0 otherwise
+        "sandbox": int(
+            getenv_bool("CHUTNEY_TOR_SANDBOX", platform.system() == "Linux")
+        ),
+        # Whether to enable a unix control socket (via ControlSocket in torrc)
+        "enable_controlsocket": getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True),
+    },
+)
 
-    # orport_base, dirport_base, controlport_base, socksport_base,
-    # extorport_base, ptport_base: the initial port numbers used by nodenum 0.
-    # Each additional node adds 1 to the port numbers.
-    'orport_base': 5100,
-    'dirport_base': 7100,
-    'controlport_base': 8000,
-    'socksport_base': 9000,
-    'extorport_base' : 9500,
-    'ptport_base' : 9900,
-
-    # authorities: combination of AlternateDirAuthority and
-    # AlternateBridgeAuthority torrc lines. there is no default for this option
-    'authorities': "AlternateDirAuthority bleargh bad torrc file!",
-    # bridges: potential Bridge torrc lines for this node. there is no default
-    # for this option
-    'bridges': "Bridge bleargh bad torrc file!",
-    # poll_launch_time: None means wait on launch (requires RunAsDaemon),
-    # otherwise, poll after that many seconds (can be fractional/decimal)
-    'poll_launch_time': None,
-    # poll_launch_time_default: Used when poll_launch_time is None, but
-    # RunAsDaemon is not set Set low so that we don't interfere with the
-    # voting interval
-    'poll_launch_time_default': 0.1,
-    # data_bytes: the number of bytes of random data we send on each connection
-    'data_bytes': getenv_int('CHUTNEY_DATA_BYTES', 10 * 1024),
-    # connection_count: the number of times each client will connect
-    'connection_count': getenv_int('CHUTNEY_CONNECTIONS', 1),
-    # hs_multi_client: If 1, every client connects to every HS. If 0, one client
-    # connects to each HS. (Clients choose an exit at random, so this doesn't
-    # apply to exits.)
-    'hs_multi_client': getenv_int('CHUTNEY_HS_MULTI_CLIENT', 0),
-    # bootstrap_time: How long in seconds we should verify (and similar
-    # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
-    # compatibility with old versions of test-network.sh
-    'bootstrap_time': getenv_int('CHUTNEY_BOOTSTRAP_TIME',
-                                 getenv_int('BOOTSTRAP_TIME',
-                                            60)),
-    # controlling_pid: the PID of the controlling script
-    # (for __OwningControllerProcess)
-    'controlling_pid': getenv_int('CHUTNEY_CONTROLLING_PID', 0),
-    # dns_conf: a DNS config file (for ServerDNSResolvConfFile)
-    'dns_conf': (os.environ.get('CHUTNEY_DNS_CONF', '/etc/resolv.conf')
-                        if 'CHUTNEY_DNS_CONF' in os.environ
-                        else None),
-
-    # config_phase, launch_phase: The phase at which this instance needs to be
-    # configured/launched, if we're doing multiphase configuration/launch.
-    'config_phase' : 1,
-    'launch_phase' : 1,
-
-    'CUR_CONFIG_PHASE': getenv_int('CHUTNEY_CONFIG_PHASE', 1),
-    'CUR_LAUNCH_PHASE': getenv_int('CHUTNEY_LAUNCH_PHASE', 1),
-    'CUR_BOOTSTRAP_PHASE': getenv_int('CHUTNEY_BOOTSTRAP_PHASE', 1),
-
-    # sandbox: the Sandbox torrc option value
-    # defaults to 1 on Linux, and 0 otherwise
-    'sandbox': int(getenv_bool('CHUTNEY_TOR_SANDBOX',
-                               platform.system() == 'Linux')),
-
-    # Whether to enable a unix control socket (via ControlSocket in torrc)
-    'enable_controlsocket': getenv_bool('CHUTNEY_ENABLE_CONTROLSOCKET', True),
-})
 
 class TorEnviron(Environ):
-
     """Subclass of chutney.Templating.Environ to implement commonly-used
-       substitutions.
+    substitutions.
 
-       Environment fields provided:
+    Environment fields provided:
 
-          orport, controlport, socksport, dirport: *Port torrc option
-          orport_directive: full ORPort torrc option, including flags
-          addressdisableipv6: torrc option to disable ipv6
-          dir: DataDirectory torrc option
-          nick: Nickname torrc option
-          controlsocket: ControlSocket torrc option
-          tor_gencert: name or path of the tor-gencert binary
-          auth_passphrase: obsoleted by CookieAuthentication
-          torrc_template_path: path to chutney torrc_templates directory
-          hs_hostname: the hostname of the key generated by a hidden service
-          owning_controller_process: the __OwningControllerProcess torrc line,
-             disabled if tor should continue after the script exits
-          server_dns_resolv_conf: the ServerDNSResolvConfFile torrc line,
-             disabled if tor should use the default DNS conf.
-             If the dns_conf file is missing, this option is also disabled:
-             otherwise, exits would not work due to tor bug #21900.
-          sandbox: Sets Sandbox to the value of CHUTNEY_TOR_SANDBOX.
-             The default is 1 on Linux, and 0 on other platforms.
-             Chutney users can disable the sandbox using:
-                export CHUTNEY_TOR_SANDBOX=0
-             if it doesn't work on their version of glibc.
+       orport, controlport, socksport, dirport: *Port torrc option
+       orport_directive: full ORPort torrc option, including flags
+       addressdisableipv6: torrc option to disable ipv6
+       dir: DataDirectory torrc option
+       nick: Nickname torrc option
+       controlsocket: ControlSocket torrc option
+       tor_gencert: name or path of the tor-gencert binary
+       auth_passphrase: obsoleted by CookieAuthentication
+       torrc_template_path: path to chutney torrc_templates directory
+       hs_hostname: the hostname of the key generated by a hidden service
+       owning_controller_process: the __OwningControllerProcess torrc line,
+          disabled if tor should continue after the script exits
+       server_dns_resolv_conf: the ServerDNSResolvConfFile torrc line,
+          disabled if tor should use the default DNS conf.
+          If the dns_conf file is missing, this option is also disabled:
+          otherwise, exits would not work due to tor bug #21900.
+       sandbox: Sets Sandbox to the value of CHUTNEY_TOR_SANDBOX.
+          The default is 1 on Linux, and 0 on other platforms.
+          Chutney users can disable the sandbox using:
+             export CHUTNEY_TOR_SANDBOX=0
+          if it doesn't work on their version of glibc.
 
-       Environment fields used:
-          nodenum: chutney's internal node number for the node
-          tag: a short text string that represents the type of node
-          orport_base, controlport_base, socksport_base, dirport_base: the
-             initial port numbers used by nodenum 0. Each additional node adds
-             1 to the port numbers.
-          disableipv6: whether to disable all ipv6 functionality
-          tor-gencert (note hyphen): name or path of the tor-gencert binary (if
-             present)
-          chutney_dir: directory of the chutney source code
-          tor: name or path of the tor binary
-          net_base_dir: path to the chutney net directory
-          hs_directory: name of the hidden service directory
-          nick: Nickname torrc option (debugging only)
-          hs-hostname (note hyphen): cached hidden service hostname value
-          controlling_pid: the PID of the controlling process. After this
-             process exits, the child tor processes will exit
-          dns_conf: the path to a DNS config file for Tor Exits. If this file
-             is empty or unreadable, Tor will try 127.0.0.1:53.
-          authority: are we an authority? (includes bridge authorities)
-          bridgeauthority: are we a bridge authority?
-          relay: are we a relay? (includes exits and bridges)
-          bridge: are we a bridge?
-          enable_controlsocket: enable unix control socket?
+    Environment fields used:
+       nodenum: chutney's internal node number for the node
+       tag: a short text string that represents the type of node
+       orport_base, controlport_base, socksport_base, dirport_base: the
+          initial port numbers used by nodenum 0. Each additional node adds
+          1 to the port numbers.
+       disableipv6: whether to disable all ipv6 functionality
+       tor-gencert (note hyphen): name or path of the tor-gencert binary (if
+          present)
+       chutney_dir: directory of the chutney source code
+       tor: name or path of the tor binary
+       net_base_dir: path to the chutney net directory
+       hs_directory: name of the hidden service directory
+       nick: Nickname torrc option (debugging only)
+       hs-hostname (note hyphen): cached hidden service hostname value
+       controlling_pid: the PID of the controlling process. After this
+          process exits, the child tor processes will exit
+       dns_conf: the path to a DNS config file for Tor Exits. If this file
+          is empty or unreadable, Tor will try 127.0.0.1:53.
+       authority: are we an authority? (includes bridge authorities)
+       bridgeauthority: are we a bridge authority?
+       relay: are we a relay? (includes exits and bridges)
+       bridge: are we a bridge?
+       enable_controlsocket: enable unix control socket?
     """
 
-    def __init__(self, parent:Environ=_DEFAULT_TOR_ENVIRON, **kwargs: Any):
+    def __init__(self, parent: Environ = _DEFAULT_TOR_ENVIRON, **kwargs: Any):
         """
-        Create a `TorEnviron` with the given `parent` environment, and `kwargs` adding and overriding mappings.
+        Create a `TorEnviron` with the given `parent` environment, and `kwargs`
+        adding and overriding mappings.
 
         `parent`, if specified, must be an instance of `TorEnviron`.
         """
@@ -2171,71 +2320,77 @@ class TorEnviron(Environ):
         # is probably a mistake.
         # If we find a use case for it though, we can remove this assertion and
         # update the doc comment.
-        assert isinstance(parent, TorEnviron) or parent is _DEFAULT_TOR_ENVIRON, "Using unsupported parent ignores defaults"
+        assert (
+            isinstance(parent, TorEnviron) or parent is _DEFAULT_TOR_ENVIRON
+        ), "Using unsupported parent ignores defaults"
 
         Environ.__init__(self, parent=parent, **kwargs)
 
     def _get_orport(self, my: Environ) -> int:
-        return check_type(my['orport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["orport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_addressdisableipv6(self, my: Environ) -> str:
-        if my['disableipv6']:
-            return '1'
+        if my["disableipv6"]:
+            return "1"
         else:
-            return '0'
+            return "0"
 
     def _get_orport_directive(self, my: Environ) -> str:
-        res = str(my['orport'])
-        if my['disableipv6']:
+        res = str(my["orport"])
+        if my["disableipv6"]:
             # Even though we set the "AddressIPv6Only" directive,
             # tor will still try to bind the orport to a v6 address
             # unless we also override it here.
-            res += ' IPv4Only'
+            res += " IPv4Only"
         return res
 
     def _get_controlsocket(self, my: Environ) -> str:
-        if my['enable_controlsocket']:
-            return str(check_type(my['dir'], Path).joinpath('control'))
+        if my["enable_controlsocket"]:
+            return str(check_type(my["dir"], Path).joinpath("control"))
         else:
-            return '0'
+            return "0"
 
     def _get_controlport(self, my: Environ) -> int:
-        return check_type(my['controlport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["controlport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_socksport(self, my: Environ) -> int:
-        return check_type(my['socksport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["socksport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_dirport(self, my: Environ) -> int:
-        return check_type(my['dirport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["dirport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_extorport(self, my: Environ) -> int:
-        return check_type(my['extorport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["extorport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_ptport(self, my: Environ) -> int:
-        return check_type(my['ptport_base'], int) + check_type(my['nodenum'], int)
+        return check_type(my["ptport_base"], int) + check_type(my["nodenum"], int)
 
     def _get_dir(self, my: Environ) -> Path:
-        return Path(my['net_base_dir'],
-                    "nodes",
-                    "%03d%s" % (my['nodenum'], my['tag'])).resolve()
+        return Path(
+            my["net_base_dir"], "nodes", "%03d%s" % (my["nodenum"], my["tag"])
+        ).resolve()
 
     def _get_nick(self, my: Environ) -> str:
-        return "test%03d%s" % (my['nodenum'], my['tag'])
+        return "test%03d%s" % (my["nodenum"], my["tag"])
 
     def _get_tor_gencert(self, my: Environ) -> str:
-        return my['tor-gencert'] or '{0}-gencert'.format(my['tor'])
+        return my["tor-gencert"] or "{0}-gencert".format(my["tor"])
 
     def _get_auth_passphrase(self, my: Environ) -> str:
-        return check_type(self['nick'], str)  # OMG TEH SECURE!
+        return check_type(self["nick"], str)  # OMG TEH SECURE!
 
     def _get_torrc_template_path(self, my: Environ) -> list[Traversable]:
-        return [importlib.resources.files("chutney").joinpath('data').joinpath('torrc_templates')]
+        return [
+            importlib.resources.files("chutney")
+            .joinpath("data")
+            .joinpath("torrc_templates")
+        ]
 
     def _get_lockfile(self, my: Environ) -> Path:
-        return Path(self['dir'], 'lock')
+        return Path(self["dir"], "lock")
 
     def _get_pidfile(self, my: Environ) -> Path:
-        return Path(self['dir'], 'pid')
+        return Path(self["dir"], "pid")
 
     # A hs generates its key on first run,
     # so check for it at the last possible moment,
@@ -2243,33 +2398,37 @@ class TorEnviron(Environ):
     # XXXX - this is not like the other functions in this class,
     # as it reads from a file created by the hidden service
     def _get_hs_hostname(self, my: Environ) -> str:
-        if my['hs-hostname'] is None:
-            datadir = my['dir']
+        if my["hs-hostname"] is None:
+            datadir = my["dir"]
             # a file containing a single line with the hs' .onion address
-            hs_hostname_file = Path(datadir, my['hs_directory'], 'hostname')
+            hs_hostname_file = Path(datadir, my["hs_directory"], "hostname")
             try:
-                with open(hs_hostname_file, 'r') as hostnamefp:
+                with open(hs_hostname_file, "r") as hostnamefp:
                     hostname = hostnamefp.read()
                 # the hostname file ends with a newline
                 hostname = hostname.strip()
-                my['hs-hostname'] = hostname
+                my["hs-hostname"] = hostname
             except IOError as e:
-                print("Error: hs %r error %d: %r opening hostname file '%s'" %
-                      (my['nick'], e.errno, e.strerror, hs_hostname_file))
+                print(
+                    "Error: hs %r error %d: %r opening hostname file '%s'"
+                    % (my["nick"], e.errno, e.strerror, hs_hostname_file)
+                )
         # We ensured above that this is set.
-        rv = check_type(my['hs-hostname'], str)
+        rv = check_type(my["hs-hostname"], str)
         return rv
 
     def _get_owning_controller_process(self, my: Environ) -> str:
-        cpid = my['controlling_pid']
-        ocp_line = ('__OwningControllerProcess %d' % (cpid))
+        cpid = my["controlling_pid"]
+        ocp_line = "__OwningControllerProcess %d" % (cpid)
         # if we want to leave the network running, or controlling_pid is 1
         # (or invalid)
-        if (getenv_int('CHUTNEY_START_TIME', 0) < 0 or
-            getenv_int('CHUTNEY_BOOTSTRAP_TIME', 0) < 0 or
-            getenv_int('CHUTNEY_STOP_TIME', 0) < 0 or
-            cpid <= 1):
-            return '#' + ocp_line
+        if (
+            getenv_int("CHUTNEY_START_TIME", 0) < 0
+            or getenv_int("CHUTNEY_BOOTSTRAP_TIME", 0) < 0
+            or getenv_int("CHUTNEY_STOP_TIME", 0) < 0
+            or cpid <= 1
+        ):
+            return "#" + ocp_line
         else:
             return ocp_line
 
@@ -2281,7 +2440,7 @@ class TorEnviron(Environ):
 
     def _get_server_dns_resolv_conf(self, my: Environ) -> str:
         # TODO: disallow `str`?
-        my_dns_conf: Union[str, Path, None] = my['dns_conf']
+        my_dns_conf: Union[str, Path, None] = my["dns_conf"]
         # To be set below
         dns_conf: Path
 
@@ -2290,8 +2449,11 @@ class TorEnviron(Environ):
             return "#ServerDNSResolvConfFile using tor's compile-time default"
         elif my_dns_conf is None:
             # if there is no DNS conf file set
-            debug("CHUTNEY_DNS_CONF not specified, using '{}'."
-                  .format(TorEnviron.DEFAULT_DNS_RESOLV_CONF))
+            debug(
+                "CHUTNEY_DNS_CONF not specified, using '{}'.".format(
+                    TorEnviron.DEFAULT_DNS_RESOLV_CONF
+                )
+            )
             dns_conf = TorEnviron.DEFAULT_DNS_RESOLV_CONF
         else:
             dns_conf = Path(my_dns_conf)
@@ -2301,18 +2463,20 @@ class TorEnviron(Environ):
         # (Path.exists returns False for broken symbolic links)
         if not dns_conf.exists():
             # Issue a warning so the user notices
-            print("CHUTNEY_DNS_CONF '{}' does not exist, using '{}'."
-                  .format(dns_conf, TorEnviron.OFFLINE_DNS_RESOLV_CONF))
+            print(
+                "CHUTNEY_DNS_CONF '{}' does not exist, using '{}'.".format(
+                    dns_conf, TorEnviron.OFFLINE_DNS_RESOLV_CONF
+                )
+            )
             dns_conf = TorEnviron.OFFLINE_DNS_RESOLV_CONF
         return "ServerDNSResolvConfFile %s" % (dns_conf)
 
-KNOWN_REQUIREMENTS = {
-    "IPV6": chutney.Host.is_ipv6_supported
-}
+
+KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
+
 
 class Network(object):
-    """A network of Tor nodes, plus functions to manipulate them
-    """
+    """A network of Tor nodes, plus functions to manipulate them"""
 
     def __init__(self, defaultEnviron: TorEnviron):
         self._nodes: list[Node] = []
@@ -2330,8 +2494,8 @@ class Network(object):
         node.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(node)
-        if node._env['bridgeauthority']:
-            self._dfltEnv['hasbridgeauth'] = True
+        if node._env["bridgeauthority"]:
+            self._dfltEnv["hasbridgeauth"] = True
 
     def addNodes(self, nodes: List[Node]) -> None:
         """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
@@ -2341,7 +2505,7 @@ class Network(object):
     def _addRequirement(self, requirement: str) -> None:
         requirement = requirement.upper()
         if requirement not in KNOWN_REQUIREMENTS:
-            raise RuntimeError(("Unrecognized requirement %r"%requirement))
+            raise RuntimeError(("Unrecognized requirement %r" % requirement))
         self._requirements.append(requirement)
 
     def move_aside_nodes_dir(self) -> None:
@@ -2365,8 +2529,7 @@ class Network(object):
         nodesdir.rename(newdir)
 
     def create_new_nodes_dir(self) -> None:
-        """Create a new directory with a unique name, and symlink it to nodes
-        """
+        """Create a new directory with a unique name, and symlink it to nodes"""
         # for backwards compatibility, move aside the old nodes directory
         # (if it's not a link)
         self.move_aside_nodes_dir()
@@ -2379,13 +2542,15 @@ class Network(object):
         # this path should be unique and should not exist
         if newnodesdir.exists():
             raise RuntimeError(
-                'get_new_absolute_nodes_path returned a path that exists')
+                "get_new_absolute_nodes_path returned a path that exists"
+            )
 
         # if this path exists, it must be a link
         if nodeslink.exists() and not nodeslink.is_symlink():
             raise RuntimeError(
-                'get_absolute_nodes_path returned a path that exists and '
-                'is not a link')
+                "get_absolute_nodes_path returned a path that exists and "
+                "is not a link"
+            )
 
         # create the new, uniquely named directory, and link it to nodes
         print("NOTE: creating '%s', linking to '%s'" % (newnodesdir, nodeslink))
@@ -2408,8 +2573,8 @@ class Network(object):
 
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
-           and host information we have, and prints the result.
-           Raises `ChutneyError` if anythign is missing.
+        and host information we have, and prints the result.
+        Raises `ChutneyError` if anythign is missing.
         """
         missing_any = False
         for r in self._requirements:
@@ -2425,9 +2590,9 @@ class Network(object):
 
     def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
-           started.
+        started.
         """
-        phase = self._dfltEnv['CUR_CONFIG_PHASE']
+        phase = self._dfltEnv["CUR_CONFIG_PHASE"]
         if phase == 1:
             self.create_new_nodes_dir()
         network = self
@@ -2436,9 +2601,8 @@ class Network(object):
         arti_fallback_lines = []
         arti_auth_lines = []
         arti_bridgelines = []
-        all_builders = [ n.getBuilder() for n in self._nodes ]
-        builders = [ b for b in all_builders
-                     if b._env['config_phase'] == phase ]
+        all_builders = [n.getBuilder() for n in self._nodes]
+        builders = [b for b in all_builders if b._env["config_phase"] == phase]
         self._checkConfig()
 
         # XXX don't change node names or types or count if anything is
@@ -2447,7 +2611,8 @@ class Network(object):
         for b in all_builders:
             b.preConfig(network)
             tor_auth_line, (arti_fallback, arti_auth) = b._getAltAuthLines(
-                self._dfltEnv['hasbridgeauth'])
+                self._dfltEnv["hasbridgeauth"]
+            )
             altauthlines.append(tor_auth_line)
             arti_fallback_lines.append(arti_fallback)
             arti_auth_lines.append(arti_auth)
@@ -2455,14 +2620,15 @@ class Network(object):
             bridgelines.append(tor_bridgeline)
             arti_bridgelines.append(arti_bridgeline)
 
-        self._dfltEnv['authorities'] = "".join(altauthlines)
-        self._dfltEnv['bridges'] = "".join(bridgelines)
+        self._dfltEnv["authorities"] = "".join(altauthlines)
+        self._dfltEnv["bridges"] = "".join(bridgelines)
 
         for b in builders:
             b.config(network)
 
-        with open(os.path.join(get_absolute_nodes_path(),"arti.toml"), 'w') as f:
-            f.write("""[storage]
+        with open(os.path.join(get_absolute_nodes_path(), "arti.toml"), "w") as f:
+            f.write(
+                """[storage]
 cache_dir = "{path}/arti/cache"
 state_dir = "{path}/arti/state"
 
@@ -2477,42 +2643,50 @@ ipv6_subnet_family_prefix = 129
 # Allow the client to accept requests to connect to e.g. 127.0.0.1
 allow_local_addrs = true
 
-""".format(path=self.dir))
-            f.write("""[tor_network]
+""".format(
+                    path=self.dir
+                )
+            )
+            f.write(
+                """[tor_network]
 fallback_caches = [
-""")
+"""
+            )
             f.write("".join(arti_fallback_lines))
             f.write("]\n")
             f.write("authorities = [\n")
             f.write("".join(arti_auth_lines))
             f.write("]\n")
 
-            f.write("""[bridges]
+            f.write(
+                """[bridges]
 enabled = "auto"
 bridges = '''
-""")
+"""
+            )
             f.write("".join(arti_bridgelines))
             f.write("'''\n")
-
 
         for b in builders:
             b.postConfig(network)
 
     def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
-           return True if all nodes are running.
+        return True if all nodes are running.
         """
-        cur_launch = self._dfltEnv['CUR_LAUNCH_PHASE']
-        statuses = [n.getController().check(listNonRunning=True)
-                    for n in self._nodes
-                    if n._env['launch_phase'] == cur_launch]
+        cur_launch = self._dfltEnv["CUR_LAUNCH_PHASE"]
+        statuses = [
+            n.getController().check(listNonRunning=True)
+            for n in self._nodes
+            if n._env["launch_phase"] == cur_launch
+        ]
         n_ok = len([x for x in statuses if x])
         print("%d/%d nodes are running" % (n_ok, len(self._nodes)))
         return n_ok == len(statuses)
 
     def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
-           network's nodes.
+        network's nodes.
         """
         self.stop()
         self.start()
@@ -2523,7 +2697,7 @@ bridges = '''
         print("Starting nodes", end="")
         errs = []
         for n in self._nodes:
-            if n._env['launch_phase'] != self._dfltEnv['CUR_LAUNCH_PHASE']:
+            if n._env["launch_phase"] != self._dfltEnv["CUR_LAUNCH_PHASE"]:
                 continue
             try:
                 n.getController().start()
@@ -2538,16 +2712,20 @@ bridges = '''
 
     def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
-           errors.
+        errors.
         """
         print("Sending SIGHUP to nodes")
         return all([n.getController().hup() for n in self._nodes])
 
-    def print_bootstrap_status(self,
-                               controllers: Iterable[LocalNodeController],
-                               most_recent_desc_status: dict[str, tuple[int, Collection[str], Collection[str], str]],
-                               elapsed:Optional[float]=None,
-                               msg:str="Bootstrap in progress") -> None:
+    def print_bootstrap_status(
+        self,
+        controllers: Iterable[LocalNodeController],
+        most_recent_desc_status: dict[
+            str, tuple[int, Collection[str], Collection[str], str]
+        ],
+        elapsed: Optional[float] = None,
+        msg: str = "Bootstrap in progress",
+    ) -> None:
         nick_set = set()
         cons_auth_nick_set = set()
         elapsed_msg = ""
@@ -2567,10 +2745,7 @@ bridges = '''
             # Support older tor versions without bootstrap keywords
             if not kwd:
                 kwd = "None"
-            print("{:13}: {:4}, {:25}, {}".format(nick,
-                                                  pct,
-                                                  kwd,
-                                                  bmsg))
+            print("{:13}: {:4}, {:25}, {}".format(nick, pct, kwd, bmsg))
         cache_client_nick_set = nick_set.difference(cons_auth_nick_set)
         print("Published dir info:")
         for c in controllers:
@@ -2586,8 +2761,7 @@ bridges = '''
                 elif node_set == cache_client_nick_set:
                     nodes = "caches and clients"
                 else:
-                    nodes = [ node.replace("test", "")
-                              for node in nodes ]
+                    nodes = [node.replace("test", "") for node in nodes]
                     nodes = " ".join(sorted(nodes))
                 if len(docs) >= c.getDocTypeDisplayLimit():
                     docs_string = "all formats"
@@ -2601,18 +2775,20 @@ bridges = '''
                         docs_set.discard("md_new")
                         docs_set.add("md")
                     docs_string = " ".join(sorted(docs_set))
-                print("{:13}: {:4}, {:25}, {:30}, {}".format(nick,
-                                                             code,
-                                                             nodes,
-                                                             docs_string,
-                                                             dmsg))
+                print(
+                    "{:13}: {:4}, {:25}, {:30}, {}".format(
+                        nick, code, nodes, docs_string, dmsg
+                    )
+                )
         print()
 
     CHECK_NETWORK_STATUS_DELAY = 1.0
-    PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL/2.0
+    PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL / 2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
-    def wait_for_bootstrap(self, limit_secs:int=getenv_int("CHUTNEY_START_TIME", 60)) -> None:
+    def wait_for_bootstrap(
+        self, limit_secs: int = getenv_int("CHUTNEY_START_TIME", 60)
+    ) -> None:
         """
         Wait for the network to bootstrap. Raises `TimeoutException` on timeout.
         """
@@ -2620,10 +2796,13 @@ bridges = '''
         start = time.time()
         limit = start + limit_secs
         next_print_status = start + Network.PRINT_NETWORK_STATUS_DELAY
-        bootstrap_upto = self._dfltEnv['CUR_LAUNCH_PHASE']
+        bootstrap_upto = self._dfltEnv["CUR_LAUNCH_PHASE"]
 
-        controllers = [n.getController() for n in self._nodes
-                       if n._env['launch_phase'] <= bootstrap_upto ]
+        controllers = [
+            n.getController()
+            for n in self._nodes
+            if n._env["launch_phase"] <= bootstrap_upto
+        ]
         min_time_list = [c.getMinStartTime() for c in controllers]
         min_time = max(min_time_list)
         wait_time_list = [c.getUncheckedDirInfoWaitTime() for c in controllers]
@@ -2644,28 +2823,29 @@ bridges = '''
                 desc_status = c.getNodeDirInfoStatus()
                 if desc_status:
                     code, nodes, docs, dmsg = desc_status
-                    most_recent_desc_status[nick] = (code,
-                                                     nodes,
-                                                     docs,
-                                                     dmsg)
+                    most_recent_desc_status[nick] = (code, nodes, docs, dmsg)
                     if code != LocalNodeController.SUCCESS_CODE:
                         all_bootstrapped = False
 
             now = time.time()
             elapsed = now - start
             if all_bootstrapped:
-                print("Everything bootstrapped after {} sec"
-                      .format(int(elapsed)))
-                self.print_bootstrap_status(controllers,
-                                            most_recent_desc_status,
-                                            elapsed=elapsed,
-                                            msg="Bootstrap finished")
+                print("Everything bootstrapped after {} sec".format(int(elapsed)))
+                self.print_bootstrap_status(
+                    controllers,
+                    most_recent_desc_status,
+                    elapsed=elapsed,
+                    msg="Bootstrap finished",
+                )
 
                 # Wait for unchecked bridge or onion service dir info.
                 # (See #33581 and #33609.)
                 # Also used to work around a timing bug in Tor 0.3.5.
-                print("Waiting {} seconds for the network to be ready...\n"
-                      .format(int(wait_time)))
+                print(
+                    "Waiting {} seconds for the network to be ready...\n".format(
+                        int(wait_time)
+                    )
+                )
                 time.sleep(wait_time)
                 now = time.time()
                 elapsed = now - start
@@ -2684,9 +2864,12 @@ bridges = '''
                 # this issue.
                 if elapsed < min_time:
                     sleep_time = min_time - elapsed
-                    print(("Waiting another {} seconds for legacy tor "
-                           "microdesc downloads...\n")
-                          .format(int(sleep_time)))
+                    print(
+                        (
+                            "Waiting another {} seconds for legacy tor "
+                            "microdesc downloads...\n"
+                        ).format(int(sleep_time))
+                    )
                     time.sleep(sleep_time)
                     now = time.time()
                     elapsed = now - start
@@ -2694,24 +2877,30 @@ bridges = '''
             if now >= limit:
                 break
             if now >= next_print_status:
-                if checks_since_last_print <= Network.CHECKS_PER_PRINT/2:
-                    self.print_bootstrap_status(controllers,
-                                                most_recent_desc_status,
-                                                elapsed=elapsed,
-                                                msg="Internal timing error")
-                    print("checks_since_last_print: {} (expected: {})"
-                          .format(checks_since_last_print,
-                                  Network.CHECKS_PER_PRINT))
+                if checks_since_last_print <= Network.CHECKS_PER_PRINT / 2:
+                    self.print_bootstrap_status(
+                        controllers,
+                        most_recent_desc_status,
+                        elapsed=elapsed,
+                        msg="Internal timing error",
+                    )
+                    print(
+                        "checks_since_last_print: {} (expected: {})".format(
+                            checks_since_last_print, Network.CHECKS_PER_PRINT
+                        )
+                    )
                     print("start: {} limit: {}".format(start, limit))
-                    print("next_print_status: {} now: {}"
-                          .format(next_print_status, time.time()))
+                    print(
+                        "next_print_status: {} now: {}".format(
+                            next_print_status, time.time()
+                        )
+                    )
                     raise ChutneyTimeoutError()
                 else:
-                    self.print_bootstrap_status(controllers,
-                                                most_recent_desc_status,
-                                                elapsed=elapsed)
-                    next_print_status = (now +
-                                         Network.PRINT_NETWORK_STATUS_DELAY)
+                    self.print_bootstrap_status(
+                        controllers, most_recent_desc_status, elapsed=elapsed
+                    )
+                    next_print_status = now + Network.PRINT_NETWORK_STATUS_DELAY
                     checks_since_last_print = 0
 
             time.sleep(Network.CHECK_NETWORK_STATUS_DELAY)
@@ -2719,23 +2908,32 @@ bridges = '''
             # macOS Travis has some weird hangs, make sure we're not hanging
             # in this loop due to clock skew
             checks_since_last_print += 1
-            if checks_since_last_print >= Network.CHECKS_PER_PRINT*2:
-                self.print_bootstrap_status(controllers,
-                                            most_recent_desc_status,
-                                            elapsed=elapsed,
-                                            msg="Internal timing error")
-                print("checks_since_last_print: {} (expected: {})"
-                      .format(checks_since_last_print,
-                              Network.CHECKS_PER_PRINT))
+            if checks_since_last_print >= Network.CHECKS_PER_PRINT * 2:
+                self.print_bootstrap_status(
+                    controllers,
+                    most_recent_desc_status,
+                    elapsed=elapsed,
+                    msg="Internal timing error",
+                )
+                print(
+                    "checks_since_last_print: {} (expected: {})".format(
+                        checks_since_last_print, Network.CHECKS_PER_PRINT
+                    )
+                )
                 print("start: {} limit: {}".format(start, limit))
-                print("next_print_status: {} now: {}"
-                      .format(next_print_status, time.time()))
+                print(
+                    "next_print_status: {} now: {}".format(
+                        next_print_status, time.time()
+                    )
+                )
                 raise ChutneyTimeoutError()
 
-        self.print_bootstrap_status(controllers,
-                                    most_recent_desc_status,
-                                    elapsed=elapsed,
-                                    msg="Bootstrap failed")
+        self.print_bootstrap_status(
+            controllers,
+            most_recent_desc_status,
+            elapsed=elapsed,
+            msg="Bootstrap failed",
+        )
         raise ChutneyTimeoutError()
 
     # Keep in sync with ShutdownWaitLength in common.i
@@ -2745,16 +2943,15 @@ bridges = '''
     # Wait for this long after signalling tor
     STOP_WAIT_TIME = SHUTDOWN_WAIT_LENGTH + EVENT_LOOP_SLOP
 
-    def final_cleanup(self,
-                      wrote_dot:bool,
-                      any_tor_was_running:bool,
-                      cleanup_runfiles:bool) -> None:
-        '''Perform final cleanup actions, based on the arguments:
-             - wrote_dot: end a series of logged dots with a newline
-             - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
-             - cleanup_runfiles: delete old lockfiles from crashed tors
-                                 rename old pid files from stopped tors
-        '''
+    def final_cleanup(
+        self, wrote_dot: bool, any_tor_was_running: bool, cleanup_runfiles: bool
+    ) -> None:
+        """Perform final cleanup actions, based on the arguments:
+        - wrote_dot: end a series of logged dots with a newline
+        - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
+        - cleanup_runfiles: delete old lockfiles from crashed tors
+                            rename old pid files from stopped tors
+        """
         # make the output clearer by adding a newline
         if wrote_dot:
             sys.stdout.write("\n")
@@ -2777,9 +2974,11 @@ bridges = '''
         """Stop our network's running tor nodes."""
         any_tor_was_running = False
         controllers = [n.getController() for n in self._nodes]
-        for sig, desc in [(signal.SIGINT, "SIGINT"),
-                          (signal.SIGINT, "another SIGINT"),
-                          (signal.SIGKILL, "SIGKILL")]:
+        for sig, desc in [
+            (signal.SIGINT, "SIGINT"),
+            (signal.SIGINT, "another SIGINT"),
+            (signal.SIGKILL, "SIGKILL"),
+        ]:
             print("Sending %s to nodes" % desc)
             for c in controllers:
                 if c.isRunning():
@@ -2790,9 +2989,7 @@ bridges = '''
             for _ in range(15):
                 time.sleep(1)
                 if all(not c.isRunning() for c in controllers):
-                    self.final_cleanup(wrote_dot,
-                                       any_tor_was_running,
-                                       True)
+                    self.final_cleanup(wrote_dot, any_tor_was_running, True)
                     return
                 sys.stdout.write(".")
                 wrote_dot = True
@@ -2800,13 +2997,10 @@ bridges = '''
             for c in controllers:
                 c.check(listNonRunning=False)
             # cleanup chutney's logging, but don't wait or cleanup files
-            self.final_cleanup(wrote_dot,
-                               False,
-                               False)
+            self.final_cleanup(wrote_dot, False, False)
         # wait for tor to exit, but don't cleanup logging
-        self.final_cleanup(False,
-                           any_tor_was_running,
-                           True)
+        self.final_cleanup(False, any_tor_was_running, True)
+
 
 class CLICommands:
     """
@@ -2814,57 +3008,58 @@ class CLICommands:
 
     All methods that don't start with `_` are invocable from the command-line.
     """
+
     def __init__(self, network: Network):
         self._net = network
 
     def print_phases(self) -> None:
         """Print the total number of phases in which the network is
-           initialized, configured, or bootstrapped."""
+        initialized, configured, or bootstrapped."""
+
         def max_phase(key: str) -> int:
             return max(int(n._env[key]) for n in self._net._nodes)
+
         cfg_max = max_phase("config_phase")
         launch_max = max_phase("launch_phase")
         print("CHUTNEY_CONFIG_PHASES={}".format(cfg_max))
         print("CHUTNEY_LAUNCH_PHASES={}".format(launch_max))
 
-    def final_cleanup(self,
-                      wrote_dot:bool,
-                      any_tor_was_running:bool,
-                      cleanup_runfiles:bool) -> None:
-        '''Perform final cleanup actions, based on the arguments:
-             - wrote_dot: end a series of logged dots with a newline
-             - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
-             - cleanup_runfiles: delete old lockfiles from crashed tors
-                                 rename old pid files from stopped tors
-        '''
+    def final_cleanup(
+        self, wrote_dot: bool, any_tor_was_running: bool, cleanup_runfiles: bool
+    ) -> None:
+        """Perform final cleanup actions, based on the arguments:
+        - wrote_dot: end a series of logged dots with a newline
+        - any_tor_was_running: wait for STOP_WAIT_TIME for tor to stop
+        - cleanup_runfiles: delete old lockfiles from crashed tors
+                            rename old pid files from stopped tors
+        """
         self._net.final_cleanup(wrote_dot, any_tor_was_running, cleanup_runfiles)
 
     def create_new_nodes_dir(self) -> None:
-        """Create a new directory with a unique name, and symlink it to nodes
-        """
+        """Create a new directory with a unique name, and symlink it to nodes"""
         self._net.create_new_nodes_dir()
 
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
-           and host information we have, and prints the result.
+        and host information we have, and prints the result.
         """
         self._net.supported()
 
     def configure(self) -> None:
         """Invoked from command line: Configure and prepare the network to be
-           started.
+        started.
         """
         self._net.configure()
 
     def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
-           return True if all nodes are running.
+        return True if all nodes are running.
         """
         return self._net.status()
 
     def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
-           network's nodes.
+        network's nodes.
         """
         self._net.restart()
 
@@ -2874,13 +3069,13 @@ class CLICommands:
 
     def hup(self) -> bool:
         """Send SIGHUP to all our network's running nodes and return True on no
-           errors.
+        errors.
         """
         return self._net.hup()
 
     def wait_for_bootstrap(self) -> None:
         """Invoked from tools/test-network.sh to wait for the network to
-           bootstrap.
+        bootstrap.
         """
         self._net.wait_for_bootstrap()
 
@@ -2888,39 +3083,51 @@ class CLICommands:
         """Stop our network's running tor nodes."""
         self._net.stop()
 
+
 def getTests() -> list[str]:
     chutney_tests_path = importlib.resources.files("chutney.network_tests")
 
-    return [test.name.removesuffix('.py') for test in chutney_tests_path.iterdir() if test.name.endswith('.py') and not test.name.startswith("_")]
+    return [
+        test.name.removesuffix(".py")
+        for test in chutney_tests_path.iterdir()
+        if test.name.endswith(".py") and not test.name.startswith("_")
+    ]
 
 
 def usage() -> str:
-    return "\n".join(["Usage: chutney {command/test} {networkfile}",
-                      "Known commands are: %s" % (
-                          " ".join(x for x in dir(CLICommands)
-                                   if not x.startswith("_"))),
-                      "Known tests are: %s" % (
-                          " ".join(getTests()))
-                      ])
+    return "\n".join(
+        [
+            "Usage: chutney {command/test} {networkfile}",
+            "Known commands are: %s"
+            % (" ".join(x for x in dir(CLICommands) if not x.startswith("_"))),
+            "Known tests are: %s" % (" ".join(getTests())),
+        ]
+    )
 
 
-def runConfigFile(verb:str, data:str) -> Optional[bool]:
+def runConfigFile(verb: str, data: str) -> Optional[bool]:
     # Wrappers used from network scripts (`data`) that manipulate
     # an implicit network (`_THE_NETWORK`).
     _BASE_ENVIRON = TorEnviron()
     _THE_NETWORK = Network(_BASE_ENVIRON)
+
     def Require(feature: str) -> None:
         _THE_NETWORK._addRequirement(feature)
+
     def ConfigureNodes(nodelist: list[Node]) -> None:
         for n in nodelist:
             _THE_NETWORK.addNode(n)
-    def NodeWrapper(parent:Optional[Node]=None, **kwargs: Any) -> Node:
+
+    def NodeWrapper(parent: Optional[Node] = None, **kwargs: Any) -> Node:
         return Node(_THE_NETWORK, parent, **kwargs)
-    _GLOBALS = dict(Node=NodeWrapper,
-                    Require=Require,
-                    ConfigureNodes=ConfigureNodes,
-                    torrc_option_warn_count=0,
-                    TORRC_OPTION_WARN_LIMIT=10)
+
+    _GLOBALS = dict(
+        Node=NodeWrapper,
+        Require=Require,
+        ConfigureNodes=ConfigureNodes,
+        torrc_option_warn_count=0,
+        TORRC_OPTION_WARN_LIMIT=10,
+    )
 
     exec(data, _GLOBALS)
     network = _THE_NETWORK
@@ -2950,7 +3157,8 @@ def runConfigFile(verb:str, data:str) -> Optional[bool]:
     res: Optional[bool] = check_type(getattr(cli_cmds, verb)(), Optional[bool])
     return res
 
-def main(action:str, network_cfg:str) -> None:
+
+def main(action: str, network_cfg: str) -> None:
     """A slightly more hermetic main could be called reasonably from python
 
     Raises an exception derived from `ChutneyError` on failure.
@@ -2966,9 +3174,11 @@ def main(action:str, network_cfg:str) -> None:
         # return a more informative error instead of `False`
         raise ChutneyError("Unspecified failure")
 
+
 def __main__() -> None:
     """Raw main, suitable for use with `project.scripts` in `pyproject.toml`"""
     import traceback
+
     try:
         (action, network_cfg) = sys.argv[1:]
     except ValueError:
@@ -2982,5 +3192,6 @@ def __main__() -> None:
         sys.exit(1)
     sys.exit(0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     __main__()
