@@ -61,13 +61,6 @@ def uniq(s: str) -> str:
     return "%s-%s" % (s, UNIQ_CTR)
 
 
-def byte_to_int(b: int) -> int:
-    assert (
-        sys.version_info[0] >= 3
-    ), f"We don't support Python < 3; found {sys.version_info[0]}"
-    return b
-
-
 def addr_to_family(addr: str) -> socket.AddressFamily:
     for family in [socket.AF_INET, socket.AF_INET6]:
         try:
@@ -371,7 +364,7 @@ class Source(asynchat.async_chat):
                 else:
                     debug(
                         "proxy handshake failed (0x%x)! (fd=%d)"
-                        % (byte_to_int(self.inbuf[1]), self.fileno())
+                        % (self.inbuf[1], self.fileno())
                     )
                     self.state = self.NOT_CONNECTED
                     self.close()
