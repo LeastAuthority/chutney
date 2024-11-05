@@ -238,8 +238,8 @@ class Environ(_DictWrapper):
     def __setitem__(self, key, val):
         self._dict[key] = val
 
-    def keys(self):
-        s = set()
+    def keys(self) -> set[str]:
+        s: set[str] = set()
         s.update(self._dict.keys())
         if self._parent is not None:
             s.update(self._parent.keys())

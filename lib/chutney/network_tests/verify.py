@@ -1,10 +1,3 @@
-# TODO: Remove these
-# mypy: no-check-untyped-defs
-# mypy: no-disallow-untyped-defs
-# mypy: no-disallow-incomplete-defs
-# mypy: no-disallow-untyped-calls
-# mypy: no-warn-return-any
-
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
@@ -51,7 +44,7 @@ def run_test(network: chutney.TorNet.Network) -> None:
         raise NetworkTestFailure("All attempts failed")
 
 
-def _verify_traffic(network, timeout=5.0):
+def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bool:
     """Verify (parts of) the network by sending traffic through it
     and verify what is received."""
     # TODO: IPv6 SOCKSPorts, SOCKSPorts with IPv6Traffic, and IPv6 Exits
@@ -85,7 +78,7 @@ def _verify_traffic(network, timeout=5.0):
             tmpdata = randfp.read(randomlen)
     else:
         dot_reps = 0
-        tmpdata = {}
+        tmpdata = b""
     # now make the connections
     bind_to = (LISTEN_ADDR, LISTEN_PORT)
     tt = chutney.Traffic.TrafficTester(
@@ -96,25 +89,26 @@ def _verify_traffic(network, timeout=5.0):
         dot_repetitions=dot_reps,
     )
     # _env does not implement get() due to its fallback to parent behaviour
-    client_list = filter(
-        lambda n: n._env["tag"].startswith("c")
-        or n._env["tag"].startswith("bc")
-        or ("client" in n._env.keys() and n._env["client"] == 1),
-        network._nodes,
+    client_list = list(
+        filter(
+            lambda n: n._env["tag"].startswith("c")
+            or n._env["tag"].startswith("bc")
+            or ("client" in n._env.keys() and n._env["client"] == 1),
+            network._nodes,
+        )
     )
-    exit_list = filter(
-        lambda n: ("exit" in n._env.keys() and n._env["exit"] == 1), network._nodes
+    exit_list = list(
+        filter(
+            lambda n: ("exit" in n._env.keys() and n._env["exit"] == 1), network._nodes
+        )
     )
-    hs_list = filter(
-        lambda n: n._env["tag"].startswith("h")
-        or ("hs" in n._env.keys() and n._env["hs"] == 1),
-        network._nodes,
+    hs_list = list(
+        filter(
+            lambda n: n._env["tag"].startswith("h")
+            or ("hs" in n._env.keys() and n._env["hs"] == 1),
+            network._nodes,
+        )
     )
-    # Make sure these lists are actually lists.  (It would probably
-    # be better to do list comprehensions here.)
-    client_list = list(client_list)
-    exit_list = list(exit_list)
-    hs_list = list(hs_list)
     if len(client_list) == 0:
         print("  Unable to verify network: no client nodes available")
         return False
@@ -167,7 +161,7 @@ def _verify_traffic(network, timeout=5.0):
 # several hundred megabytes of data or more. Passing around this
 # much data in Python has its own performance impacts, so we provide
 # a smaller amount of random data instead, and repeat it to DATALEN
-def _calculate_randomlen(datalen):
+def _calculate_randomlen(datalen: int) -> int:
     MAX_RANDOMLEN = 128 * 1024  # Octets.
     if datalen > MAX_RANDOMLEN:
         return MAX_RANDOMLEN
@@ -175,13 +169,13 @@ def _calculate_randomlen(datalen):
         return datalen
 
 
-def _calculate_reps(datalen, replen):
+def _calculate_reps(datalen: int, replen: int) -> int:
     # sanity checks
     if datalen == 0 or replen == 0:
         return 0
     # effectively rounds datalen up to the nearest replen
     if replen < datalen:
-        return (datalen + replen - 1) / replen
+        return int((datalen + replen - 1) / replen)
     else:
         return 1
 
@@ -191,16 +185,16 @@ def _calculate_reps(datalen, replen):
 # Each client binds directly to <CHUTNEY_LISTEN_ADDRESS>:LISTEN_PORT
 # via an Exit relay
 def _configure_exits(
-    tt,
-    bind_to,
-    tmpdata,
-    reps,
-    client_list,
-    exit_list,
-    LISTEN_ADDR,
-    LISTEN_PORT,
-    connection_count,
-):
+    tt: chutney.Traffic.TrafficTester,
+    bind_to: chutney.Traffic.HostPortTuple,
+    tmpdata: bytes,
+    reps: int,
+    client_list: list[chutney.TorNet.Node],
+    exit_list: list[chutney.TorNet.Node],
+    LISTEN_ADDR: str,
+    LISTEN_PORT: int,
+    connection_count: int,
+) -> int:
     CLIENT_EXIT_PATH_NODES = 4
     exit_path_node_count = 0
     if len(exit_list) > 0:
@@ -225,17 +219,17 @@ def _configure_exits(
 # Instead of binding directly to LISTEN_PORT via an Exit relay,
 # we bind to hs_hostname:HS_PORT via a hidden service connection
 def _configure_hs(
-    tt,
-    tmpdata,
-    reps,
-    client_list,
-    hs_list,
-    HS_PORT,
-    LISTEN_ADDR,
-    LISTEN_PORT,
-    connection_count,
-    hs_multi_client,
-):
+    tt: chutney.Traffic.TrafficTester,
+    tmpdata: bytes,
+    reps: int,
+    client_list: list[chutney.TorNet.Node],
+    hs_list: list[chutney.TorNet.Node],
+    HS_PORT: int,
+    LISTEN_ADDR: str,
+    LISTEN_PORT: int,
+    connection_count: int,
+    hs_multi_client: bool,
+) -> int:
     CLIENT_HS_PATH_NODES = 8
     hs_path_node_count = len(hs_list) * CLIENT_HS_PATH_NODES * connection_count
     # Each client in hs_client_list connects to each hs
@@ -277,7 +271,9 @@ def _configure_hs(
 # * tor performance is CPU-limited
 # This be used to estimate the bandwidth capacity of a CPU-bound
 # tor relay running on this machine
-def _report_bandwidth(data_length, total_path_node_count, start_time, end_time):
+def _report_bandwidth(
+    data_length: int, total_path_node_count: int, start_time: float, end_time: float
+) -> None:
     # otherwise, if we sent at least 5 MB cumulative total, and
     # it took us at least a second to send, report bandwidth
     MIN_BWDATA = 5 * 1024 * 1024  # Octets.
