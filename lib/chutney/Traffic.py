@@ -20,18 +20,16 @@
 #
 # For example code, see main() below.
 
-# TODO: Remove these
-# mypy: no-check-untyped-defs
-# mypy: no-disallow-untyped-defs
-# mypy: no-disallow-incomplete-defs
-# mypy: no-disallow-untyped-calls
-# mypy: no-warn-return-any
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
 
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import abc
 import sys
 import socket
 import struct
@@ -41,37 +39,29 @@ import asyncore
 import asynchat
 
 from chutney.Debug import debug_flag, debug
+from typing import Any, Callable, Optional, cast
+
+HostPortTuple = tuple[str, int]
 
 
-def note(s):
+def note(s: str) -> None:
     sys.stderr.write("NOTE: %s\n" % s)
 
 
-def warn(s):
+def warn(s: str) -> None:
     sys.stderr.write("WARN: %s\n" % s)
 
 
 UNIQ_CTR = 0
 
 
-def uniq(s):
+def uniq(s: str) -> str:
     global UNIQ_CTR
     UNIQ_CTR += 1
     return "%s-%s" % (s, UNIQ_CTR)
 
 
-if sys.version_info[0] >= 3:
-
-    def byte_to_int(b):
-        return b
-
-else:
-
-    def byte_to_int(b):
-        return ord(b)
-
-
-def addr_to_family(addr):
+def addr_to_family(addr: str) -> socket.AddressFamily:
     for family in [socket.AF_INET, socket.AF_INET6]:
         try:
             socket.inet_pton(family, addr)
@@ -79,10 +69,11 @@ def addr_to_family(addr):
         except (socket.error, OSError):
             pass
 
+    # We get here e.g. if `addr` is a hostname. Default to AF_INET.
     return socket.AF_INET
 
 
-def socks_cmd(addr_port):
+def socks_cmd(addr_port: HostPortTuple) -> bytes:
     """
     Return a SOCKS command for connecting to addr_port.
 
@@ -100,26 +91,25 @@ def socks_cmd(addr_port):
         addr = b"\x00\x00\x00\x01"
         dnsname = "%s\x00" % host
     debug("Socks 4a request to %s:%d" % (host, port))
-    if type(dnsname) is not type(b""):
-        dnsname = dnsname.encode("ascii")
-    return struct.pack("!BBH", ver, cmd, port) + addr + user + dnsname
+    dnsname_enc: bytes = dnsname.encode("ascii")
+    return struct.pack("!BBH", ver, cmd, port) + addr + user + dnsname_enc
 
 
 class TestSuite(object):
     """Keep a tab on how many tests are pending, how many have failed
     and how many have succeeded."""
 
-    def __init__(self):
-        self.tests = {}
+    def __init__(self) -> None:
+        self.tests: dict[str, str] = {}
         self.not_done = 0
         self.successes = 0
         self.failures = 0
-        self.teststatus = {}
+        self.teststatus: dict[str, str] = {}
 
-    def note(self, testname, status):
+    def note(self, testname: str, status: str) -> None:
         self.teststatus[testname] = status
 
-    def add(self, name):
+    def add(self, name: str) -> None:
         note("Registering %s" % name)
         if name not in self.tests:
             debug("Registering %s" % name)
@@ -128,7 +118,7 @@ class TestSuite(object):
         else:
             warn("... already registered!")
 
-    def success(self, name):
+    def success(self, name: str) -> None:
         note("Success for %s" % name)
         if self.tests[name] == "not done":
             debug("Succeeded %s" % name)
@@ -138,7 +128,7 @@ class TestSuite(object):
         else:
             warn("... status was %s" % self.tests.get(name))
 
-    def failure(self, name):
+    def failure(self, name: str) -> None:
         note("Failure for %s" % name)
         if self.tests[name] == "not done":
             debug("Failed %s" % name)
@@ -148,13 +138,13 @@ class TestSuite(object):
         else:
             warn("... status was %s" % self.tests.get(name))
 
-    def failure_count(self):
+    def failure_count(self) -> int:
         return self.failures
 
-    def all_done(self):
+    def all_done(self) -> bool:
         return self.not_done == 0
 
-    def status(self):
+    def status(self) -> str:
         return "%s: %d/%d/%d" % (
             self.tests,
             self.not_done,
@@ -166,7 +156,7 @@ class TestSuite(object):
 class Listener(asyncore.dispatcher):
     "A TCP listener, binding, listening and accepting new connections."
 
-    def __init__(self, tt, endpoint):
+    def __init__(self, tt: TrafficTester, endpoint: HostPortTuple):
         asyncore.dispatcher.__init__(self, map=tt.socket_map)
         self.create_socket(addr_to_family(endpoint[0]), socket.SOCK_STREAM)
         self.set_reuse_addr()
@@ -174,10 +164,10 @@ class Listener(asyncore.dispatcher):
         self.listen(0)
         self.tt = tt
 
-    def writable(self):
+    def writable(self) -> bool:
         return False
 
-    def handle_accept(self):
+    def handle_accept(self) -> None:
         # deprecated in python 3.2
         pair = self.accept()
         if pair is not None:
@@ -188,45 +178,62 @@ class Listener(asyncore.dispatcher):
             )
             self.tt.add_responder(newsock)
 
-    def fileno(self):
+    def fileno(self) -> int:
+        assert self.socket is not None
         return self.socket.fileno()
 
 
-class DataSource(object):
+class AsynChatProducer(abc.ABC):
+    """A Producer as defined in the AsynChat documentation."""
+
+    @abc.abstractmethod
+    def more(self) -> bytes: ...
+
+    """Produce some bytes.
+
+    From <https://docs.python.org/3.11/library/asynchat.html>:
+    "A producer need have only one method, more(), which should return data to
+    be transmitted on the channel. The producer indicates exhaustion (i.e. that
+    it contains no more data) by having its more() method return the empty bytes
+    object."
+    """
+
+
+class DataSource(AsynChatProducer):
     """A data source generates some number of bytes of data, and then
     returns None.
 
     For convenience, it conforms to the 'producer' api.
     """
 
-    def __init__(self, data, repetitions=1):
+    def __init__(self, data: bytes, repetitions: int = 1):
         self.data = data
         self.repetitions = repetitions
         self.sent_any = False
 
-    def copy(self):
+    def copy(self) -> DataSource:
         assert not self.sent_any
         return DataSource(self.data, self.repetitions)
 
-    def more(self):
+    def more(self) -> bytes:
         self.sent_any = True
         if self.repetitions > 0:
             self.repetitions -= 1
             return self.data
 
-        return None
+        return b""
 
 
 class DataChecker(object):
     """A data checker verifies its input against bytes in a stream."""
 
-    def __init__(self, source):
+    def __init__(self, source: DataSource):
         self.source = source
-        self.pending = b""
+        self.pending: bytes = self.source.more()
         self.succeeded = False
         self.failed = False
 
-    def consume(self, inp):
+    def consume(self, inp: bytes) -> None:
         if self.failed:
             return
         if self.succeeded and len(inp):
@@ -244,7 +251,7 @@ class DataChecker(object):
             if not self.pending:
                 self.pending = self.source.more()
 
-                if self.pending is None:
+                if len(self.pending) == 0:
                     if len(inp):
                         self.failed = True
                     else:
@@ -255,17 +262,17 @@ class DataChecker(object):
 class Sink(asynchat.async_chat):
     "A data sink, reading from its peer and verifying the data."
 
-    def __init__(self, sock, tt):
+    def __init__(self, sock: socket.socket, tt: TrafficTester):
         asynchat.async_chat.__init__(self, sock, map=tt.socket_map)
         self.set_terminator(None)
         self.tt = tt
         self.data_checker = DataChecker(tt.data_source.copy())
         self.testname = uniq("recv-data")
 
-    def get_test_names(self):
+    def get_test_names(self) -> list[str]:
         return [self.testname]
 
-    def collect_incoming_data(self, inp):
+    def collect_incoming_data(self, inp: bytes) -> None:
         # shortcut read when we don't ever expect any data
 
         debug("successfully received (bytes=%d)" % len(inp))
@@ -279,17 +286,18 @@ class Sink(asynchat.async_chat):
             self.tt.failure(self.testname)
             self.close()
 
-    def fileno(self):
+    def fileno(self) -> int:
+        assert self.socket is not None
         return self.socket.fileno()
 
 
-class CloseSourceProducer:
+class CloseSourceProducer(AsynChatProducer):
     """Helper: when this producer is returned, a source is successful."""
 
-    def __init__(self, source):
+    def __init__(self, source: Source):
         self.source = source
 
-    def more(self):
+    def more(self) -> bytes:
         self.source.note("Flushed")
         self.source.sent_ok()
         return b""
@@ -304,7 +312,12 @@ class Source(asynchat.async_chat):
     CONNECTING_THROUGH_PROXY = 2
     CONNECTED = 5
 
-    def __init__(self, tt, server, proxy=None):
+    def __init__(
+        self,
+        tt: TrafficTester,
+        server: HostPortTuple,
+        proxy: Optional[HostPortTuple] = None,
+    ):
         asynchat.async_chat.__init__(self, map=tt.socket_map)
         self.data_source = tt.data_source.copy()
         self.inbuf = b""
@@ -320,16 +333,16 @@ class Source(asynchat.async_chat):
         self.state = self.CONNECTING
         self.connect(dest)
 
-    def get_test_names(self):
+    def get_test_names(self) -> list[str]:
         return [self.testname]
 
-    def sent_ok(self):
+    def sent_ok(self) -> None:
         self.tt.success(self.testname)
 
-    def note(self, s):
+    def note(self, s: str) -> None:
         self.tt.tests.note(self.testname, s)
 
-    def handle_connect(self):
+    def handle_connect(self) -> None:
         if self.proxy:
             self.state = self.CONNECTING_THROUGH_PROXY
             self.note("connected, sending socks handshake")
@@ -338,7 +351,7 @@ class Source(asynchat.async_chat):
             self.state = self.CONNECTED
             self.push_output()
 
-    def collect_incoming_data(self, data):
+    def collect_incoming_data(self, data: bytes) -> None:
         self.inbuf += data
         if self.state == self.CONNECTING_THROUGH_PROXY:
             if len(self.inbuf) >= 8:
@@ -351,46 +364,60 @@ class Source(asynchat.async_chat):
                 else:
                     debug(
                         "proxy handshake failed (0x%x)! (fd=%d)"
-                        % (byte_to_int(self.inbuf[1]), self.fileno())
+                        % (self.inbuf[1], self.fileno())
                     )
                     self.state = self.NOT_CONNECTED
                     self.close()
 
-    def push_output(self):
+    def _push_with_producer_interface(self, producer: AsynChatProducer) -> None:
+        # In at least some versions of Python,
+        # async_chat.push_with_producer is incorrectly annotated to require the
+        # `simple_producer` type.
+        # It *should* accept anything that implements the producer interface.
+        # We get around this with an unchecked cast.
+        self.push_with_producer(cast(asynchat.simple_producer, producer))
+
+    def push_output(self) -> None:
         self.note("pushed output")
-        self.push_with_producer(self.data_source)
+        self._push_with_producer_interface(self.data_source)
 
-        self.push_with_producer(CloseSourceProducer(self))
+        self._push_with_producer_interface(CloseSourceProducer(self))
 
-    def fileno(self):
+    def fileno(self) -> int:
+        assert self.socket is not None
         return self.socket.fileno()
 
 
 class EchoServer(asynchat.async_chat):
-    def __init__(self, sock, tt):
+    def __init__(self, sock: socket.socket, tt: TrafficTester):
         asynchat.async_chat.__init__(self, sock, map=tt.socket_map)
         self.set_terminator(None)
         self.tt = tt
         self.am_closing = False
 
-    def collect_incoming_data(self, data):
+    def collect_incoming_data(self, data: bytes) -> None:
         self.push(data)
 
 
 class EchoClient(Source):
-    def __init__(self, tt, server, proxy=None):
+    def __init__(
+        self,
+        tt: TrafficTester,
+        server: HostPortTuple,
+        proxy: Optional[HostPortTuple] = None,
+    ):
         Source.__init__(self, tt, server, proxy)
         self.data_checker = DataChecker(tt.data_source.copy())
         self.testname_check = uniq("check")
         self.am_closing = False
 
-    def enote(self, s):
+    def enote(self, s: str) -> None:
         self.tt.tests.note(self.testname_check, s)
 
-    def get_test_names(self):
+    def get_test_names(self) -> list[str]:
         return [self.testname, self.testname_check]
 
-    def collect_incoming_data(self, data):
+    def collect_incoming_data(self, data: bytes) -> None:
         if self.state == self.CONNECTING_THROUGH_PROXY:
             Source.collect_incoming_data(self, data)
             if self.state == self.CONNECTING_THROUGH_PROXY:
@@ -423,13 +450,20 @@ class TrafficTester(object):
 
     def __init__(
         self,
-        endpoint,
-        data=b"",
-        timeout=3,
-        repetitions=1,
-        dot_repetitions=0,
-        chat_type="Echo",
+        endpoint: HostPortTuple,
+        data: bytes = b"",
+        timeout: float = 3.0,
+        repetitions: int = 1,
+        dot_repetitions: int = 0,
+        # TODO make this an enum?
+        chat_type: str = "Echo",
     ):
+        self.client_class: Callable[
+            [TrafficTester, HostPortTuple, Optional[HostPortTuple]], Source
+        ]
+        self.responder_class: Callable[
+            [socket.socket, TrafficTester], asynchat.async_chat
+        ]
         if chat_type == "Echo":
             self.client_class = EchoClient
             self.responder_class = EchoServer
@@ -437,10 +471,9 @@ class TrafficTester(object):
             self.client_class = Source
             self.responder_class = Sink
 
-        self.socket_map = {}
+        self.socket_map: dict[Any, Any] = {}
 
         self.listener = Listener(self, endpoint)
-        self.pending_close = []
         self.timeout = timeout
         self.tests = TestSuite()
         self.data_source = DataSource(data, repetitions)
@@ -449,7 +482,7 @@ class TrafficTester(object):
         self.dot_repetitions = dot_repetitions
         debug("listener fd=%d" % self.listener.fileno())
 
-    def add(self, item):
+    def add(self, item: asynchat.async_chat) -> None:
         """Register a single item."""
         # We used to hold on to these items for their fds, but now
         # asyncore manages them for us.
@@ -457,23 +490,25 @@ class TrafficTester(object):
             for name in item.get_test_names():
                 self.tests.add(name)
 
-    def add_client(self, server, proxy=None):
+    def add_client(
+        self, server: HostPortTuple, proxy: Optional[HostPortTuple] = None
+    ) -> None:
         source = self.client_class(self, server, proxy)
         self.add(source)
 
-    def add_responder(self, socket):
+    def add_responder(self, socket: socket.socket) -> None:
         sink = self.responder_class(socket, self)
         self.add(sink)
 
-    def success(self, name):
+    def success(self, name: str) -> None:
         """Declare that a single test has passed."""
         self.tests.success(name)
 
-    def failure(self, name):
+    def failure(self, name: str) -> None:
         """Declare that a single test has failed."""
         self.tests.failure(name)
 
-    def run(self):
+    def run(self) -> bool:
         start = now = time.time()
         end = time.time() + self.timeout
         DUMP_TEST_STATUS_INTERVAL = 0.5
@@ -502,7 +537,7 @@ class TrafficTester(object):
         return self.tests.all_done() and self.tests.failure_count() == 0
 
 
-def main():
+def main() -> int:
     """Test the TrafficTester by sending and receiving some data."""
     DATA = b"a foo is a bar" * 1000
     bind_to = ("localhost", int(sys.argv[1]))
