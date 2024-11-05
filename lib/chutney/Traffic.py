@@ -194,7 +194,7 @@ class AsynChatProducer(abc.ABC):
     """A Producer as defined in the AsynChat documentation."""
 
     @abc.abstractmethod
-    def more(self) -> Optional[bytes]: ...
+    def more(self) -> bytes: ...
 
     """Produce some bytes.
 
@@ -203,10 +203,7 @@ class AsynChatProducer(abc.ABC):
     be transmitted on the channel. The producer indicates exhaustion (i.e. that
     it contains no more data) by having its more() method return the empty bytes
     object."
-
-    Note that we deviate from this contract by potentially returning None.
     """
-    # TODO: Don't allow returning None.
 
 
 class DataSource(AsynChatProducer):
@@ -225,13 +222,13 @@ class DataSource(AsynChatProducer):
         assert not self.sent_any
         return DataSource(self.data, self.repetitions)
 
-    def more(self) -> Optional[bytes]:
+    def more(self) -> bytes:
         self.sent_any = True
         if self.repetitions > 0:
             self.repetitions -= 1
             return self.data
 
-        return None
+        return b""
 
 
 class DataChecker(object):
@@ -239,7 +236,7 @@ class DataChecker(object):
 
     def __init__(self, source: DataSource):
         self.source = source
-        self.pending: Optional[bytes] = b""
+        self.pending: bytes = self.source.more()
         self.succeeded = False
         self.failed = False
 
@@ -252,7 +249,6 @@ class DataChecker(object):
             return
 
         while len(inp):
-            assert self.pending is not None
             n = min(len(inp), len(self.pending))
             if inp[:n] != self.pending[:n]:
                 self.failed = True
@@ -262,7 +258,7 @@ class DataChecker(object):
             if not self.pending:
                 self.pending = self.source.more()
 
-                if self.pending is None:
+                if len(self.pending) == 0:
                     if len(inp):
                         self.failed = True
                     else:
@@ -308,7 +304,7 @@ class CloseSourceProducer(AsynChatProducer):
     def __init__(self, source: Source):
         self.source = source
 
-    def more(self) -> Optional[bytes]:
+    def more(self) -> bytes:
         self.source.note("Flushed")
         self.source.sent_ok()
         return b""
