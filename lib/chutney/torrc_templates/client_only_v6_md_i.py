@@ -1,7 +1,8 @@
-from chutney.Templating import Template, Environ
+from chutney.Templating import Template
+from chutney.TorNet import TorEnviron
 
 
-def format(env: Environ) -> str:
+def format(env: TorEnviron) -> str:
     t = Template(
         """\
 # A client that only uses IPv6 ORPorts
