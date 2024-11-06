@@ -264,7 +264,7 @@ def template_by_name(name: str, env: HierarchicalDict) -> str:
     """Load the template with the given name"""
     # XXX expose errors?
     module_name = name.translate({ord("."): "_", ord("-"): "_"})
-    mod = importlib.import_module("chutney.data.torrc_templates." + module_name)
+    mod = importlib.import_module("chutney.torrc_templates." + module_name)
     return mod.format(env)
 
 
