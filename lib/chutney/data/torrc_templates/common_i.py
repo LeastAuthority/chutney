@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 TestingTorNetwork 1
 
 ## Rapid Bootstrap Testing Options ##
@@ -59,3 +65,6 @@ Sandbox ${sandbox}
 ${owning_controller_process}
 
 ${authorities}
+"""
+    )
+    return t.format(env)

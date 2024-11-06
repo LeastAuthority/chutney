@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:relay-non-exit.tmpl}
 
 # This file is named "relay.tmpl" for compatibility with previous
@@ -7,3 +13,6 @@ ${include:relay-non-exit.tmpl}
 # (newer versions of tor need this to be explicitly configured)
 
 ${include:exit-v4.i}
+"""
+    )
+    return t.format(env)

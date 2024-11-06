@@ -93,8 +93,10 @@ from __future__ import unicode_literals
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Any, Optional
+from typing import Any, Optional
 
+import abc
+import importlib
 import string
 import os
 
@@ -104,7 +106,18 @@ import os
 _KeyError = KeyError
 
 
-class _DictWrapper(object):
+class HierarchicalDict(abc.ABC):
+    @abc.abstractmethod
+    def lookup(self, key: Any, my: HierarchicalDict) -> Any:
+        """As self[key], but parents are told when doing their lookups that
+        the lookup is relative to a specialized environment 'my'.  This
+        is helpful when a parent environment has a value that depends
+        on other values.
+        """
+        ...
+
+
+class _DictWrapper(HierarchicalDict):
     """Base class to implement a dictionary-like object with delegation.
     To use it, implement the _getitem method, and pass the optional
     'parent' argument to the constructor.
@@ -247,6 +260,14 @@ class Environ(_DictWrapper):
         return s
 
 
+def template_by_name(name: str, env: HierarchicalDict) -> str:
+    """Load the template with the given name"""
+    # XXX expose errors?
+    module_name = name.translate({ord("."): "_", ord("-"): "_"})
+    mod = importlib.import_module("chutney.data.torrc_templates." + module_name)
+    return mod.format(env)
+
+
 class IncluderDict(_DictWrapper):
     """Helper to implement ${include:} template substitution.  Acts as a
     dictionary that maps include:foo to the contents of foo (relative to
@@ -273,24 +294,9 @@ class IncluderDict(_DictWrapper):
         if not key.startswith("include:"):
             raise KeyError(key)
 
-        filename = Path(key[len("include:") :])
-        if filename.is_absolute():
-            with filename.open(mode="r") as f:
-                stat = os.fstat(f.fileno())
-                if stat.st_mtime > self._st_mtime:
-                    self._st_mtime = stat.st_mtime
-                return f.read()
-
-        for elt in self._includePath:
-            fullname = Path(elt, filename)
-            if fullname.exists():
-                with fullname.open(mode="r") as f:
-                    stat = os.fstat(f.fileno())
-                    if stat.st_mtime > self._st_mtime:
-                        self._st_mtime = stat.st_mtime
-                    return f.read()
-
-        raise KeyError(key)
+        modulename = key[len("include:") :]
+        # XXX handle errors
+        return template_by_name(modulename, my)
 
     def getUpdateTime(self):
         return self._st_mtime
@@ -337,7 +343,7 @@ class _BetterTemplate(string.Template):
         string.Template.__init__(self, template)
 
 
-class _FindVarsHelper(object):
+class _FindVarsHelper(HierarchicalDict):
     """Helper dictionary for finding the free variables in a template.
     It answers all requests for key lookups affirmatively, and remembers
     what it was asked for.
@@ -379,12 +385,9 @@ class Template(object):
 
     # Fields
     # _pat: The base pattern string to start our substitutions from
-    # _includePath: a list of directories to search when including a file
-    #    by relative path.
 
-    def __init__(self, pattern: str, includePath: Iterable[str] = (".",)):
+    def __init__(self, pattern: str):
         self._pat = pattern
-        self._includePath = includePath
 
     def freevars(self, defaults=None) -> set[str]:
         """Return a set containing all the free variables in this template"""
@@ -398,7 +401,7 @@ class Template(object):
         """Return a string containing this template, filled in with the
         values in the mapping 'values'.
         """
-        values = IncluderDict(values, self._includePath)
+        values = IncluderDict(values)
         values = PathDict(values)
         orig_val = self._pat
         nIterations = 0
@@ -423,11 +426,6 @@ if __name__ == "__main__":
         print("done")
     else:
         for fn in sys.argv[1:]:
-            path = (
-                importlib.resources.files("chutney")
-                .joinpath("data")
-                .joinpath("torrc_templates")
-                .joinpath(fn)
-            )
-            t = Template(path.read_text())
-            print(fn, t.freevars())
+            d = _FindVarsHelper(Environ())
+            t = template_by_name(fn, d)
+            print(fn, d._vars)

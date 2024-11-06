@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:common.i}
 SocksPort $socksport
 UseEntryGuards 0
@@ -10,3 +16,6 @@ CircuitBuildTimeout 60
 ConnectionPadding 0
 __DisablePredictedCircuits 1
 __LeaveStreamsUnattached 1
+"""
+    )
+    return t.format(env)

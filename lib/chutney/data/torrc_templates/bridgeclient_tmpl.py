@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:client.tmpl}
 
 UseBridges 1
@@ -7,3 +13,6 @@ UseBridges 1
 #UseMicrodescriptors 0
 
 ${bridges}
+"""
+    )
+    return t.format(env)

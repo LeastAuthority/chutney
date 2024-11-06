@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 AuthoritativeDirectory 1
 V3AuthoritativeDirectory 1
 ContactInfo auth${nodenum}@test.test
@@ -33,3 +39,6 @@ V3AuthVoteDelay 4
 V3AuthDistDelay 4
 
 ConsensusParams cc_alg=2
+"""
+    )
+    return t.format(env)

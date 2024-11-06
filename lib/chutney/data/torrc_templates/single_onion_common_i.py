@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:hs-common.i}
 
 # Make this hidden service instance a Single Onion Service
@@ -19,3 +25,6 @@ Log notice [rend,bug]info file ${dir}/single-onion.log
 LongLivedPorts
 # This disables everything except hidden service preemptive 3-hop circuits.
 # See #17360.
+"""
+    )
+    return t.format(env)

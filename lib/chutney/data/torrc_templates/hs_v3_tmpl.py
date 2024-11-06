@@ -1,4 +1,13 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:hs-common.i}
 
 # Tor 0.3.4 and earlier default to 2, but 0.3.5 and later default to 3
 HiddenServiceVersion 3
+"""
+    )
+    return t.format(env)

@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:orport-v6.i}
 
 # Must be included after relay-non-exit.tmpl
@@ -23,3 +29,6 @@ ExitPolicy accept6 private:*
 # 3. Finally, reject all IPv6 addresses which haven't been permitted
 # ------------------------------------------------------------------
 ExitPolicy reject6 *:*
+"""
+    )
+    return t.format(env)

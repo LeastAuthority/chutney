@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 # Must be included after relay-non-exit.tmpl
 ExitRelay 1
 
@@ -31,3 +37,6 @@ ExitPolicy accept *:*
 # 4. Finally, reject all IPv4 addresses which haven't been permitted
 # ------------------------------------------------------------------
 ExitPolicy reject *:*
+"""
+    )
+    return t.format(env)

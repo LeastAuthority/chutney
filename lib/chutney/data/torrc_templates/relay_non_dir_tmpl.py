@@ -1,3 +1,9 @@
+from chutney.Templating import Template, Environ
+
+
+def format(env: Environ) -> str:
+    t = Template(
+        """\
 ${include:common.i}
 SocksPort 0
 OrPort $orport_directive
@@ -16,3 +22,6 @@ ServerDNSTestAddresses
 # will not use DNS. Otherwise, DNS is enabled with this config.
 # (If the following line is commented out, tor uses /etc/resolv.conf.)
 ${server_dns_resolv_conf}
+"""
+    )
+    return t.format(env)
