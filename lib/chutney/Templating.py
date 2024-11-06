@@ -93,7 +93,7 @@ from __future__ import unicode_literals
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Iterable
 
 import abc
 import importlib
@@ -302,6 +302,33 @@ class IncluderDict(_DictWrapper):
         return self._st_mtime
 
 
+def find_on_path(
+    basename: str, path: Optional[Iterable[Path]] = None
+) -> Optional[Path]:
+    """Find the first occurrence of `basename` in `path`
+
+    Uses the `PATH` environment variable if `path` is not provided.
+    """
+    _path: Iterable[Path]
+    if path is None:
+        env_path = os.getenv("PATH")
+        if env_path is None:
+            _path = []
+        else:
+            _path = map(Path, env_path.split(":"))
+    else:
+        _path = path
+    for location in _path:
+        p = Path(location, basename)
+        try:
+            s = p.stat()
+            if s and s.st_mode & 0x111:
+                return p
+        except OSError:
+            pass
+    return None
+
+
 class PathDict(_DictWrapper):
     """
     Implements ${path:} patterns, which map ${path:foo} to the location
@@ -320,16 +347,10 @@ class PathDict(_DictWrapper):
 
         key = key[len("path:") :]
 
-        for location in self._path:
-            p = Path(location, key)
-            try:
-                s = p.stat()
-                if s and s.st_mode & 0x111:
-                    return p
-            except OSError:
-                pass
-
-        raise KeyError(key)
+        res = find_on_path(key, path=self._path)
+        if res is None:
+            raise KeyError(key)
+        return res
 
 
 class _BetterTemplate(string.Template):
