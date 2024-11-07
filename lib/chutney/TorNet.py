@@ -2143,15 +2143,6 @@ class TorEnviron:
     # chutney_dir: directory of the chutney source code
     # TODO: Remove?
     chutney_dir: Path = get_absolute_chutney_path()
-    # orport_base, dirport_base, controlport_base, socksport_base,
-    # extorport_base, ptport_base: the initial port numbers used by nodenum 0.
-    # Each additional node adds 1 to the port numbers.
-    orport_base: int = 5100
-    dirport_base: int = 7100
-    controlport_base: int = 8000
-    socksport_base: int = 9000
-    extorport_base: int = 9500
-    ptport_base: int = 9900
     # poll_launch_time: None means wait on launch (requires RunAsDaemon),
     # otherwise, poll after that many seconds (can be fractional/decimal)
     poll_launch_time: Optional[float] = None
@@ -2189,7 +2180,7 @@ class TorEnviron:
     @property
     def orport(self) -> int:
         """OrPort that this node exposes"""
-        return self.orport_base + self.nodenum
+        return self.network.orport_base + self.nodenum
 
     @property
     def controlsocket(self) -> Optional[Path]:
@@ -2202,27 +2193,27 @@ class TorEnviron:
     @property
     def controlport(self) -> int:
         """ControlPort that this node exposes"""
-        return self.controlport_base + self.nodenum
+        return self.network.controlport_base + self.nodenum
 
     @property
     def socksport(self) -> int:
         """SocksPort that this node exposes"""
-        return self.socksport_base + self.nodenum
+        return self.network.socksport_base + self.nodenum
 
     @property
     def dirport(self) -> int:
         """DirPort that this node exposes"""
-        return self.dirport_base + self.nodenum
+        return self.network.dirport_base + self.nodenum
 
     @property
     def extorport(self) -> int:
         """Extended ORPort that this node exposes"""
-        return self.extorport_base + self.nodenum
+        return self.network.extorport_base + self.nodenum
 
     @property
     def ptport(self) -> int:
         """Port to listen on as a pluggble transport bridge (ServerTransportListenAddr)"""
-        return self.ptport_base + self.nodenum
+        return self.network.ptport_base + self.nodenum
 
     @property
     def dir(self) -> Path:
@@ -2362,6 +2353,16 @@ class Network(object):
         self.bootstrap_time: int = getenv_int(
             "CHUTNEY_BOOTSTRAP_TIME", getenv_int("BOOTSTRAP_TIME", 60)
         )
+
+        # orport_base, dirport_base, controlport_base, socksport_base,
+        # extorport_base, ptport_base: the initial port numbers used by nodenum 0.
+        # Each additional node adds 1 to the port numbers.
+        self.orport_base: int = 5100
+        self.dirport_base: int = 7100
+        self.controlport_base: int = 8000
+        self.socksport_base: int = 9000
+        self.extorport_base: int = 9500
+        self.ptport_base: int = 9900
 
     def addNode(self, node: Node) -> None:
         """Add `node` to the network. `node` must have been created with this `Network`."""
