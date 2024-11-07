@@ -501,27 +501,10 @@ class Node(object):
         self._env.nodenum = num
 
 
-class _NodeCommon(object):
-    """Internal helper class for functionality shared by some NodeBuilders
-    and some NodeControllers."""
-
-    # XXXX maybe this should turn into a mixin.
-
-    def __init__(self, env: TorEnviron):
-        self._env = env
-
-    def _getTorrcFname(self) -> str:
-        """Return the name of the file where we'll be writing torrc"""
-        return self._env.torrc_fname
-
-
-class NodeBuilder(_NodeCommon):
+class NodeBuilder:
     """Abstract base class.  A NodeBuilder is responsible for doing all the
     one-time prep needed to set up a node in a network.
     """
-
-    def __init__(self, env: TorEnviron):
-        _NodeCommon.__init__(self, env)
 
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
@@ -547,13 +530,10 @@ class NodeBuilder(_NodeCommon):
         raise NotImplementedError()
 
 
-class NodeController(_NodeCommon):
+class NodeController:
     """Abstract base class.  A NodeController is responsible for running a
     node on the network.
     """
-
-    def __init__(self, env: TorEnviron):
-        _NodeCommon.__init__(self, env)
 
     def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
         """See if this node is running, stopped, or crashed.  If it's running
@@ -601,7 +581,7 @@ class LocalNodeBuilder(NodeBuilder):
     # nodenum -- int -- set by chutney -- which unique node index is this?
 
     def __init__(self, env: TorEnviron):
-        NodeBuilder.__init__(self, env)
+        NodeBuilder.__init__(self)
         self._env = env
 
     def _createTorrcFile(self, checkOnly: bool = False) -> None:
@@ -612,7 +592,7 @@ class LocalNodeBuilder(NodeBuilder):
         """
         global torrc_option_warn_count
 
-        fn_out = self._getTorrcFname()
+        fn_out = self._env.torrc_fname
         output = self._getTorrcContents()
         if checkOnly:
             # XXXX Is it time-consuming to format? If so, cache here.
@@ -774,7 +754,7 @@ class LocalNodeBuilder(NodeBuilder):
         """
         datadir = self._env.dir
         tor = self._env.tor
-        torrc = self._getTorrcFname()
+        torrc = self._env.torrc_fname
         cmdline: list[str] = [
             tor,
             "--ignore-missing-torrc",
@@ -942,7 +922,7 @@ class LocalNodeBuilder(NodeBuilder):
 class LocalNodeController(NodeController):
 
     def __init__(self, network: Network, env: TorEnviron):
-        NodeController.__init__(self, env)
+        NodeController.__init__(self)
         self._network = network
         self._env = env
         self.most_recent_oniondesc_status: Optional[tuple[int, str, str]] = None
@@ -1229,7 +1209,7 @@ class LocalNodeController(NodeController):
             print("{:12} is already running".format(self._env.nick))
             return
         tor_path = self._env.tor
-        torrc = self._getTorrcFname()
+        torrc = self._env.torrc_fname
         cmdline = [
             tor_path,
             "-f",
@@ -1300,7 +1280,7 @@ class LocalNodeController(NodeController):
         # TODO: is this the best place for this code?
         # RunAsDaemon default is 0
         runAsDaemon = False
-        with open(self._getTorrcFname(), "r") as f:
+        with open(self._env.torrc_fname, "r") as f:
             for line in f.readlines():
                 stline = line.strip()
                 # if the line isn't all whitespace or blank
