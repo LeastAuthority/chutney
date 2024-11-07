@@ -1,9 +1,9 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
 AuthoritativeDirectory 1
 BridgeAuthoritativeDir 1
-ContactInfo bridgeauth{env.nodenum}@test.test
+ContactInfo bridgeauth{n.nodenum}@test.test
 """

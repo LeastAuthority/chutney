@@ -1,7 +1,7 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return """\
 # Must be included after relay-non-exit.tmpl
 ExitRelay 1

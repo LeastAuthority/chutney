@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import hs_v2_tmpl
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
 # This file is a backwards-compatibility redirect
 # Older chutney networks use hs.tmpl for v2 onion services
-{hs_v2_tmpl.format(env)}
+{hs_v2_tmpl.format(n)}
 """

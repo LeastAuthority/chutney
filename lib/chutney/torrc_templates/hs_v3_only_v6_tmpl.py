@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import hs_v3_tmpl, client_only_v6_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{hs_v3_tmpl.format(env)}
+{hs_v3_tmpl.format(n)}
 # Hidden services are just another kind of client
-{client_only_v6_i.format(env)}
+{client_only_v6_i.format(n)}
 """

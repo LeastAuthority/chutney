@@ -1,13 +1,13 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import common_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{common_i.format(env)}
+{common_i.format(n)}
 SocksPort 0
-OrPort {env.orport}{" IPv4Only" if env.disableipv6 else ""}
-Address {env.ip}
+OrPort {n.orport}{" IPv4Only" if n.disableipv6 else ""}
+Address {n.ip}
 
 # Must be included before exit-v{{4,6}}.i
 ExitRelay 0
@@ -21,5 +21,5 @@ ServerDNSTestAddresses
 # If this option is /dev/null, or any other empty or unreadable file, tor exits
 # will not use DNS. Otherwise, DNS is enabled with this config.
 # (If the following line is commented out, tor uses /etc/resolv.conf.)
-{env.server_dns_resolv_conf}
+{n.server_dns_resolv_conf}
 """

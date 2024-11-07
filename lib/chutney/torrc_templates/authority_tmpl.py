@@ -1,9 +1,9 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import relay_non_exit_tmpl, authority_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{relay_non_exit_tmpl.format(env)}
-{authority_i.format(env)}
+{relay_non_exit_tmpl.format(n)}
+{authority_i.format(n)}
 """

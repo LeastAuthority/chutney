@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import hs_common_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{hs_common_i.format(env)}
+{hs_common_i.format(n)}
 
 # Make this hidden service instance a Single Onion Service
 HiddenServiceSingleHopMode 1
@@ -15,7 +15,7 @@ HiddenServiceNonAnonymousMode 1
 # To confirm one-hop intro and rendezvous circuits, look for
 # rend_service_intro_has_opened and rend_service_rendezvous_has_opened, and
 # check the length of the circuit in the next line.
-Log notice [rend,bug]info file {env.dir}/single-onion.log
+Log notice [rend,bug]info file {n.dir}/single-onion.log
 
 # Disable preemtive circuits, a Single Onion doesn't need them (except for
 # descriptor posting).

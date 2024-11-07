@@ -1,9 +1,9 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import relay_non_dir_tmpl
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{relay_non_dir_tmpl.format(env)}
-DirPort {env.dirport}
+{relay_non_dir_tmpl.format(n)}
+DirPort {n.dirport}
 """

@@ -1,9 +1,9 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import single_onion_common_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{single_onion_common_i.format(env)}
+{single_onion_common_i.format(n)}
 HiddenServiceVersion 2
 """

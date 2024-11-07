@@ -1,11 +1,11 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import common_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{common_i.format(env)}
-SocksPort {env.socksport}
+{common_i.format(n)}
+SocksPort {n.socksport}
 UseEntryGuards 0
 UseMicroDescriptors 0
 FetchDirInfoEarly 1

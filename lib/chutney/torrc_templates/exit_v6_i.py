@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import orport_v6_i
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{orport_v6_i.format(env)}
+{orport_v6_i.format(n)}
 
 # Must be included after relay-non-exit.tmpl
 ExitRelay 1

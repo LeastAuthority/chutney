@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
 # Tor uses the first IPv6 ORPort address as its IPv6 address
-OrPort {env.ipv6_addr}:{env.orport} IPv6Only
+OrPort {n.ipv6_addr}:{n.orport} IPv6Only
 
 # IPv6 DirPorts are not needed
 """

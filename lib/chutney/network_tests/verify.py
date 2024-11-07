@@ -92,19 +92,18 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         repetitions=reps,
         dot_repetitions=dot_reps,
     )
-    # _env does not implement get() due to its fallback to parent behaviour
     client_list = list(
         filter(
-            lambda n: n._env.tag.startswith("c")
-            or n._env.tag.startswith("bc")
-            or n._env.client,
+            lambda n: n._config.tag.startswith("c")
+            or n._config.tag.startswith("bc")
+            or n._config.client,
             network._nodes,
         )
     )
-    exit_list = list(filter(lambda n: n._env.exit, network._nodes))
+    exit_list = list(filter(lambda n: n._config.exit, network._nodes))
     hs_list = list(
         filter(
-            lambda n: n._env.tag.startswith("h") or n._env.hs,
+            lambda n: n._config.tag.startswith("h") or n._config.hs,
             network._nodes,
         )
     )
@@ -206,10 +205,10 @@ def _configure_exits(
         for op in client_list:
             print(
                 "  Exit to %s:%d via client %s:%s"
-                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op._env.socksport)
+                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op._config.socksport)
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(op._env.socksport))
+                proxy = ("localhost", int(op._config.socksport))
                 tt.add_client(bind_to, proxy)
     return exit_path_node_count
 
@@ -243,21 +242,21 @@ def _configure_hs(
         hs_client_list = client_list[:1]
     # Setup the connections from each client in hs_client_list to each hs
     for hs in hs_list:
-        hs_bind_to = (hs._env.hs_hostname, HS_PORT)
+        hs_bind_to = (hs._config.hs_hostname, HS_PORT)
         for client in hs_client_list:
             print(
                 "  HS to %s:%d (%s:%d) via client %s:%s"
                 % (
-                    hs._env.hs_hostname,
+                    hs._config.hs_hostname,
                     HS_PORT,
                     LISTEN_ADDR,
                     LISTEN_PORT,
                     "localhost",
-                    client._env.socksport,
+                    client._config.socksport,
                 )
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(client._env.socksport))
+                proxy = ("localhost", int(client._config.socksport))
                 tt.add_client(hs_bind_to, proxy)
 
     return hs_path_node_count

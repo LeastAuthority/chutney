@@ -1,7 +1,7 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
 TestingTorNetwork 1
 
@@ -28,40 +28,40 @@ TestingMinExitFlagThreshold 0
 #Default VoteOnHidServDirectoriesV2 1
 
 ## Options that we always want to test ##
-DataDirectory {env.dir}
+DataDirectory {n.dir}
 RunAsDaemon 1
-ConnLimit {env.connlimit}
-Nickname {env.nick}
+ConnLimit {n.connlimit}
+Nickname {n.nick}
 # Let tor close connections gracefully before exiting
 ShutdownWaitLength 2
 DisableDebuggerAttachment 0
 
-AddressDisableIPv6 {int(env.disableipv6)}
-ControlPort {env.controlport}
+AddressDisableIPv6 {int(n.disableipv6)}
+ControlPort {n.controlport}
 # Use ControlSocket rather than ControlPort unix: to support older tors
-ControlSocket {env.controlsocket or 0}
+ControlSocket {n.controlsocket or 0}
 CookieAuthentication 1
-PidFile {env.dir}/pid
+PidFile {n.dir}/pid
 
-Log notice file {env.dir}/notice.log
-Log info file {env.dir}/info.log
+Log notice file {n.dir}/notice.log
+Log info file {n.dir}/info.log
 # Turn this off to save space
-#Log debug file {env.dir}/debug.log
+#Log debug file {n.dir}/debug.log
 ProtocolWarnings 1
 SafeLogging 0
 LogTimeGranularity 1
 
-# Options that we can disable at runtime, based on env vars
+# Options that we can disable at runtime, based on n vars
 
 # Use tor's sandbox. Defaults to 1 on Linux, and 0 on other platforms.
 # Use CHUTNEY_TOR_SANDBOX=0 to disable, if tor's sandbox doesn't work with
 # your glibc.
-Sandbox {int(env.sandbox)}
+Sandbox {int(n.sandbox)}
 
 # Ask all child tor processes to exit when chutney's test-network.sh exits
 # (if the CHUTNEY_*_TIME options leave the network running, this option is
 # disabled)
-{env.owning_controller_process}
+{n.owning_controller_process}
 
-{env.network.authorities}
+{n.network.authorities}
 """

@@ -1,8 +1,8 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import relay_v6_tmpl
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{relay_v6_tmpl.format(env)}
+{relay_v6_tmpl.format(n)}
 """

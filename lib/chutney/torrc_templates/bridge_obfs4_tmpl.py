@@ -1,13 +1,13 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from chutney.Util import find_on_path
 from . import bridge_tmpl
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{bridge_tmpl.format(env)}
+{bridge_tmpl.format(n)}
 
 ServerTransportPlugin obfs4 exec {find_on_path("obfs4proxy")}
-ExtOrPort {env.extorport}
-ServerTransportListenAddr obfs4 {env.ip}:{env.ptport}
+ExtOrPort {n.extorport}
+ServerTransportListenAddr obfs4 {n.ip}:{n.ptport}
 """

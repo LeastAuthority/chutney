@@ -1,10 +1,10 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import NodeConfig
 from . import relay_non_exit_tmpl
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
-{relay_non_exit_tmpl.format(env)}
+{relay_non_exit_tmpl.format(n)}
 
 Nickname relay1mbyteMAB
 MaxAdvertisedBandwidth 1 MBytes

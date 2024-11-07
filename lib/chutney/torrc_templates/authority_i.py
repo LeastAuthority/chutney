@@ -1,11 +1,11 @@
-from chutney.TorNet import TorEnviron, V3_AUTH_VOTING_INTERVAL
+from chutney.TorNet import NodeConfig, V3_AUTH_VOTING_INTERVAL
 
 
-def format(env: TorEnviron) -> str:
+def format(n: NodeConfig) -> str:
     return f"""\
 AuthoritativeDirectory 1
 V3AuthoritativeDirectory 1
-ContactInfo auth{env.nodenum}@test.test
+ContactInfo auth{n.nodenum}@test.test
 
 # Disable authority to relay/bridge reachability checks
 # These checks happen every half hour, even in testing networks
