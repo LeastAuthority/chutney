@@ -19,6 +19,7 @@ from __future__ import unicode_literals
 from pathlib import Path
 from typing import List, Optional, TypeVar, Any, Iterable, Union, Callable
 
+import copy
 import dataclasses
 import errno
 import importlib
@@ -431,7 +432,6 @@ class Node(object):
     """
 
     # Fields:
-    # _parent
     # _config
     # _builder
     # _controller
@@ -440,35 +440,16 @@ class Node(object):
     ########
     # Users are expected to call these:
 
-    def __init__(self, network: Network, parent: Optional[Node] = None, **kwargs: Any):
+    def __init__(self, network: Network, config: NodeConfig):
         """Create a new Node.
 
-        Initial fields in this Node's environment are set from `kwargs`.
-        Any fields not found there will be searched for in `parent`, if
-        present, or else in `network`.
-
-        Note that the created `Node` won't actually be instantiated in
-        `network` until e.g. `network.addNode` is called. This is to support
-        "template nodes", as used with `Node.getN`.
+        This should generally only be called by Network, to create a node as
+        it's being added.
         """
         self._network = network
-        self._config: NodeConfig
-        if parent:
-            self._config = dataclasses.replace(parent._config, **kwargs)
-        else:
-            self._config = NodeConfig(network=network, **kwargs)
+        self._config = config
         self._builder: Optional[LocalNodeBuilder] = None
         self._controller: Optional[LocalNodeController] = None
-
-    def getN(self, N: int) -> list[Node]:
-        """Generate 'N' nodes of the same configuration as this node."""
-        return [Node(network=self._network, parent=self) for _ in range(N)]
-
-    def specialize(self, **kwargs: Any) -> Node:
-        """Return a new Node based on this node's value as its defaults,
-        but with the values from 'kwargs' (if any) overriding them.
-        """
-        return Node(network=self._network, parent=self, **kwargs)
 
     ######
     # Chutney uses these:
@@ -2301,6 +2282,16 @@ class NodeConfig:
             dns_conf = NodeConfig.OFFLINE_DNS_RESOLV_CONF
         return "ServerDNSResolvConfFile %s" % (dns_conf)
 
+    def getN(self, N: int) -> list[NodeConfig]:
+        """Generate 'N' duplicates of self"""
+        return [copy.copy(self) for _ in range(N)]
+
+    def specialize(self, **kwargs: Any) -> NodeConfig:
+        """Return a new Node based on this node's value as its defaults,
+        but with the values from 'kwargs' (if any) overriding them.
+        """
+        return dataclasses.replace(self, **kwargs)
+
 
 KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
 
@@ -2343,19 +2334,20 @@ class Network(object):
         self.extorport_base: int = 9500
         self.ptport_base: int = 9900
 
-    def addNode(self, node: Node) -> None:
-        """Add `node` to the network. `node` must have been created with this `Network`."""
-        assert node._network is self, "Node was created from a different Network"
+    def addNode(self, config: NodeConfig) -> Node:
+        """Create a node with the given config, add it to the network, and return it."""
+        assert config.network is self, "Node was created from a different Network"
+        node = Node(self, config)
         node.setNodenum(self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(node)
         if node._config.bridgeauthority:
             self.hasbridgeauth = True
+        return node
 
-    def addNodes(self, nodes: List[Node]) -> None:
+    def addNodes(self, configs: List[NodeConfig]) -> List[Node]:
         """Add `nodes` to the network. `nodes` must have been created with this `Network`."""
-        for node in nodes:
-            self.addNode(node)
+        return [self.addNode(c) for c in configs]
 
     def _addRequirement(self, requirement: str) -> None:
         requirement = requirement.upper()
@@ -2966,14 +2958,22 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
     def Require(feature: str) -> None:
         _THE_NETWORK._addRequirement(feature)
 
-    def ConfigureNodes(nodelist: list[Node]) -> None:
+    def ConfigureNodes(nodelist: list[NodeConfig]) -> None:
         for n in nodelist:
             _THE_NETWORK.addNode(n)
 
-    def NodeWrapper(parent: Optional[Node] = None, **kwargs: Any) -> Node:
-        return Node(network=_THE_NETWORK, parent=parent, **kwargs)
+    def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
+        if parent is None:
+            return NodeConfig(network=_THE_NETWORK, **kwargs)
+        else:
+            return parent.specialize(**kwargs)
 
     _GLOBALS = dict(
+        # Note that in the network scripts "Node" is actually a factory function
+        # for creating NodeConfig.
+        # TODO: Some way to make this less confusing? Maybe we can update built-in
+        # networks, and only use this path for "external" network configs if we want
+        # to continue supporting them.
         Node=NodeWrapper,
         Require=Require,
         ConfigureNodes=ConfigureNodes,
