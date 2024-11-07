@@ -2192,12 +2192,12 @@ class TorEnviron:
         return self.orport_base + self.nodenum
 
     @property
-    def controlsocket(self) -> str:
+    def controlsocket(self) -> Optional[Path]:
         """ControlSocket that this node exposes"""
         if self.enable_controlsocket:
-            return str(self.dir.joinpath("control"))
+            return self.dir.joinpath("control")
         else:
-            return "0"
+            return None
 
     @property
     def controlport(self) -> int:

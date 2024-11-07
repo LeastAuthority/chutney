@@ -39,7 +39,7 @@ DisableDebuggerAttachment 0
 AddressDisableIPv6 {int(env.disableipv6)}
 ControlPort {env.controlport}
 # Use ControlSocket rather than ControlPort unix: to support older tors
-ControlSocket {env.controlsocket}
+ControlSocket {env.controlsocket or 0}
 CookieAuthentication 1
 PidFile {env.dir}/pid
 
