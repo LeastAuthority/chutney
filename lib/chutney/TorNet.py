@@ -462,7 +462,7 @@ class Node(object):
         node can be run by a NodeController).
         """
         if self._builder is None:
-            self._builder = LocalNodeBuilder(self._config)
+            self._builder = LocalNodeBuilder(self)
         return self._builder
 
     # TODO: return a `NodeController`. Right now a lot of code implicitly assumes
@@ -561,9 +561,9 @@ class LocalNodeBuilder(NodeBuilder):
     # fingerprint_ed -- base64 router key ed25519 fingerprint
     # nodenum -- int -- set by chutney -- which unique node index is this?
 
-    def __init__(self, config: NodeConfig):
+    def __init__(self, node: Node):
         NodeBuilder.__init__(self)
-        self._config = config
+        self._node = node
 
     def _createTorrcFile(self, checkOnly: bool = False) -> None:
         """Write the torrc file for this node, disabling any options
@@ -573,14 +573,14 @@ class LocalNodeBuilder(NodeBuilder):
         """
         global torrc_option_warn_count
 
-        fn_out = self._config.torrc_fname
+        fn_out = self._node._config.torrc_fname
         output = self._getTorrcContents()
         if checkOnly:
             # XXXX Is it time-consuming to format? If so, cache here.
             return
         # now filter the options we're about to write, commenting out
         # the options that the current tor binary doesn't support
-        tor = self._config.tor
+        tor = self._node._config.tor
         tor_version = get_tor_version(tor)
         torrc_opts = get_torrc_options(tor)
         # check if each option is supported before writing it
@@ -619,20 +619,22 @@ class LocalNodeBuilder(NodeBuilder):
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
         # TODO: Maybe make this a (big) explicit `match` statement?
-        module_name = self._config.torrc.translate({ord("."): "_", ord("-"): "_"})
+        module_name = self._node._config.torrc.translate({ord("."): "_", ord("-"): "_"})
         try:
             mod = importlib.import_module("chutney.torrc_templates." + module_name)
         except ModuleNotFoundError as e:
-            raise ChutneyError(f"Unrecognized torrc_template {self._config.torrc}") from e
+            raise ChutneyError(
+                f"Unrecognized torrc_template {self._node._config.torrc}"
+            ) from e
         try:
-            f = check_type(getattr(mod, "format"), Callable[[NodeConfig], str])
+            f = check_type(getattr(mod, "format"), Callable[[Node], str])
         except (AttributeError, TypeCheckError) as e:
             raise ChutneyInternalError(
                 f"module {module_name} didn't have expected format fn"
             ) from e
         # mypy still requires checking that the result is a string, even though
         # we verified the function signature.
-        return check_type(f(self._config), str)
+        return check_type(f(self._node), str)
 
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
@@ -643,11 +645,11 @@ class LocalNodeBuilder(NodeBuilder):
         hidden service directories as needed.
         """
         self._makeDataDir()
-        if self._config.authority:
+        if self._node._config.authority:
             self._genAuthorityKey()
-        if self._config.relay:
+        if self._node._config.relay:
             self._genRouterKey()
-        if self._config.hs:
+        if self._node._config.hs:
             self._makeHiddenServiceDir()
 
     def config(self, net: Network) -> None:
@@ -664,23 +666,26 @@ class LocalNodeBuilder(NodeBuilder):
         """Return true if this node appears to have everything it needs;
         false otherwise."""
 
-        if not tor_exists(self._config.tor):
-            print("No binary found for %r" % self._config.tor)
+        if not tor_exists(self._node._config.tor):
+            print("No binary found for %r" % self._node._config.tor)
             return False
 
-        if self._config.authority:
-            if not tor_has_module(self._config.tor, "dirauth"):
-                print("No dirauth support in %r" % self._config.tor)
+        if self._node._config.authority:
+            if not tor_has_module(self._node._config.tor, "dirauth"):
+                print("No dirauth support in %r" % self._node._config.tor)
                 return False
-            if not tor_gencert_exists(self._config.tor_gencert):
-                print("No binary found for tor-gencert %r" % self._config.tor_gencert)
+            if not tor_gencert_exists(self._node._config.tor_gencert):
+                print(
+                    "No binary found for tor-gencert %r"
+                    % self._node._config.tor_gencert
+                )
                 return False
 
         return True
 
     def _makeDataDir(self) -> None:
         """Create the data directory (with keys subdirectory) for this node."""
-        datadir = check_type(self._config.dir, Path)
+        datadir = check_type(self._node._config.dir, Path)
         make_datadir_subdirectory(datadir, "keys")
 
     def _makeHiddenServiceDir(self) -> None:
@@ -690,20 +695,20 @@ class LocalNodeBuilder(NodeBuilder):
         key. It is combined with the 'dir' data directory key to yield the
         path to the hidden service directory.
         """
-        datadir = self._config.dir
-        make_datadir_subdirectory(datadir, self._config.hs_directory)
+        datadir = self._node._config.dir
+        make_datadir_subdirectory(datadir, self._node._config.hs_directory)
 
     def _genAuthorityKey(self) -> None:
         """Generate an authority identity and signing key for this authority,
         if they do not already exist."""
-        datadir = self._config.dir
-        tor_gencert = self._config.tor_gencert
-        lifetime = self._config.auth_cert_lifetime
+        datadir = self._node._config.dir
+        tor_gencert = self._node._config.tor_gencert
+        lifetime = self._node._config.auth_cert_lifetime
         idfile = Path(datadir, "keys", "authority_identity_key")
         skfile = Path(datadir, "keys", "authority_signing_key")
         certfile = Path(datadir, "keys", "authority_certificate")
-        addr = f"{self._config.ip}:{self._config.dirport}"
-        passphrase = self._config.auth_passphrase
+        addr = f"{self._node._config.ip}:{self._node._config.dirport}"
+        passphrase = self._node._config.auth_passphrase
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
         cmdline = [
@@ -724,7 +729,9 @@ class LocalNodeBuilder(NodeBuilder):
         ]
         # nicknames are testNNNaa[OLD], but we want them to look tidy
         print(
-            "Creating identity key for {:12} with {}".format(self._config.nick, cmdline[0])
+            "Creating identity key for {:12} with {}".format(
+                self._node._config.nick, cmdline[0]
+            )
         )
         debug("Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline)))
         run_tor_gencert(cmdline, passphrase)
@@ -733,9 +740,9 @@ class LocalNodeBuilder(NodeBuilder):
         """Generate an identity key for this router, unless we already have,
         and set up the 'fingerprint' entry in the Environ.
         """
-        datadir = self._config.dir
-        tor = self._config.tor
-        torrc = self._config.torrc_fname
+        datadir = self._node._config.dir
+        tor = self._node._config.tor
+        torrc = self._node._config.torrc_fname
         cmdline: list[str] = [
             tor,
             "--ignore-missing-torrc",
@@ -755,14 +762,14 @@ class LocalNodeBuilder(NodeBuilder):
                     repr(" ".join(cmdline)), repr(stdouterr)
                 )
             )
-        self._config.fingerprint = fingerprint
+        self._node._config.fingerprint = fingerprint
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
         if os.path.exists(ed_fn):
             s = open(ed_fn).read().strip().split()[1]
-            self._config.fingerprint_ed25519 = s
+            self._node._config.fingerprint_ed25519 = s
         else:
-            self._config.fingerprint_ed25519 = ""
+            self._node._config.fingerprint_ed25519 = ""
 
     def _getAltAuthLines(
         self, hasbridgeauth: bool = False
@@ -778,10 +785,10 @@ class LocalNodeBuilder(NodeBuilder):
 
         If this node not an authority, the returned strings are empty.
         """
-        if not self._config.authority:
+        if not self._node._config.authority:
             return ("", ("", ""))
 
-        datadir = self._config.dir
+        datadir = self._node._config.dir
         certfile = Path(datadir, "keys", "authority_certificate")
         v3id = None
         with certfile.open(mode="r") as f:
@@ -792,11 +799,11 @@ class LocalNodeBuilder(NodeBuilder):
 
         assert v3id is not None
 
-        if self._config.bridgeauthority:
+        if self._node._config.bridgeauthority:
             # Bridge authorities return AlternateBridgeAuthority with
             # the 'bridge' flag set.
             options = ("AlternateBridgeAuthority",)
-            self._config.dirserver_flags += " bridge"
+            self._node._config.dirserver_flags += " bridge"
             arti = False
         else:
             # Directory authorities return AlternateDirAuthority with
@@ -807,42 +814,45 @@ class LocalNodeBuilder(NodeBuilder):
                 options = ("AlternateDirAuthority",)
             else:
                 options = ("DirAuthority",)
-            self._config.dirserver_flags += " v3ident=%s" % v3id
+            self._node._config.dirserver_flags += " v3ident=%s" % v3id
             arti = True
 
         authlines = ""
         for authopt in options:
             authlines += "%s %s orport=%s" % (
                 authopt,
-                self._config.nick,
-                self._config.orport,
+                self._node._config.nick,
+                self._node._config.orport,
             )
             # It's ok to give an authority's IPv6 address to an IPv4-only
             # client or relay: it will and must ignore it
             # and yes, the orport is the same on IPv4 and IPv6
-            if self._config.ipv6_addr is not None:
+            if self._node._config.ipv6_addr is not None:
                 authlines += " ipv6=%s:%s" % (
-                    self._config.ipv6_addr,
-                    self._config.orport,
+                    self._node._config.ipv6_addr,
+                    self._node._config.orport,
                 )
             authlines += " %s %s:%s %s\n" % (
-                self._config.dirserver_flags,
-                self._config.ip,
-                self._config.dirport,
-                self._config.fingerprint,
+                self._node._config.dirserver_flags,
+                self._node._config.ip,
+                self._node._config.dirport,
+                self._node._config.fingerprint,
             )
 
         # generate arti configuartion if supported
         arti_lines = ("", "")
         if arti:
-            addrs = '"%s:%s"' % (self._config.ip, self._config.orport)
-            if self._config.ipv6_addr is not None:
-                addrs += ', "%s:%s"' % (self._config.ipv6_addr, self._config.orport)
+            addrs = '"%s:%s"' % (self._node._config.ip, self._node._config.orport)
+            if self._node._config.ipv6_addr is not None:
+                addrs += ', "%s:%s"' % (
+                    self._node._config.ipv6_addr,
+                    self._node._config.orport,
+                )
             elts = {
-                "fp": self._config.fingerprint.replace(" ", ""),
-                "ed_fp": self._config.fingerprint_ed25519,
+                "fp": self._node._config.fingerprint.replace(" ", ""),
+                "ed_fp": self._node._config.fingerprint_ed25519,
                 "orports": addrs,
-                "nick": self._config.nick,
+                "nick": self._node._config.nick,
                 "v3id": v3id,
             }
             arti_lines = (
@@ -867,16 +877,16 @@ class LocalNodeBuilder(NodeBuilder):
         First element is the line in torrc format, and 2nd is the same line in raw/arti format.
         Non-bridge relays return ("", "").
         """
-        if not self._config.bridge:
+        if not self._node._config.bridge:
             return ("", "")
 
-        if self._config.pt_bridge:
-            port = self._config.ptport
-            transport = self._config.pt_transport
-            extra = self._config.pt_extra
+        if self._node._config.pt_bridge:
+            port = self._node._config.ptport
+            transport = self._node._config.pt_transport
+            extra = self._node._config.pt_extra
         else:
             # the orport is the same on IPv4 and IPv6
-            port = self._config.orport
+            port = self._node._config.orport
             transport = ""
             extra = ""
 
@@ -884,17 +894,17 @@ class LocalNodeBuilder(NodeBuilder):
 
         bridgelines = BRIDGE_LINE_TEMPLATE % (
             transport,
-            self._config.ip,
+            self._node._config.ip,
             port,
-            self._config.fingerprint,
+            self._node._config.fingerprint,
             extra,
         )
-        if self._config.ipv6_addr is not None:
+        if self._node._config.ipv6_addr is not None:
             bridgelines += BRIDGE_LINE_TEMPLATE % (
                 transport,
-                self._config.ipv6_addr,
+                self._node._config.ipv6_addr,
                 port,
-                self._config.fingerprint,
+                self._node._config.fingerprint,
                 extra,
             )
         return ("Bridge " + bridgelines, bridgelines)
@@ -2449,7 +2459,7 @@ class Network(object):
         arti_auth_lines = []
         arti_bridgelines = []
         all_builders = [n.getBuilder() for n in self._nodes]
-        builders = [b for b in all_builders if b._config.config_phase == phase]
+        builders = [b for b in all_builders if b._node._config.config_phase == phase]
         self._checkConfig()
 
         # XXX don't change node names or types or count if anything is

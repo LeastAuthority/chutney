@@ -1,8 +1,8 @@
-from chutney.TorNet import NodeConfig
+from chutney.TorNet import Node
 from . import orport_v6_i
 
 
-def format(n: NodeConfig) -> str:
+def format(n: Node) -> str:
     return f"""\
 {orport_v6_i.format(n)}
 

@@ -1,8 +1,8 @@
-from chutney.TorNet import NodeConfig
+from chutney.TorNet import Node
 from . import client_tmpl
 
 
-def format(n: NodeConfig) -> str:
+def format(n: Node) -> str:
     return f"""\
 {client_tmpl.format(n)}
 
@@ -12,5 +12,5 @@ UseBridges 1
 # But the latest git sources appear to be fine
 #UseMicrodescriptors 0
 
-{n.network.bridges}
+{n._config.network.bridges}
 """

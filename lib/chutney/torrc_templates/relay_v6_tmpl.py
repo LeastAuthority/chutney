@@ -1,8 +1,8 @@
-from chutney.TorNet import NodeConfig
+from chutney.TorNet import Node
 from . import exit_v4_i, exit_v6_i, relay_non_exit_tmpl
 
 
-def format(n: NodeConfig) -> str:
+def format(n: Node) -> str:
     return f"""\
 {relay_non_exit_tmpl.format(n)}
 
