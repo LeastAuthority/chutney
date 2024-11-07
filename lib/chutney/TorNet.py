@@ -2192,16 +2192,6 @@ class TorEnviron:
         return self.orport_base + self.nodenum
 
     @property
-    def orport_directive(self) -> str:
-        res = str(self.orport)
-        if self.disableipv6:
-            # Even though we set the "AddressIPv6Only" directive,
-            # tor will still try to bind the orport to a v6 address
-            # unless we also override it here.
-            res += " IPv4Only"
-        return res
-
-    @property
     def controlsocket(self) -> str:
         """ControlSocket that this node exposes"""
         if self.enable_controlsocket:

@@ -6,7 +6,7 @@ def format(env: TorEnviron) -> str:
     return f"""\
 {common_i.format(env)}
 SocksPort 0
-OrPort {env.orport_directive}
+OrPort {env.orport}{" IPv4Only" if env.disableipv6 else ""}
 Address {env.ip}
 
 # Must be included before exit-v{{4,6}}.i
