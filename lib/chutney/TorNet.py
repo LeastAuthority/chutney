@@ -2178,7 +2178,7 @@ class TorEnviron:
     # Chutney users can disable the sandbox using:
     #    export CHUTNEY_TOR_SANDBOX=0
     # if it doesn't work on their version of glibc.
-    sandbox: int = int(getenv_bool("CHUTNEY_TOR_SANDBOX", platform.system() == "Linux"))
+    sandbox: bool = getenv_bool("CHUTNEY_TOR_SANDBOX", platform.system() == "Linux")
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     enable_controlsocket: bool = getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True)
 

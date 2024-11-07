@@ -56,7 +56,7 @@ LogTimeGranularity 1
 # Use tor's sandbox. Defaults to 1 on Linux, and 0 on other platforms.
 # Use CHUTNEY_TOR_SANDBOX=0 to disable, if tor's sandbox doesn't work with
 # your glibc.
-Sandbox {env.sandbox}
+Sandbox {int(env.sandbox)}
 
 # Ask all child tor processes to exit when chutney's test-network.sh exits
 # (if the CHUTNEY_*_TIME options leave the network running, this option is
