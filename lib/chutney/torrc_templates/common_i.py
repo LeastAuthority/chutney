@@ -63,5 +63,5 @@ Sandbox {int(n._config.sandbox)}
 # disabled)
 {n._config.owning_controller_process}
 
-{n._config.network.authorities}
+{n._network.authorities}
 """

@@ -2113,10 +2113,6 @@ CUR_BOOTSTRAP_PHASE: int = getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1)
 class NodeConfig:
     """Properties of a Tor Node"""
 
-    # The network to which this object belongs (or will belong, if it hasn't
-    # been added yet).
-    network: Network
-
     # Name of the template module to use to generate the config file.
     # This should be the name of a module in `chutney.torrc_templates`.
     # For backwards compatibility '-' and '.' are translated to `_`
@@ -2338,7 +2334,6 @@ class Network(object):
 
     def addNode(self, config: NodeConfig) -> Node:
         """Create a node with the given config, add it to the network, and return it."""
-        assert config.network is self, "Node was created from a different Network"
         node = Node(self, config, self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(node)
@@ -2965,7 +2960,7 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
 
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
         if parent is None:
-            return NodeConfig(network=_THE_NETWORK, **kwargs)
+            return NodeConfig(**kwargs)
         else:
             return parent.specialize(**kwargs)
 

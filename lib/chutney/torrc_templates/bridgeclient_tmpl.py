@@ -12,5 +12,5 @@ UseBridges 1
 # But the latest git sources appear to be fine
 #UseMicrodescriptors 0
 
-{n._config.network.bridges}
+{n._network.bridges}
 """

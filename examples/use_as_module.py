@@ -13,9 +13,9 @@ from chutney.network_tests import verify
 
 network = TorNet.Network()
 
-Authority = NodeConfig(network, tag="a", authority=1, relay=1, torrc="authority.tmpl")
-ExitRelay = NodeConfig(network, tag="r", relay=1, exit=1, torrc="relay.tmpl")
-Client = NodeConfig(network, tag="c", client=1, torrc="client.tmpl")
+Authority = NodeConfig(tag="a", authority=1, relay=1, torrc="authority.tmpl")
+ExitRelay = NodeConfig(tag="r", relay=1, exit=1, torrc="relay.tmpl")
+Client = NodeConfig(tag="c", client=1, torrc="client.tmpl")
 
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
