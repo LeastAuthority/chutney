@@ -658,7 +658,6 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
-        # XXX dedupe with Templating.Environ
         # TODO: Maybe make this a (big) explicit `match` statement?
         module_name = self._env.torrc.translate({ord("."): "_", ord("-"): "_"})
         try:
