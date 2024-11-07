@@ -36,7 +36,7 @@ Nickname {env.nick}
 ShutdownWaitLength 2
 DisableDebuggerAttachment 0
 
-AddressDisableIPv6 {env.addressdisableipv6}
+AddressDisableIPv6 {int(env.disableipv6)}
 ControlPort {env.controlport}
 # Use ControlSocket rather than ControlPort unix: to support older tors
 ControlSocket {env.controlsocket}

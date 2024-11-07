@@ -2067,7 +2067,6 @@ CUR_BOOTSTRAP_PHASE: int = getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1)
 @dataclasses.dataclass
 class TorEnviron:
     """Properties of a Tor Node"""
-       addressdisableipv6: torrc option to disable ipv6
 
     # The network to which this object belongs (or will belong, if it hasn't
     # been added yet).
@@ -2191,13 +2190,6 @@ class TorEnviron:
     def orport(self) -> int:
         """OrPort that this node exposes"""
         return self.orport_base + self.nodenum
-
-    @property
-    def addressdisableipv6(self) -> str:
-        if self.disableipv6:
-            return "1"
-        else:
-            return "0"
 
     @property
     def orport_directive(self) -> str:
