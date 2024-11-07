@@ -8,6 +8,6 @@ def format(n: Node) -> str:
 {bridge_tmpl.format(n)}
 
 ServerTransportPlugin obfs4 exec {find_on_path("obfs4proxy")}
-ExtOrPort {n._config.extorport}
-ServerTransportListenAddr obfs4 {n._config.ip}:{n._config.ptport}
+ExtOrPort {n.extorport}
+ServerTransportListenAddr obfs4 {n._config.ip}:{n.ptport}
 """

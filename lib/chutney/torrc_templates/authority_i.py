@@ -5,7 +5,7 @@ def format(n: Node) -> str:
     return f"""\
 AuthoritativeDirectory 1
 V3AuthoritativeDirectory 1
-ContactInfo auth{n._config.nodenum}@test.test
+ContactInfo auth{n.nodenum}@test.test
 
 # Disable authority to relay/bridge reachability checks
 # These checks happen every half hour, even in testing networks

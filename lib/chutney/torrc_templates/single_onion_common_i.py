@@ -15,7 +15,7 @@ HiddenServiceNonAnonymousMode 1
 # To confirm one-hop intro and rendezvous circuits, look for
 # rend_service_intro_has_opened and rend_service_rendezvous_has_opened, and
 # check the length of the circuit in the next line.
-Log notice [rend,bug]info file {n._config.dir}/single-onion.log
+Log notice [rend,bug]info file {n.dir}/single-onion.log
 
 # Disable preemtive circuits, a Single Onion doesn't need them (except for
 # descriptor posting).

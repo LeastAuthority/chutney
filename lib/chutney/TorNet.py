@@ -431,25 +431,102 @@ class Node(object):
     configured and launched.
     """
 
-    # Fields:
-    # _config
-    # _builder
-    # _controller
-    # _network
-
-    ########
-    # Users are expected to call these:
-
-    def __init__(self, network: Network, config: NodeConfig):
+    def __init__(self, network: Network, config: NodeConfig, nodenum: int):
         """Create a new Node.
 
         This should generally only be called by Network, to create a node as
         it's being added.
         """
+        # chutney's internal node number for the node
+        self.nodenum: int = nodenum
+
         self._network = network
         self._config = config
         self._builder: Optional[LocalNodeBuilder] = None
         self._controller: Optional[LocalNodeController] = None
+
+    @property
+    def orport(self) -> int:
+        """OrPort that this node exposes"""
+        return self._network.orport_base + self.nodenum
+
+    @property
+    def controlport(self) -> int:
+        """ControlPort that this node exposes"""
+        return self._network.controlport_base + self.nodenum
+
+    @property
+    def socksport(self) -> int:
+        """SocksPort that this node exposes"""
+        return self._network.socksport_base + self.nodenum
+
+    @property
+    def dirport(self) -> int:
+        """DirPort that this node exposes"""
+        return self._network.dirport_base + self.nodenum
+
+    @property
+    def extorport(self) -> int:
+        """Extended ORPort that this node exposes"""
+        return self._network.extorport_base + self.nodenum
+
+    @property
+    def ptport(self) -> int:
+        """Port to listen on as a pluggble transport bridge (ServerTransportListenAddr)"""
+        return self._network.ptport_base + self.nodenum
+
+    @property
+    def dir(self) -> Path:
+        """Directory where this node stores its configuration and data (DataDirectory)"""
+        return Path(
+            self._config.net_base_dir,
+            "nodes",
+            "%03d%s" % (self.nodenum, self._config.tag),
+        ).resolve()
+
+    @property
+    def torrc_fname(self) -> str:
+        return f"{self.dir}/torrc"
+
+    @property
+    def controlsocket(self) -> Optional[Path]:
+        """ControlSocket that this node exposes"""
+        if self._config.enable_controlsocket:
+            return self.dir.joinpath("control")
+        else:
+            return None
+
+    @property
+    def nick(self) -> str:
+        """Nickname for this node on the network (debugging only)"""
+        return "test%03d%s" % (self.nodenum, self._config.tag)
+
+    @property
+    def auth_passphrase(self) -> str:
+        """Obsoleted by CookieAuthentication"""
+        # TODO: remove?
+        return self.nick  # OMG TEH SECURE!
+
+    @property
+    def lockfile(self) -> Path:
+        """Path to this node's lockfile"""
+        return Path(self.dir, "lock")
+
+    @property
+    def pidfile(self) -> Path:
+        """Path to this node's PidFile"""
+        return Path(self.dir, "pid")
+
+    # A hs generates its key on first run,
+    # so check for it at the last possible moment,
+    # but cache it in memory to avoid repeatedly reading the file
+    # XXXX - this is not like the other functions in this class,
+    # as it reads from a file created by the hidden service
+    @property
+    def hs_hostname(self) -> str:
+        """Generated hostname for this hidden service"""
+        # Call memoized helper function.
+        return _hs_hostname(Path(self.dir, self._config.hs_directory))
 
     ######
     # Chutney uses these:
@@ -472,14 +549,8 @@ class Node(object):
         to start it, stop it, see if it's running, etc.)
         """
         if self._controller is None:
-            self._controller = LocalNodeController(self._network, self._config)
+            self._controller = LocalNodeController(self._network, self)
         return self._controller
-
-    def setNodenum(self, num: int) -> None:
-        """Assign a value to the 'nodenum' element of this node.  Each node
-        in a network gets its own nodenum.
-        """
-        self._config.nodenum = num
 
 
 class NodeBuilder:
@@ -573,7 +644,7 @@ class LocalNodeBuilder(NodeBuilder):
         """
         global torrc_option_warn_count
 
-        fn_out = self._node._config.torrc_fname
+        fn_out = self._node.torrc_fname
         output = self._getTorrcContents()
         if checkOnly:
             # XXXX Is it time-consuming to format? If so, cache here.
@@ -685,7 +756,7 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _makeDataDir(self) -> None:
         """Create the data directory (with keys subdirectory) for this node."""
-        datadir = check_type(self._node._config.dir, Path)
+        datadir = check_type(self._node.dir, Path)
         make_datadir_subdirectory(datadir, "keys")
 
     def _makeHiddenServiceDir(self) -> None:
@@ -695,20 +766,20 @@ class LocalNodeBuilder(NodeBuilder):
         key. It is combined with the 'dir' data directory key to yield the
         path to the hidden service directory.
         """
-        datadir = self._node._config.dir
+        datadir = self._node.dir
         make_datadir_subdirectory(datadir, self._node._config.hs_directory)
 
     def _genAuthorityKey(self) -> None:
         """Generate an authority identity and signing key for this authority,
         if they do not already exist."""
-        datadir = self._node._config.dir
+        datadir = self._node.dir
         tor_gencert = self._node._config.tor_gencert
         lifetime = self._node._config.auth_cert_lifetime
         idfile = Path(datadir, "keys", "authority_identity_key")
         skfile = Path(datadir, "keys", "authority_signing_key")
         certfile = Path(datadir, "keys", "authority_certificate")
-        addr = f"{self._node._config.ip}:{self._node._config.dirport}"
-        passphrase = self._node._config.auth_passphrase
+        addr = f"{self._node._config.ip}:{self._node.dirport}"
+        passphrase = self._node.auth_passphrase
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
         cmdline = [
@@ -730,7 +801,7 @@ class LocalNodeBuilder(NodeBuilder):
         # nicknames are testNNNaa[OLD], but we want them to look tidy
         print(
             "Creating identity key for {:12} with {}".format(
-                self._node._config.nick, cmdline[0]
+                self._node.nick, cmdline[0]
             )
         )
         debug("Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline)))
@@ -740,9 +811,9 @@ class LocalNodeBuilder(NodeBuilder):
         """Generate an identity key for this router, unless we already have,
         and set up the 'fingerprint' entry in the Environ.
         """
-        datadir = self._node._config.dir
+        datadir = self._node.dir
         tor = self._node._config.tor
-        torrc = self._node._config.torrc_fname
+        torrc = self._node.torrc_fname
         cmdline: list[str] = [
             tor,
             "--ignore-missing-torrc",
@@ -788,7 +859,7 @@ class LocalNodeBuilder(NodeBuilder):
         if not self._node._config.authority:
             return ("", ("", ""))
 
-        datadir = self._node._config.dir
+        datadir = self._node.dir
         certfile = Path(datadir, "keys", "authority_certificate")
         v3id = None
         with certfile.open(mode="r") as f:
@@ -821,8 +892,8 @@ class LocalNodeBuilder(NodeBuilder):
         for authopt in options:
             authlines += "%s %s orport=%s" % (
                 authopt,
-                self._node._config.nick,
-                self._node._config.orport,
+                self._node.nick,
+                self._node.orport,
             )
             # It's ok to give an authority's IPv6 address to an IPv4-only
             # client or relay: it will and must ignore it
@@ -830,29 +901,29 @@ class LocalNodeBuilder(NodeBuilder):
             if self._node._config.ipv6_addr is not None:
                 authlines += " ipv6=%s:%s" % (
                     self._node._config.ipv6_addr,
-                    self._node._config.orport,
+                    self._node.orport,
                 )
             authlines += " %s %s:%s %s\n" % (
                 self._node._config.dirserver_flags,
                 self._node._config.ip,
-                self._node._config.dirport,
+                self._node.dirport,
                 self._node._config.fingerprint,
             )
 
         # generate arti configuartion if supported
         arti_lines = ("", "")
         if arti:
-            addrs = '"%s:%s"' % (self._node._config.ip, self._node._config.orport)
+            addrs = '"%s:%s"' % (self._node._config.ip, self._node.orport)
             if self._node._config.ipv6_addr is not None:
                 addrs += ', "%s:%s"' % (
                     self._node._config.ipv6_addr,
-                    self._node._config.orport,
+                    self._node.orport,
                 )
             elts = {
                 "fp": self._node._config.fingerprint.replace(" ", ""),
                 "ed_fp": self._node._config.fingerprint_ed25519,
                 "orports": addrs,
-                "nick": self._node._config.nick,
+                "nick": self._node.nick,
                 "v3id": v3id,
             }
             arti_lines = (
@@ -881,12 +952,12 @@ class LocalNodeBuilder(NodeBuilder):
             return ("", "")
 
         if self._node._config.pt_bridge:
-            port = self._node._config.ptport
+            port = self._node.ptport
             transport = self._node._config.pt_transport
             extra = self._node._config.pt_extra
         else:
             # the orport is the same on IPv4 and IPv6
-            port = self._node._config.orport
+            port = self._node.orport
             transport = ""
             extra = ""
 
@@ -912,10 +983,10 @@ class LocalNodeBuilder(NodeBuilder):
 
 class LocalNodeController(NodeController):
 
-    def __init__(self, network: Network, config: NodeConfig):
+    def __init__(self, network: Network, node: Node):
         NodeController.__init__(self)
         self._network = network
-        self._config = config
+        self._node = node
         self.most_recent_oniondesc_status: Optional[tuple[int, str, str]] = None
         self.most_recent_bootstrap_status: Optional[tuple[int, str, str]] = None
 
@@ -928,7 +999,7 @@ class LocalNodeController(NodeController):
 
         Raises a ValueError if the file appears to be corrupt.
         """
-        datadir = self._config.dir
+        datadir = self._node.dir
         key_file = Path(datadir, "keys", "ed25519_master_id_public_key")
         # If we're called early during bootstrap, the file won't have been
         # created yet. (And some very old tor versions don't have ed25519.)
@@ -970,44 +1041,46 @@ class LocalNodeController(NodeController):
 
     def getNick(self) -> str:
         """Return the nickname for this node."""
-        return check_type(self._config.nick, str)
+        return check_type(self._node.nick, str)
 
     def getBridge(self) -> int:
         """Return the bridge (relay) flag for this node."""
         try:
-            return check_type(self._config.bridge, int)
+            return check_type(self._node._config.bridge, int)
         except KeyError:
             return 0
 
     def getEd25519Id(self) -> Optional[str]:
         """Return the base64-encoded ed25519 public key of this node."""
         try:
-            return self._config.ed25519_id
+            return self._node._config.ed25519_id
         except KeyError:
             ed25519_id = self._loadEd25519Id()
             # cache a copy for later
             if ed25519_id is not None:
-                self._config.ed25519_id = ed25519_id
+                self._node._config.ed25519_id = ed25519_id
             return ed25519_id
 
     def getBridgeClient(self) -> bool:
         """Return the bridge client flag for this node."""
         try:
-            return bool(check_type(self._config.bridgeclient, Union[int, bool]))
+            return bool(check_type(self._node._config.bridgeclient, Union[int, bool]))
         except KeyError:
             return False
 
     def getBridgeAuthority(self) -> bool:
         """Return the bridge authority flag for this node."""
         try:
-            return bool(check_type(self._config.bridgeauthority, Union[int, bool]))
+            return bool(
+                check_type(self._node._config.bridgeauthority, Union[int, bool])
+            )
         except KeyError:
             return False
 
     def getAuthority(self) -> bool:
         """Return the authority flag for this node."""
         try:
-            return bool(check_type(self._config.authority, Union[int, bool]))
+            return bool(check_type(self._node._config.authority, Union[int, bool]))
         except KeyError:
             return False
 
@@ -1024,7 +1097,7 @@ class LocalNodeController(NodeController):
         The relay flag is set on authorities, relays, and bridges.
         """
         try:
-            return bool(check_type(self._config.relay, Union[int, bool]))
+            return bool(check_type(self._node._config.relay, Union[int, bool]))
         except KeyError:
             return False
 
@@ -1036,11 +1109,11 @@ class LocalNodeController(NodeController):
 
     def isOnionService(self) -> bool:
         """Is this node an onion service?"""
-        if self._config.tag.startswith("h"):
+        if self._node._config.tag.startswith("h"):
             return True
 
         try:
-            return bool(check_type(self._config.hs, Union[int, bool]))
+            return bool(check_type(self._node._config.hs, Union[int, bool]))
         except KeyError:
             return False
 
@@ -1070,7 +1143,7 @@ class LocalNodeController(NodeController):
 
     def isLegacyTorVersion(self) -> bool:
         """Is the current Tor version 0.3.5 or earlier?"""
-        tor = self._config.tor
+        tor = self._node._config.tor
         tor_version = get_tor_version(tor)
         min_version = LocalNodeController.MIN_TOR_VERSION_FOR_TIMING_FIX
 
@@ -1115,7 +1188,7 @@ class LocalNodeController(NodeController):
         """Read the pidfile, and return the pid of the running process.
         Returns None if there is no pid in the file.
         """
-        pidfile = Path(self._config.pidfile)
+        pidfile = Path(self._node.pidfile)
         if not pidfile.exists():
             return None
 
@@ -1155,12 +1228,12 @@ class LocalNodeController(NodeController):
         """
         # XXX Split this into "check" and "print" parts.
         pid = self.getPid()
-        nick = self._config.nick
-        datadir = self._config.dir
+        nick = self._node.nick
+        datadir = self._node.dir
         corefile = None
         if pid:
             corefile = "core.%d" % pid
-        tor_version = get_tor_version(self._config.tor)
+        tor_version = get_tor_version(self._node._config.tor)
         if self.isRunning(pid):
             if listRunning:
                 # PIDs are typically 65535 or less
@@ -1184,7 +1257,7 @@ class LocalNodeController(NodeController):
     def hup(self) -> bool:
         """Send a SIGHUP to this node, if it's running."""
         pid = self.getPid()
-        nick = self._config.nick
+        nick = self._node.nick
         if pid is not None and self.isRunning(pid):
             print("Sending sighup to {}".format(nick))
             os.kill(pid, signal.SIGHUP)
@@ -1197,10 +1270,10 @@ class LocalNodeController(NodeController):
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
 
         if self.isRunning():
-            print("{:12} is already running".format(self._config.nick))
+            print("{:12} is already running".format(self._node.nick))
             return
-        tor_path = self._config.tor
-        torrc = self._config.torrc_fname
+        tor_path = self._node._config.tor
+        torrc = self._node.torrc_fname
         cmdline = [
             tor_path,
             "-f",
@@ -1215,7 +1288,7 @@ class LocalNodeController(NodeController):
             # We expect the parent process to have exited with code 0.
             if p.returncode != 0:
                 raise ChutneyError(
-                    f"Couldn't launch {self._config.nick:12}"
+                    f"Couldn't launch {self._node.nick:12}"
                     + f" command '{' '.join(cmdline)}': "
                     + f" exit {p.returncode},"
                     + f" output '{stdouterr}'"
@@ -1231,39 +1304,39 @@ class LocalNodeController(NodeController):
             # avoid writing a newline or space when polling
             # so output comes out neatly
             print(".", end="", flush=True)
-            assert self._config.poll_launch_time is not None
-            time.sleep(self._config.poll_launch_time)
+            assert self._node._config.poll_launch_time is not None
+            time.sleep(self._node._config.poll_launch_time)
             p.poll()
             if p.returncode is not None:
                 # Process unexpectedly exited
                 raise ChutneyError(
-                    f"'{self._config.nick:12}' unexpectedly exited with code {p.returncode}."
+                    f"'{self._node.nick:12}' unexpectedly exited with code {p.returncode}."
                     + f" command '{' '.join(cmdline)}'"
-                    + f" after waiting {self._config.poll_launch_time} seconds for launch"
+                    + f" after waiting {self._node._config.poll_launch_time} seconds for launch"
                 )
 
     def stop(self, sig: int = signal.SIGINT) -> None:
         """Try to stop this node by sending it the signal 'sig'."""
         pid = self.getPid()
         if pid is None or not self.isRunning(pid):
-            print("{:12} is not running".format(self._config.nick))
+            print("{:12} is not running".format(self._node.nick))
             return
         os.kill(pid, sig)
 
     def cleanup_lockfile(self) -> None:
         """Remove lock file if this node is no longer running."""
-        lf = Path(self._config.lockfile)
+        lf = Path(self._node.lockfile)
         if not self.isRunning() and lf.exists():
-            debug("Removing stale lock file for {} ...".format(self._config.nick))
+            debug("Removing stale lock file for {} ...".format(self._node.nick))
             os.remove(lf)
 
     def cleanup_pidfile(self) -> None:
         """Move PID file to pidfile.old if this node is no longer running
         so that we don't try to stop the node again.
         """
-        pidfile = Path(self._config.pidfile)
+        pidfile = Path(self._node.pidfile)
         if not self.isRunning() and pidfile.exists():
-            debug("Renaming stale pid file for {} ...".format(self._config.nick))
+            debug("Renaming stale pid file for {} ...".format(self._node.nick))
             pidfile.rename(pidfile.with_suffix(".old"))
 
     def waitOnLaunch(self) -> bool:
@@ -1271,7 +1344,7 @@ class LocalNodeController(NodeController):
         # TODO: is this the best place for this code?
         # RunAsDaemon default is 0
         runAsDaemon = False
-        with open(self._config.torrc_fname, "r") as f:
+        with open(self._node.torrc_fname, "r") as f:
             for line in f.readlines():
                 stline = line.strip()
                 # if the line isn't all whitespace or blank
@@ -1288,17 +1361,19 @@ class LocalNodeController(NodeController):
                         runAsDaemon = True
         if runAsDaemon:
             # we must use wait() instead of poll()
-            self._config.poll_launch_time = None
+            self._node._config.poll_launch_time = None
             return True
         else:
             # we must use poll() instead of wait()
-            if self._config.poll_launch_time is None:
-                self._config.poll_launch_time = self._config.poll_launch_time_default
+            if self._node._config.poll_launch_time is None:
+                self._node._config.poll_launch_time = (
+                    self._node._config.poll_launch_time_default
+                )
             return False
 
     def getLogfile(self, info: bool = False) -> Path:
         """Return the expected path to the logfile for this instance."""
-        datadir = check_type(self._config.dir, Path)
+        datadir = check_type(self._node.dir, Path)
         if info:
             logname = "info.log"
         else:
@@ -1462,7 +1537,7 @@ class LocalNodeController(NodeController):
         """
         to_bridge_client = self.getBridgeClient()
         to_bridge_auth = self.getBridgeAuthority()
-        datadir = self._config.dir
+        datadir = self._node.dir
         to_dir_server = self.getDirServer()
 
         desc = Path(datadir, "cached-descriptors")
@@ -1524,7 +1599,7 @@ class LocalNodeController(NodeController):
         for node in self._network._nodes:
             if node._config.launch_phase > launch_phase:
                 continue
-            nick = check_type(node._config.nick, str)
+            nick = check_type(node.nick, str)
             controller = node.getController()
             node_files = controller.getNodeCacheDirInfoPaths(consensus_member)
             # skip empty file lists
@@ -2067,8 +2142,6 @@ class NodeConfig:
     exit: bool = False
 
     # XXX These gets set dynamically. make `Optional`? and/or "private"? and/or properties?
-    # chutney's internal node number for the node
-    nodenum: int = 0
     fingerprint: str = ""
     fingerprint_ed25519: str = ""
     ed25519_id: str = ""
@@ -2144,90 +2217,9 @@ class NodeConfig:
     enable_controlsocket: bool = getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True)
 
     @property
-    def torrc_fname(self) -> str:
-        return f"{self.dir}/torrc"
-
-    @property
-    def orport(self) -> int:
-        """OrPort that this node exposes"""
-        return self.network.orport_base + self.nodenum
-
-    @property
-    def controlsocket(self) -> Optional[Path]:
-        """ControlSocket that this node exposes"""
-        if self.enable_controlsocket:
-            return self.dir.joinpath("control")
-        else:
-            return None
-
-    @property
-    def controlport(self) -> int:
-        """ControlPort that this node exposes"""
-        return self.network.controlport_base + self.nodenum
-
-    @property
-    def socksport(self) -> int:
-        """SocksPort that this node exposes"""
-        return self.network.socksport_base + self.nodenum
-
-    @property
-    def dirport(self) -> int:
-        """DirPort that this node exposes"""
-        return self.network.dirport_base + self.nodenum
-
-    @property
-    def extorport(self) -> int:
-        """Extended ORPort that this node exposes"""
-        return self.network.extorport_base + self.nodenum
-
-    @property
-    def ptport(self) -> int:
-        """Port to listen on as a pluggble transport bridge (ServerTransportListenAddr)"""
-        return self.network.ptport_base + self.nodenum
-
-    @property
-    def dir(self) -> Path:
-        """Directory where this node stores its configuration and data (DataDirectory)"""
-        return Path(
-            self.net_base_dir, "nodes", "%03d%s" % (self.nodenum, self.tag)
-        ).resolve()
-
-    @property
-    def nick(self) -> str:
-        """Nickname for this node on the network (debugging only)"""
-        return "test%03d%s" % (self.nodenum, self.tag)
-
-    @property
     def tor_gencert(self) -> str:
         """name or path of the tor-gencert binary (if present)"""
         return os.getenv("CHUTNEY_TOR_GENCERT", self.tor + "-gencert")
-
-    @property
-    def auth_passphrase(self) -> str:
-        """Obsoleted by CookieAuthentication"""
-        # TODO: remove?
-        return self.nick  # OMG TEH SECURE!
-
-    @property
-    def lockfile(self) -> Path:
-        """Path to this node's lockfile"""
-        return Path(self.dir, "lock")
-
-    @property
-    def pidfile(self) -> Path:
-        """Path to this node's PidFile"""
-        return Path(self.dir, "pid")
-
-    # A hs generates its key on first run,
-    # so check for it at the last possible moment,
-    # but cache it in memory to avoid repeatedly reading the file
-    # XXXX - this is not like the other functions in this class,
-    # as it reads from a file created by the hidden service
-    @property
-    def hs_hostname(self) -> str:
-        """Generated hostname for this hidden service"""
-        # Call memoized helper function.
-        return _hs_hostname(Path(self.dir, self.hs_directory))
 
     # XXX Move template logic into template
     @property
@@ -2347,8 +2339,7 @@ class Network(object):
     def addNode(self, config: NodeConfig) -> Node:
         """Create a node with the given config, add it to the network, and return it."""
         assert config.network is self, "Node was created from a different Network"
-        node = Node(self, config)
-        node.setNodenum(self._nextnodenum)
+        node = Node(self, config, self._nextnodenum)
         self._nextnodenum += 1
         self._nodes.append(node)
         if node._config.bridgeauthority:

@@ -28,25 +28,25 @@ TestingMinExitFlagThreshold 0
 #Default VoteOnHidServDirectoriesV2 1
 
 ## Options that we always want to test ##
-DataDirectory {n._config.dir}
+DataDirectory {n.dir}
 RunAsDaemon 1
 ConnLimit {n._config.connlimit}
-Nickname {n._config.nick}
+Nickname {n.nick}
 # Let tor close connections gracefully before exiting
 ShutdownWaitLength 2
 DisableDebuggerAttachment 0
 
 AddressDisableIPv6 {int(n._config.disableipv6)}
-ControlPort {n._config.controlport}
+ControlPort {n.controlport}
 # Use ControlSocket rather than ControlPort unix: to support older tors
-ControlSocket {n._config.controlsocket or 0}
+ControlSocket {n.controlsocket or 0}
 CookieAuthentication 1
-PidFile {n._config.dir}/pid
+PidFile {n.dir}/pid
 
-Log notice file {n._config.dir}/notice.log
-Log info file {n._config.dir}/info.log
+Log notice file {n.dir}/notice.log
+Log info file {n.dir}/info.log
 # Turn this off to save space
-#Log debug file {n._config.dir}/debug.log
+#Log debug file {n.dir}/debug.log
 ProtocolWarnings 1
 SafeLogging 0
 LogTimeGranularity 1

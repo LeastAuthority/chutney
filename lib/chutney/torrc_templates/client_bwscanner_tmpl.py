@@ -5,7 +5,7 @@ from . import common_i
 def format(n: Node) -> str:
     return f"""\
 {common_i.format(n)}
-SocksPort {n._config.socksport}
+SocksPort {n.socksport}
 UseEntryGuards 0
 UseMicroDescriptors 0
 FetchDirInfoEarly 1

@@ -6,7 +6,7 @@ def format(n: Node) -> str:
     return f"""\
 {common_i.format(n)}
 SocksPort 0
-OrPort {n._config.orport}{" IPv4Only" if n._config.disableipv6 else ""}
+OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
 Address {n._config.ip}
 
 # Must be included before exit-v{{4,6}}.i

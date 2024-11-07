@@ -8,7 +8,7 @@ def format(n: Node) -> str:
 SocksPort 0
 Address {n._config.ip}
 
-HiddenServiceDir {n._config.dir}/hidden_service
+HiddenServiceDir {n.dir}/hidden_service
 
 # Redirect requests to the port used by chutney verify
 HiddenServicePort 5858 127.0.0.1:4747
