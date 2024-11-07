@@ -1,4 +1,4 @@
-from chutney.TorNet import TorEnviron
+from chutney.TorNet import TorEnviron, V3_AUTH_VOTING_INTERVAL
 
 
 def format(env: TorEnviron) -> str:
@@ -32,8 +32,7 @@ TestingV3AuthInitialDistDelay 4
 # Vote + Dist must be less than Interval/2, because when there's no consensus,
 # tor uses Interval/2 as the voting interval
 #
-# Keep in sync with lib/chutney/network_tests/verify.py V3_AUTH_VOTING_INTERVAL
-V3AuthVotingInterval 20
+V3AuthVotingInterval {V3_AUTH_VOTING_INTERVAL}
 V3AuthVoteDelay 4
 V3AuthDistDelay 4
 

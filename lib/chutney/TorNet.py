@@ -42,7 +42,6 @@ from typeguard import check_type, TypeCheckError
 import chutney.Host
 import chutney.Util
 
-# Keep in sync with torrc_templates/authority.i V3AuthVotingInterval
 V3_AUTH_VOTING_INTERVAL = 20.0
 
 _TOR_VERSIONS = None
