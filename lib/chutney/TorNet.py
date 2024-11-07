@@ -440,6 +440,13 @@ class Node(object):
         # chutney's internal node number for the node
         self.nodenum: int = nodenum
 
+        # These gets set by Builder.preConfigBuild.
+        # TODO: make `Optional` and init to `None`?
+        # TODO: move onto the builder? Or a "builder output" field?
+        self.fingerprint: str = ""
+        self.fingerprint_ed25519: str = ""
+        self.ed25519_id: str = ""
+
         self._network = network
         self._config = config
         self._builder: Optional[LocalNodeBuilder] = None
@@ -833,14 +840,14 @@ class LocalNodeBuilder(NodeBuilder):
                     repr(" ".join(cmdline)), repr(stdouterr)
                 )
             )
-        self._node._config.fingerprint = fingerprint
+        self._node.fingerprint = fingerprint
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
         if os.path.exists(ed_fn):
             s = open(ed_fn).read().strip().split()[1]
-            self._node._config.fingerprint_ed25519 = s
+            self._node.fingerprint_ed25519 = s
         else:
-            self._node._config.fingerprint_ed25519 = ""
+            self._node.fingerprint_ed25519 = ""
 
     def _getAltAuthLines(
         self, hasbridgeauth: bool = False
@@ -907,7 +914,7 @@ class LocalNodeBuilder(NodeBuilder):
                 self._node._config.dirserver_flags,
                 self._node._config.ip,
                 self._node.dirport,
-                self._node._config.fingerprint,
+                self._node.fingerprint,
             )
 
         # generate arti configuartion if supported
@@ -920,8 +927,8 @@ class LocalNodeBuilder(NodeBuilder):
                     self._node.orport,
                 )
             elts = {
-                "fp": self._node._config.fingerprint.replace(" ", ""),
-                "ed_fp": self._node._config.fingerprint_ed25519,
+                "fp": self._node.fingerprint.replace(" ", ""),
+                "ed_fp": self._node.fingerprint_ed25519,
                 "orports": addrs,
                 "nick": self._node.nick,
                 "v3id": v3id,
@@ -967,7 +974,7 @@ class LocalNodeBuilder(NodeBuilder):
             transport,
             self._node._config.ip,
             port,
-            self._node._config.fingerprint,
+            self._node.fingerprint,
             extra,
         )
         if self._node._config.ipv6_addr is not None:
@@ -975,7 +982,7 @@ class LocalNodeBuilder(NodeBuilder):
                 transport,
                 self._node._config.ipv6_addr,
                 port,
-                self._node._config.fingerprint,
+                self._node.fingerprint,
                 extra,
             )
         return ("Bridge " + bridgelines, bridgelines)
@@ -1053,12 +1060,12 @@ class LocalNodeController(NodeController):
     def getEd25519Id(self) -> Optional[str]:
         """Return the base64-encoded ed25519 public key of this node."""
         try:
-            return self._node._config.ed25519_id
+            return self._node.ed25519_id
         except KeyError:
             ed25519_id = self._loadEd25519Id()
             # cache a copy for later
             if ed25519_id is not None:
-                self._node._config.ed25519_id = ed25519_id
+                self._node.ed25519_id = ed25519_id
             return ed25519_id
 
     def getBridgeClient(self) -> bool:
@@ -2136,11 +2143,6 @@ class NodeConfig:
     # Whether this node is configured as an exit.
     # (should agree with `torrc`)
     exit: bool = False
-
-    # XXX These gets set dynamically. make `Optional`? and/or "private"? and/or properties?
-    fingerprint: str = ""
-    fingerprint_ed25519: str = ""
-    ed25519_id: str = ""
 
     # authority: whether a node is an authority or bridge authority
     authority: bool = False
