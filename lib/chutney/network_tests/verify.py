@@ -94,8 +94,8 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
     )
     client_list = list(
         filter(
-            lambda n: n._config.tag.startswith("c")
-            or n._config.tag.startswith("bc")
+            lambda n: n.tag.startswith("c")
+            or n.tag.startswith("bc")
             or n._config.client,
             network._nodes,
         )
@@ -103,7 +103,7 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
     exit_list = list(filter(lambda n: n._config.exit, network._nodes))
     hs_list = list(
         filter(
-            lambda n: n._config.tag.startswith("h") or n._config.hs,
+            lambda n: n.tag.startswith("h") or n._config.hs,
             network._nodes,
         )
     )

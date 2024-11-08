@@ -4,8 +4,6 @@ Attempt to use chutney as a module.
 """
 
 import os
-# XXX: make this a parameter again
-os.environ["CHUTNEY_CONTROLLING_PID"] = str(os.getpid())
 
 from chutney import TorNet
 from chutney.TorNet import NodeConfig
@@ -13,9 +11,10 @@ from chutney.network_tests import verify
 
 network = TorNet.Network()
 
-Authority = NodeConfig(tag="a", authority=1, relay=1, torrc="authority.tmpl")
-ExitRelay = NodeConfig(tag="r", relay=1, exit=1, torrc="relay.tmpl")
-Client = NodeConfig(tag="c", client=1, torrc="client.tmpl")
+base = NodeConfig(controlling_pid=os.getpid())
+Authority = base.specialize(tag="a", authority=1, relay=1, torrc="authority.tmpl")
+ExitRelay = base.specialize(tag="r", relay=1, exit=1, torrc="relay.tmpl")
+Client = base.specialize(tag="c", client=1, torrc="client.tmpl")
 
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 

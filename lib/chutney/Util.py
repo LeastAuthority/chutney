@@ -11,7 +11,7 @@ import os
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, TypeVar, Any, Optional, overload, Generic
+from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union
 from typing_extensions import ParamSpec
 
 P = ParamSpec("P")
@@ -62,6 +62,8 @@ class Option(Generic[T]):
         """Asserts v is not None and returns it"""
         if self._val is not None:
             return self._val
+        if not isinstance(failure_msg, str):
+            failure_msg = failure_msg()
         raise AssertionError(failure_msg)
 
     def as_optional(self) -> Optional[T]:

@@ -440,6 +440,15 @@ class Node(object):
         # chutney's internal node number for the node
         self.nodenum: int = nodenum
 
+        # Validate some fields. NodeConfig permits these to be None
+        # for use with templating; e.g. NodeConfig.specialize.
+        self.torrc: str = Option(config.torrc).unwrap(
+            lambda: f"Config is missing 'torrc': {config}"
+        )
+        self.tag: str = Option(config.tag).unwrap(
+            lambda: f"Config is missing 'tag': {config}"
+        )
+
         # These gets set by Builder.preConfigBuild.
         # TODO: make `Optional` and init to `None`?
         # TODO: move onto the builder? Or a "builder output" field?
@@ -697,13 +706,11 @@ class LocalNodeBuilder(NodeBuilder):
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
         # TODO: Maybe make this a (big) explicit `match` statement?
-        module_name = self._node._config.torrc.translate({ord("."): "_", ord("-"): "_"})
+        module_name = self._node.torrc.translate({ord("."): "_", ord("-"): "_"})
         try:
             mod = importlib.import_module("chutney.torrc_templates." + module_name)
         except ModuleNotFoundError as e:
-            raise ChutneyError(
-                f"Unrecognized torrc_template {self._node._config.torrc}"
-            ) from e
+            raise ChutneyError(f"Unrecognized torrc_template {self._node.torrc}") from e
         try:
             f = check_type(getattr(mod, "format"), Callable[[Node], str])
         except (AttributeError, TypeCheckError) as e:
@@ -1109,7 +1116,7 @@ class LocalNodeController(NodeController):
 
     def isOnionService(self) -> bool:
         """Is this node an onion service?"""
-        if self._node._config.tag.startswith("h"):
+        if self._node.tag.startswith("h"):
             return True
 
         try:
@@ -2117,14 +2124,14 @@ class NodeConfig:
     # when loading the module.
     # TODO: Get rid of this and build the config file based on other attributes
     # like "client", "exit", etc.
-    torrc: str
+    torrc: Optional[str] = None
     # a short text string that represents the type of node.
     # Some special tag prefixes:
     # * 'h' configures it to run an onion service.
     # * 'c' and 'bc' cause the `verify` test to recognize it as a client.
     #   (as does setting the `client` attribute).
     # TODO: Get rid of these special tag meanings in favor of explicit attributes.
-    tag: str
+    tag: Optional[str] = None
     # Whether this node is configured to use a bridge.
     # (should agree with `torrc`)
     bridgeclient: bool = False
