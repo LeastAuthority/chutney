@@ -92,8 +92,8 @@ from __future__ import unicode_literals
 # stringification.
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Optional, Iterable
+from chutney.Util import find_on_path
+from typing import Any, Optional
 
 import abc
 import importlib
@@ -300,33 +300,6 @@ class IncluderDict(_DictWrapper):
 
     def getUpdateTime(self):
         return self._st_mtime
-
-
-def find_on_path(
-    basename: str, path: Optional[Iterable[Path]] = None
-) -> Optional[Path]:
-    """Find the first occurrence of `basename` in `path`
-
-    Uses the `PATH` environment variable if `path` is not provided.
-    """
-    _path: Iterable[Path]
-    if path is None:
-        env_path = os.getenv("PATH")
-        if env_path is None:
-            _path = []
-        else:
-            _path = map(Path, env_path.split(":"))
-    else:
-        _path = path
-    for location in _path:
-        p = Path(location, basename)
-        try:
-            s = p.stat()
-            if s and s.st_mode & 0x111:
-                return p
-        except OSError:
-            pass
-    return None
 
 
 class PathDict(_DictWrapper):

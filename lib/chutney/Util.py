@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 import os
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Callable, TypeVar, Any, Optional, overload
 from typing_extensions import ParamSpec
 
@@ -120,3 +121,30 @@ def getenv_bool(env_var: str, default: bool) -> bool:
             return False
         else:
             return getenv_type(env_var, default, bool, type_name="a bool")
+
+
+def find_on_path(
+    basename: str, path: Optional[Iterable[Path]] = None
+) -> Optional[Path]:
+    """Find the first occurrence of `basename` in `path`
+
+    Uses the `PATH` environment variable if `path` is not provided.
+    """
+    _path: Iterable[Path]
+    if path is None:
+        env_path = os.getenv("PATH")
+        if env_path is None:
+            _path = []
+        else:
+            _path = map(Path, env_path.split(":"))
+    else:
+        _path = path
+    for location in _path:
+        p = Path(location, basename)
+        try:
+            s = p.stat()
+            if s and s.st_mode & 0x111:
+                return p
+        except OSError:
+            pass
+    return None
