@@ -1,10 +1,8 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
+    return """\
 # Must be included after relay-non-exit.tmpl
 ExitRelay 1
 
@@ -39,5 +37,3 @@ ExitPolicy accept *:*
 # ------------------------------------------------------------------
 ExitPolicy reject *:*
 """
-    )
-    return t.format(env)

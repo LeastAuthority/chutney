@@ -1,13 +1,10 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import client_only_v6_md_i, single_onion_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:single-onion.tmpl}
+    return f"""\
+{single_onion_tmpl.format(env)}
 # Onion services are just another kind of client
-${include:client-only-v6-md.i}
+{client_only_v6_md_i.format(env)}
 """
-    )
-    return t.format(env)

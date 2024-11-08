@@ -1,11 +1,10 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import client_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:client.tmpl}
+    return f"""\
+{client_tmpl.format(env)}
 
 UseBridges 1
 
@@ -13,7 +12,5 @@ UseBridges 1
 # But the latest git sources appear to be fine
 #UseMicrodescriptors 0
 
-${bridges}
+{env.network.bridges}
 """
-    )
-    return t.format(env)

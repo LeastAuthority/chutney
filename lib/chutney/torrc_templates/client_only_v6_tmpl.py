@@ -1,12 +1,9 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import client_tmpl, client_only_v6_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:client.tmpl}
-${include:client-only-v6.i}
+    return f"""\
+{client_tmpl.format(env)}
+{client_only_v6_i.format(env)}
 """
-    )
-    return t.format(env)

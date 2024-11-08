@@ -1,12 +1,9 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import relay_non_dir_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:relay-non-dir.tmpl}
-DirPort $dirport
+    return f"""\
+{relay_non_dir_tmpl.format(env)}
+DirPort {env.dirport}
 """
-    )
-    return t.format(env)

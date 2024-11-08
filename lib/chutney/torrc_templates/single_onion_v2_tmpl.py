@@ -1,12 +1,9 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import single_onion_common_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:single-onion-common.i}
+    return f"""\
+{single_onion_common_i.format(env)}
 HiddenServiceVersion 2
 """
-    )
-    return t.format(env)

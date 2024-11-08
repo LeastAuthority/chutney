@@ -1,14 +1,11 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import relay_non_exit_tmpl, orport_v6_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:relay-non-exit.tmpl}
+    return f"""\
+{relay_non_exit_tmpl.format(env)}
 
 # A relay that has an IPv6 ORPort
-${include:orport-v6.i}
+{orport_v6_i.format(env)}
 """
-    )
-    return t.format(env)

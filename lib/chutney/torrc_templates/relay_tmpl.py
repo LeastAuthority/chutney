@@ -1,11 +1,10 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import relay_non_exit_tmpl, exit_v4_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:relay-non-exit.tmpl}
+    return f"""\
+{relay_non_exit_tmpl.format(env)}
 
 # This file is named "relay.tmpl" for compatibility with previous
 # chutney versions
@@ -13,7 +12,5 @@ ${include:relay-non-exit.tmpl}
 # An exit relay that can exit to IPv4 localhost
 # (newer versions of tor need this to be explicitly configured)
 
-${include:exit-v4.i}
+{exit_v4_i.format(env)}
 """
-    )
-    return t.format(env)

@@ -1,18 +1,15 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import common_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:common.i}
+    return f"""\
+{common_i.format(env)}
 SocksPort 0
-Address $ip
+Address {env.ip}
 
-HiddenServiceDir ${dir}/hidden_service
+HiddenServiceDir {env.dir}/hidden_service
 
 # Redirect requests to the port used by chutney verify
 HiddenServicePort 5858 127.0.0.1:4747
 """
-    )
-    return t.format(env)

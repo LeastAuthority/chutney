@@ -1,13 +1,11 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
+    return f"""\
 AuthoritativeDirectory 1
 V3AuthoritativeDirectory 1
-ContactInfo auth${nodenum}@test.test
+ContactInfo auth{env.nodenum}@test.test
 
 # Disable authority to relay/bridge reachability checks
 # These checks happen every half hour, even in testing networks
@@ -41,5 +39,3 @@ V3AuthDistDelay 4
 
 ConsensusParams cc_alg=2
 """
-    )
-    return t.format(env)

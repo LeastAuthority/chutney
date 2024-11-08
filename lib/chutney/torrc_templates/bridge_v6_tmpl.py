@@ -1,14 +1,11 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import bridge_tmpl, orport_v6_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:bridge.tmpl}
+    return f"""\
+{bridge_tmpl.format(env)}
 
 # A bridge that has an IPv6 ORPort
-${include:orport-v6.i}
+{orport_v6_i.format(env)}
 """
-    )
-    return t.format(env)

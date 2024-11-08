@@ -1,13 +1,10 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import hs_v2_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
+    return f"""\
 # This file is a backwards-compatibility redirect
 # Older chutney networks use hs.tmpl for v2 onion services
-${include:hs-v2.tmpl}
+{hs_v2_tmpl.format(env)}
 """
-    )
-    return t.format(env)

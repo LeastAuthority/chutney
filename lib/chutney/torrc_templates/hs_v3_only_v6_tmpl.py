@@ -1,13 +1,10 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import hs_v3_tmpl, client_only_v6_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:hs-v3.tmpl}
+    return f"""\
+{hs_v3_tmpl.format(env)}
 # Hidden services are just another kind of client
-${include:client-only-v6.i}
+{client_only_v6_i.format(env)}
 """
-    )
-    return t.format(env)

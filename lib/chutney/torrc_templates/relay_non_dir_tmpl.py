@@ -1,16 +1,15 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import common_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:common.i}
+    return f"""\
+{common_i.format(env)}
 SocksPort 0
-OrPort $orport_directive
-Address $ip
+OrPort {env.orport_directive}
+Address {env.ip}
 
-# Must be included before exit-v{4,6}.i
+# Must be included before exit-v{{4,6}}.i
 ExitRelay 0
 
 # These options are set here so they apply to IPv4 and IPv6 Exits
@@ -22,7 +21,5 @@ ServerDNSTestAddresses
 # If this option is /dev/null, or any other empty or unreadable file, tor exits
 # will not use DNS. Otherwise, DNS is enabled with this config.
 # (If the following line is commented out, tor uses /etc/resolv.conf.)
-${server_dns_resolv_conf}
+{env.server_dns_resolv_conf}
 """
-    )
-    return t.format(env)

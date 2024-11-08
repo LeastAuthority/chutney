@@ -1,14 +1,11 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import relay_non_exit_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:relay-non-exit.tmpl}
+    return f"""\
+{relay_non_exit_tmpl.format(env)}
 
 Nickname relay1mbyteMAB
 MaxAdvertisedBandwidth 1 MBytes
 """
-    )
-    return t.format(env)

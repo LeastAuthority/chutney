@@ -1,12 +1,11 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import common_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:common.i}
-SocksPort $socksport
+    return f"""\
+{common_i.format(env)}
+SocksPort {env.socksport}
 UseEntryGuards 0
 UseMicroDescriptors 0
 FetchDirInfoEarly 1
@@ -18,5 +17,3 @@ ConnectionPadding 0
 __DisablePredictedCircuits 1
 __LeaveStreamsUnattached 1
 """
-    )
-    return t.format(env)

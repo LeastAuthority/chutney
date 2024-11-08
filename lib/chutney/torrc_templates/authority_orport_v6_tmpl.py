@@ -1,17 +1,14 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import authority_tmpl, orport_v6_i
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:authority.tmpl}
+    return f"""\
+{authority_tmpl.format(env)}
 
 # An authority that has an IPv6 ORPort
-${include:orport-v6.i}
+{orport_v6_i.format(env)}
 
 # And has IPv6 connectivity
 AuthDirHasIPv6Connectivity 1
 """
-    )
-    return t.format(env)

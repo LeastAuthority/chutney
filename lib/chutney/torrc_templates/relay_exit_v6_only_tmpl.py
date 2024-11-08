@@ -1,11 +1,8 @@
-from chutney.Templating import Template
 from chutney.TorNet import TorEnviron
+from . import relay_v6_tmpl
 
 
 def format(env: TorEnviron) -> str:
-    t = Template(
-        """\
-${include:relay-v6.tmpl}
+    return f"""\
+{relay_v6_tmpl.format(env)}
 """
-    )
-    return t.format(env)
