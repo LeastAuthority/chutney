@@ -34,7 +34,7 @@ import time
 import base64
 
 from chutney.Debug import debug_flag, debug
-from chutney.Util import getenv_int, getenv_bool
+from chutney.Util import getenv_int, getenv_bool, Option
 from chutney.network_tests import NetworkTestFailure
 from collections.abc import Collection
 from importlib.abc import Traversable
@@ -443,9 +443,9 @@ class Node(object):
         # These gets set by Builder.preConfigBuild.
         # TODO: make `Optional` and init to `None`?
         # TODO: move onto the builder? Or a "builder output" field?
-        self.fingerprint: str = ""
-        self.fingerprint_ed25519: str = ""
-        self.ed25519_id: str = ""
+        self.fingerprint: Option[str] = Option(None)
+        self.fingerprint_ed25519: Option[str] = Option(None)
+        self.ed25519_id: Option[str] = Option(None)
 
         self._network = network
         self._config = config
@@ -840,14 +840,12 @@ class LocalNodeBuilder(NodeBuilder):
                     repr(" ".join(cmdline)), repr(stdouterr)
                 )
             )
-        self._node.fingerprint = fingerprint
+        self._node.fingerprint.replace(fingerprint)
 
         ed_fn = os.path.join(datadir, "fingerprint-ed25519")
         if os.path.exists(ed_fn):
             s = open(ed_fn).read().strip().split()[1]
-            self._node.fingerprint_ed25519 = s
-        else:
-            self._node.fingerprint_ed25519 = ""
+            self._node.fingerprint_ed25519.replace(s)
 
     def _getAltAuthLines(
         self, hasbridgeauth: bool = False
@@ -914,7 +912,7 @@ class LocalNodeBuilder(NodeBuilder):
                 self._node._config.dirserver_flags,
                 self._node._config.ip,
                 self._node.dirport,
-                self._node.fingerprint,
+                self._node.fingerprint.unwrap(),
             )
 
         # generate arti configuartion if supported
@@ -927,8 +925,8 @@ class LocalNodeBuilder(NodeBuilder):
                     self._node.orport,
                 )
             elts = {
-                "fp": self._node.fingerprint.replace(" ", ""),
-                "ed_fp": self._node.fingerprint_ed25519,
+                "fp": self._node.fingerprint.unwrap().replace(" ", ""),
+                "ed_fp": self._node.fingerprint_ed25519.unwrap(),
                 "orports": addrs,
                 "nick": self._node.nick,
                 "v3id": v3id,
@@ -974,7 +972,7 @@ class LocalNodeBuilder(NodeBuilder):
             transport,
             self._node._config.ip,
             port,
-            self._node.fingerprint,
+            self._node.fingerprint.unwrap(),
             extra,
         )
         if self._node._config.ipv6_addr is not None:
@@ -982,7 +980,7 @@ class LocalNodeBuilder(NodeBuilder):
                 transport,
                 self._node._config.ipv6_addr,
                 port,
-                self._node.fingerprint,
+                self._node.fingerprint.unwrap(),
                 extra,
             )
         return ("Bridge " + bridgelines, bridgelines)
@@ -997,7 +995,7 @@ class LocalNodeController(NodeController):
         self.most_recent_oniondesc_status: Optional[tuple[int, str, str]] = None
         self.most_recent_bootstrap_status: Optional[tuple[int, str, str]] = None
 
-    def _loadEd25519Id(self) -> Optional[str]:
+    def _loadEd25519Id(self) -> Option[str]:
         """
         Read the ed25519 identity key for this router, encode it using
         base64, strip trailing padding, and return it.
@@ -1016,7 +1014,7 @@ class LocalNodeController(NodeController):
                     "File {} does not exist. Are you running a very old tor " "version?"
                 ).format(key_file)
             )
-            return None
+            return Option(None)
 
         EXPECTED_ED25519_FILE_SIZE = 64
         key_file_size = key_file.stat().st_size
@@ -1044,7 +1042,7 @@ class LocalNodeController(NodeController):
                         "matching the expected length of {}"
                     ).format(key_base64_size, EXPECTED_ED25519_BASE64_KEY_SIZE)
                 )
-            return ed25519_id
+            return Option(ed25519_id)
 
     def getNick(self) -> str:
         """Return the nickname for this node."""
@@ -1057,16 +1055,11 @@ class LocalNodeController(NodeController):
         except KeyError:
             return 0
 
-    def getEd25519Id(self) -> Optional[str]:
+    def getEd25519Id(self) -> Option[str]:
         """Return the base64-encoded ed25519 public key of this node."""
-        try:
-            return self._node.ed25519_id
-        except KeyError:
-            ed25519_id = self._loadEd25519Id()
-            # cache a copy for later
-            if ed25519_id is not None:
-                self._node.ed25519_id = ed25519_id
-            return ed25519_id
+        if self._node.ed25519_id.is_none():
+            self._node.ed25519_id = self._loadEd25519Id()
+        return self._node.ed25519_id
 
     def getBridgeClient(self) -> bool:
         """Return the bridge client flag for this node."""
@@ -1641,11 +1634,9 @@ class LocalNodeController(NodeController):
         elif desc:
             return r"^router " + nickname + " "
         elif md:
-            if ed25519_key:
-                return r"^id ed25519 " + re.escape(ed25519_key)
-            else:
-                # If there is no ed25519_id, then we can't search for it
-                return None
+            return ed25519_key.map(
+                lambda s: r"^id ed25519 " + re.escape(s)
+            ).as_optional()
         else:
             raise ChutneyError(f"Invalid dir_format {dir_format}")
 

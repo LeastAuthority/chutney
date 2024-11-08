@@ -1,3 +1,7 @@
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
+
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
@@ -7,11 +11,12 @@ import os
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, TypeVar, Any, Optional, overload
+from typing import Callable, TypeVar, Any, Optional, overload, Generic
 from typing_extensions import ParamSpec
 
 P = ParamSpec("P")
 T = TypeVar("T")
+V = TypeVar("V")
 
 
 def memoized(fn: Callable[P, T]) -> Callable[P, T]:
@@ -31,6 +36,71 @@ def memoized(fn: Callable[P, T]) -> Callable[P, T]:
         return result
 
     return memoized_fn
+
+
+class Option(Generic[T]):
+    """A wrapper for values that may be None
+
+    Modeled after Rust's Option type.  Unlike typing.Optional, this is a real
+    object wrapper that provides methods for safely manipulating the value, and
+    that forces to the user to explicitly extract the inner value.
+
+    The default `__str__` method is overridden to fail at runtime, meaning e.g.
+    `str(Option(val))` will also fail. Calling code must use methods to access
+    the inner value to perform a string conversion. This is done to prevent
+    accidental substitution of a value like "None" in string templates, and to
+    force call-sites of such conversions to be explicit about how to handle the
+    `None` case.
+    """
+
+    def __init__(self, val: Optional[T]):
+        self._val = val
+
+    def unwrap(
+        self, failure_msg: Union[str, Callable[[], str]] = "Unwrapped None"
+    ) -> T:
+        """Asserts v is not None and returns it"""
+        if self._val is not None:
+            return self._val
+        raise AssertionError(failure_msg)
+
+    def as_optional(self) -> Optional[T]:
+        """Returns the value, or None"""
+        return self._val
+
+    def unwrap_or(self, default: T) -> T:
+        return self._val if self._val is not None else default
+
+    def is_some(self) -> bool:
+        return self._val is not None
+
+    def is_none(self) -> bool:
+        return self._val is None
+
+    def replace(self, val: T) -> Optional[T]:
+        """Assigns `val` and returns the previous value"""
+        prev = self._val
+        self._val = val
+        return prev
+
+    def map(self, f: Callable[[T], V]) -> Option[V]:
+        if self._val is None:
+            return Option(None)
+        else:
+            return Option(f(self._val))
+
+    # Suppress string conversion to prevent unchecked usage
+    # in templates, etc. (`repr` still works).
+    #
+    # Python allows assigning `__str__ = None` here, in which case string
+    # conversions will fail at runtime. However doing so requires opting out of
+    # mypy (which requires __str__ to be a callable with the expected
+    # signature), and likewise doesn't have the benefit one might hope of mypy
+    # statically preventing string conversions.
+    def __str__(self) -> str:
+        raise AssertionError(
+            "Option doesn't support str conversion. Get the inner value instead."
+        )
 
 
 @overload
