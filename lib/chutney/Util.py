@@ -8,6 +8,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import os
+import stat
 
 from collections.abc import Iterable
 from pathlib import Path
@@ -195,10 +196,18 @@ def getenv_bool(env_var: str, default: bool) -> bool:
             return getenv_type(env_var, default, bool, type_name="a bool")
 
 
-def find_on_path(
+def find_executable_on_path(
     basename: str, path: Optional[Iterable[Path]] = None
 ) -> Optional[Path]:
-    """Find the first occurrence of `basename` in `path`
+    """Find the first executable file named `basename` in `path`
+
+    Roughly, mostly, emulates bash's PATH search:
+    Returns the first file with *any* executable bit set on the given `path`.
+    Does *not* attempt to fully validate that the current user actually has
+    permission to execute it.
+
+    Unlike bash, skips empty strings and other relative paths in the search
+    path.
 
     Uses the `PATH` environment variable if `path` is not provided.
     """
@@ -212,11 +221,24 @@ def find_on_path(
     else:
         _path = path
     for location in _path:
+        if not location.is_absolute():
+            # Technically relative paths function in shell search of PATH
+            # (at least for bash), including the empty string effectively
+            # meaning "search the current directory".
+            #
+            # We probably don't want that behavior here.
+            continue
         p = Path(location, basename)
+        if not p.is_file():
+            # Not a file
+            continue
+        mode = 0
         try:
-            s = p.stat()
-            if s and s.st_mode & 0x111:
-                return p
+            mode = p.stat().st_mode
         except OSError:
             pass
+        if not (mode & (stat.S_IXOTH | stat.S_IXGRP | stat.S_IXUSR)):
+            # Not executable
+            continue
+        return p
     return None
