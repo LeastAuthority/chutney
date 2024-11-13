@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+
+import glob
+import subprocess
+import sys
+import textwrap
+
+from chutney import TorNet
+from chutney.TorNet import NodeConfig
+from pathlib import Path
+
+network = TorNet.Network()
+
+# Generate configs for all[^1] torrc templates, using their legacy names.
+#
+# [^1]: Except for the ones in the explicit `skip` list; see below.
+configs = [
+    NodeConfig(
+        torrc="authority-orport-v6.tmpl",
+        tag="a",
+        authority=True,
+        relay=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="authority.tmpl",
+        tag="a",
+        authority=True,
+        relay=True,
+    ),
+    NodeConfig(
+        torrc="bridgeauthority.tmpl",
+        tag="ba",
+        authority=True,
+        relay=True,
+        bridgeauthority=True,
+    ),
+    NodeConfig(
+        torrc="bridgeclient-obfs4.tmpl",
+        tag="bc",
+        client=True,
+        # Managed proxies are incompatible with sandboxing
+        sandbox=False,
+    ),
+    NodeConfig(
+        torrc="bridgeclient.tmpl",
+        tag="bc",
+        client=True,
+        # Managed proxies are incompatible with sandboxing
+        sandbox=False,
+    ),
+    NodeConfig(
+        torrc="bridge-obfs4.tmpl",
+        tag="br",
+        bridge=True,
+        pt_bridge=True,
+        relay=True,
+        pt_transport="obfs4",
+        # Managed proxies are incompatible with sandboxing
+        sandbox=False,
+    ),
+    NodeConfig(
+        torrc="bridge.tmpl",
+        tag="br",
+        bridge=True,
+        relay=True,
+    ),
+    NodeConfig(
+        torrc="bridge-v6.tmpl",
+        tag="br",
+        bridge=True,
+        relay=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="client_bwscanner.tmpl",
+        tag="c",
+        client=True,
+    ),
+    NodeConfig(
+        torrc="client-only-v6-md.tmpl",
+        tag="c",
+        client=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="client-only-v6.tmpl",
+        tag="c",
+        client=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="client.tmpl",
+        tag="c",
+        client=True,
+    ),
+    NodeConfig(
+        torrc="hs-v3-only-v6-md.tmpl",
+        tag="h",
+        hs=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="hs-v3-only-v6.tmpl",
+        tag="h",
+        hs=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="hs-v3.tmpl",
+        tag="h",
+        hs=True,
+    ),
+    NodeConfig(
+        torrc="relay-MAB.tmpl",
+        tag="relay1mbyteMAB",
+        relay=True,
+        exit=True,
+    ),
+    NodeConfig(
+        torrc="relay-MBR.tmpl",
+        tag="relay1mbyteMBR",
+        relay=True,
+        exit=True,
+    ),
+    NodeConfig(
+        torrc="relay-non-dir.tmpl",
+        tag="r",
+        relay=True,
+        exit=True,
+    ),
+    NodeConfig(
+        torrc="relay-non-exit.tmpl",
+        tag="r",
+        relay=True,
+        exit=False,
+    ),
+    NodeConfig(
+        torrc="relay-exit-v6-only.tmpl",
+        tag="r",
+        relay=True,
+        exit=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="relay-orport-v6-non-exit.tmpl",
+        tag="r",
+        relay=True,
+        exit=False,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="relay.tmpl",
+        tag="r",
+        relay=True,
+        exit=True,
+    ),
+    NodeConfig(
+        torrc="relay-v6.tmpl",
+        tag="r",
+        relay=True,
+        exit=True,
+        ipv6_addr="[::1]",
+    ),
+    NodeConfig(
+        torrc="single-onion-v3.tmpl",
+        tag="h",
+        hs=True,
+    ),
+    NodeConfig(
+        torrc="single-onion-v3-only-v6-md.tmpl",
+        tag="h",
+        hs=True,
+        ipv6_addr="[::1]",
+    ),
+]
+
+# Add the configs to the network, getting their corresponding Nodes.
+nodes = network.addNodes(configs)
+# Configure the network, generating the torrc files.
+network.configure()
+
+# Validate the generated config file for every node.
+checked: set[str] = set()
+for node in nodes:
+    checked.add(node.torrc)
+    torrc_path = Path(node.dir, "torrc")
+    print(f"Testing template {node.torrc}: {torrc_path}")
+    res = subprocess.run(
+        ["tor", "--verify-config", "-f", str(torrc_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    print("stdout:\n", textwrap.indent(res.stdout, "  "))
+    if len(res.stderr) > 0:
+        print("stderr:\n", textwrap.indent(res.stderr, "  "))
+    if res.returncode != 0:
+        print("Failed with returncode: ", res.returncode)
+        sys.exit(1)
+
+# Now check that we didn't miss any templates.
+
+skipped: set[str] = {
+    # v2 hidden service configs are rejected by modern tor.
+    # TODO: Test these with a legacy tor? Or remove altogether?
+    "hs.tmpl",
+    "hs-v2.tmpl",
+    "hs-only-v6-md.tmpl",
+    "single-onion-v2.tmpl",
+    "single-onion.tmpl",
+    "single-onion-only-v6-md.tmpl",
+}
+
+
+def template_to_basename(s: str) -> str:
+    """Map a legacy template name to  the basename of the python file implementing it"""
+    return s.translate({ord("."): "_", ord("-"): "_"}) + ".py"
+
+
+unhandled_template_basenames: set[str] = {
+    Path(s).name for s in glob.glob("lib/chutney/torrc_templates/*_tmpl.py")
+}
+for t in skipped.union(checked):
+    unhandled_template_basenames.remove(template_to_basename(t))
+
+if len(unhandled_template_basenames) > 0:
+    unhandled = list(unhandled_template_basenames)
+    unhandled.sort()
+    print("ERROR: didn't test or explicitly skip:")
+    for basename in unhandled:
+        print("  ", node)
+    sys.exit(1)
+
+print("Passed")
