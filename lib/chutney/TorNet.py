@@ -34,7 +34,7 @@ import time
 import base64
 
 from chutney.Debug import debug_flag, debug
-from chutney.Util import getenv_int, getenv_bool, Option
+from chutney.Util import getenv_int, getenv_bool, Option, OptionalConversionDescriptor
 from chutney.network_tests import NetworkTestFailure
 from collections.abc import Collection
 from importlib.abc import Traversable
@@ -910,9 +910,9 @@ class LocalNodeBuilder(NodeBuilder):
             # It's ok to give an authority's IPv6 address to an IPv4-only
             # client or relay: it will and must ignore it
             # and yes, the orport is the same on IPv4 and IPv6
-            if self._node._config.ipv6_addr is not None:
+            if self._node._config.ipv6_addr.is_some():
                 authlines += " ipv6=%s:%s" % (
-                    self._node._config.ipv6_addr,
+                    self._node._config.ipv6_addr.unwrap(),
                     self._node.orport,
                 )
             authlines += " %s %s:%s %s\n" % (
@@ -926,9 +926,9 @@ class LocalNodeBuilder(NodeBuilder):
         arti_lines = ("", "")
         if arti:
             addrs = '"%s:%s"' % (self._node._config.ip, self._node.orport)
-            if self._node._config.ipv6_addr is not None:
+            if self._node._config.ipv6_addr.is_some():
                 addrs += ', "%s:%s"' % (
-                    self._node._config.ipv6_addr,
+                    self._node._config.ipv6_addr.unwrap(),
                     self._node.orport,
                 )
             elts = {
@@ -982,10 +982,10 @@ class LocalNodeBuilder(NodeBuilder):
             self._node.fingerprint.unwrap(),
             extra,
         )
-        if self._node._config.ipv6_addr is not None:
+        if self._node._config.ipv6_addr.is_some():
             bridgelines += BRIDGE_LINE_TEMPLATE % (
                 transport,
-                self._node._config.ipv6_addr,
+                self._node._config.ipv6_addr.unwrap(),
                 port,
                 self._node.fingerprint.unwrap(),
                 extra,
@@ -2173,8 +2173,13 @@ class NodeConfig:
     # ip: primary IP address (usually IPv4) to listen on
     ip: str = os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1")
     # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
-    # ipv6_addr=None to support IPv4-only systems
-    ipv6_addr: Optional[str] = os.environ.get("CHUTNEY_LISTEN_ADDRESS_V6", None)
+    # ipv6_addr=None to support IPv4-only systems.
+    # We use OptionalConversionDescriptor here to get `Option[str]`'s
+    # enforcement for our internal usage, but allow callers to initialize and
+    # assign as if it were `Optional[str]`.
+    ipv6_addr: OptionalConversionDescriptor[str] = OptionalConversionDescriptor(
+        default=Option(os.environ.get("CHUTNEY_LISTEN_ADDRESS_V6", None))
+    )
     # Whether to disable all ipv6 functionality
     disableipv6: bool = getenv_bool("CHUTNEY_DISABLE_IPV6", False)
     # dirserver_flags: used only if authority=True
