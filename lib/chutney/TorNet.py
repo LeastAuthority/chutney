@@ -709,9 +709,9 @@ class LocalNodeBuilder(NodeBuilder):
                         tor, tor_version, line
                     )
                 f.writelines([line])
-        # Verify that the resulting config parses.
-        # If we move or remove this check, ensure that `tests/config-tests` still actually
-        # validates the generated config files.
+        # Verify that the resulting config parses.  If we move or remove this
+        # check, ensure that `tests/config-tests` and `tests/network-config-tests`
+        # still actually validate the generated config files.
         run_tor(
             [
                 str(self._node._config.tor),
@@ -984,7 +984,9 @@ class LocalNodeBuilder(NodeBuilder):
         if self._node._config.pt_bridge:
             port = self._node.ptport
             transport = self._node._config.pt_transport
-            extra = self._node._config.pt_extra
+            # TODO: can we make this just an `unwrap`?
+            # Currently doing so breaks the `bridges-obfs4` network;
+            extra = self._node.getController().getPtExtra().unwrap_or("")
         else:
             # the orport is the same on IPv4 and IPv6
             port = self._node.orport
@@ -1069,6 +1071,39 @@ class LocalNodeController(NodeController):
                 )
             return Option(ed25519_id)
 
+    def _loadPtExtraObfs4(self) -> Option[str]:
+        """_loadPtExtra impl for the obfs4 transport"""
+        assert self._node._config.pt_transport == "obfs4"
+        location = Path(self._node.dir, "pt_state", "obfs4_bridgeline.txt")
+        if not location.exists():
+            return Option(None)
+        # read the file and find the actual line
+        with open(location, "r") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                if line.isspace():
+                    continue
+                m = re.match(r"(.*<FINGERPRINT>) (cert.*)", line)
+                if m:
+                    return Option(m.group(2))
+        return Option(None)
+
+    def _loadPtExtra(self) -> Option[str]:
+        """Load extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        # `match` would be nice here, but requires python 3.10.
+        ptt = self._node._config.pt_transport
+        if ptt == "":
+            return Option("")
+        elif ptt == "obfs4":
+            return self._loadPtExtraObfs4()
+        else:
+            raise ChutneyError("Unhandled pt_transport: " + ptt)
+
     def getNick(self) -> str:
         """Return the nickname for this node."""
         return check_type(self._node.nick, str)
@@ -1079,6 +1114,16 @@ class LocalNodeController(NodeController):
             return check_type(self._node._config.bridge, int)
         except KeyError:
             return 0
+
+    def getPtExtra(self) -> Option[str]:
+        """Get extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        # TODO: cache result? I don't really think it's worth the extra complexity,
+        # but not doing so is inconsistent with the other accessors.
+        return self._loadPtExtra()
 
     def getEd25519Id(self) -> Option[str]:
         """Return the base64-encoded ed25519 public key of this node."""
@@ -2172,10 +2217,9 @@ class NodeConfig:
     bridge: bool = False
     # pt_bridge: whether a node is a potential bridge
     pt_bridge: bool = False
-    # pt_transport, pt_extra: a potential bridge's transport and extra-info
-    # parameters, that will be used in the Bridge torrc option
+    # pt_transport: a potential bridge's transport,
+    # which will be used in the Bridge torrc option
     pt_transport: str = ""
-    pt_extra: str = ""
     # hs: whether a node has a hidden service
     hs: bool = False
     # hs_directory: directory (relative to datadir) to store hidden service info
@@ -2325,9 +2369,9 @@ class Network(object):
         # Keys into `KNOWN_REQUIREMENTS`
         self._requirements: list[str] = []
         self._nextnodenum = 0
-        # Assigned in `create_new_nodes_dir`
-        # TODO: assign here or don't make it a member.
-        self.dir: Path
+        # Use the "nodes" symlink by default. This is overwritten by
+        # `create_new_nodes_dir` when we configure a new network.
+        self.dir: Path = get_absolute_nodes_path()
 
         # Whether a bridge authority has been added.
         self.hasbridgeauth = False
