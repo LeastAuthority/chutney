@@ -1,4 +1,6 @@
-OLD_TOR="tor-stable"
+import os
+
+OLD_TOR=os.getenv("CHUTNEY_OLD_TOR", "tor-stable")
 # By default, Authorities are not configured as exits
 Authority = Node(tag="a", authority=1, relay=1, torrc="authority.tmpl")
 OldAuthority = Node(tag="aOLD", authority=1, relay=1, torrc="authority.tmpl",

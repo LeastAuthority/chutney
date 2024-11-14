@@ -5,7 +5,7 @@ Require("IPV6")
 
 import os
 
-OLD_TOR="tor-stable"
+OLD_TOR=os.getenv("CHUTNEY_OLD_TOR", "tor-stable")
 
 # By default, Authorities are not configured as exits
 Authority6 = Node(tag="a", authority=1, relay=1,
