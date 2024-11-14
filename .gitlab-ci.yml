@@ -201,6 +201,15 @@ torrc-template-tests:
   - python3 -m pip install --user .
   - ./tests/torrc-template-tests
 
+network-config-tests:
+  <<: *debian-template
+  script:
+  - apt-get install
+      python3-pip
+      tor
+  - python3 -m pip install --user .
+  - ./tests/network-config-tests
+
 shellcheck:
   <<: *debian-template
   script:
