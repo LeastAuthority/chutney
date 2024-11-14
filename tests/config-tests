@@ -11,9 +11,7 @@ from pathlib import Path
 
 network = TorNet.Network()
 
-# Generate configs for all[^1] torrc templates, using their legacy names.
-#
-# [^1]: Except for the ones in the explicit `skip` list; see below.
+# Generate configs for all torrc templates, using their legacy names.
 configs = [
     NodeConfig(
         torrc="authority-orport-v6.tmpl",
@@ -199,37 +197,25 @@ for node in nodes:
         print("Failed with returncode: ", res.returncode)
         sys.exit(1)
 
-# Now check that we didn't miss any templates.
-
-skipped: set[str] = {
-    # v2 hidden service configs are rejected by modern tor.
-    # TODO: Test these with a legacy tor? Or remove altogether?
-    "hs.tmpl",
-    "hs-v2.tmpl",
-    "hs-only-v6-md.tmpl",
-    "single-onion-v2.tmpl",
-    "single-onion.tmpl",
-    "single-onion-only-v6-md.tmpl",
-}
-
 
 def template_to_basename(s: str) -> str:
     """Map a legacy template name to  the basename of the python file implementing it"""
     return s.translate({ord("."): "_", ord("-"): "_"}) + ".py"
 
 
-unhandled_template_basenames: set[str] = {
+all_template_basenames: set[str] = {
     Path(s).name for s in glob.glob("lib/chutney/torrc_templates/*_tmpl.py")
 }
-for t in skipped.union(checked):
-    unhandled_template_basenames.remove(template_to_basename(t))
+missed_template_basenames = all_template_basenames.difference(
+    template_to_basename(s) for s in checked
+)
 
-if len(unhandled_template_basenames) > 0:
-    unhandled = list(unhandled_template_basenames)
+if len(missed_template_basenames) > 0:
+    unhandled = list(missed_template_basenames)
     unhandled.sort()
-    print("ERROR: didn't test or explicitly skip:")
+    print("ERROR: didn't test:")
     for basename in unhandled:
-        print("  ", node)
+        print("  ", basename)
     sys.exit(1)
 
 print("Passed")
