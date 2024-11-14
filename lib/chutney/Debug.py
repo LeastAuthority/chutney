@@ -14,6 +14,7 @@ from __future__ import unicode_literals
 
 import os
 import sys
+import textwrap
 
 # Set debug_flag=True in order to debug this program or to get hints
 # about what's going wrong in your system.
@@ -22,8 +23,9 @@ debug_flag = os.environ.get("CHUTNEY_DEBUG", "") != ""
 
 def debug(s: str) -> None:
     "Print a debug message on stdout if debug_flag is True."
-    if debug_flag:
-        print("DEBUG: %s" % s)
+    if not debug_flag:
+        return
+    print(textwrap.indent(s, "DEBUG: "))
 
 
 def main() -> int:
