@@ -215,7 +215,7 @@ if len(missed_template_basenames) > 0:
     unhandled.sort()
     print("ERROR: didn't test:")
     for basename in unhandled:
-        print("  ", node)
+        print("  ", basename)
     sys.exit(1)
 
 print("Passed")
