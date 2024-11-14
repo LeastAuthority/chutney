@@ -709,6 +709,17 @@ class LocalNodeBuilder(NodeBuilder):
                         tor, tor_version, line
                     )
                 f.writelines([line])
+        # Verify that the resulting config parses.
+        # If we move or remove this check, ensure that `tests/config-tests` still actually
+        # validates the generated config files.
+        run_tor(
+            [
+                str(self._node._config.tor),
+                "-f",
+                self._node.torrc_fname,
+                "--verify-config",
+            ]
+        )
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
