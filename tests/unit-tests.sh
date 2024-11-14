@@ -43,22 +43,6 @@ unset CHUTNEY_DEBUG
 export CHUTNEY_DEBUG
 
 
-echo "$myname: running Templating.py tests"
-
-LOG_FILE=$(mktemp)
-export LOG_FILE
-test -n "$LOG_FILE"
-
-echo "$myname: checking for Templating.py failures:"
-PYTHONPATH="${PYTHONPATH:-}:lib" $PYTHON -m chutney.Templating common.i | tee "$LOG_FILE"
-grep -q owning_controller_process "$LOG_FILE"
-grep -q connlimit "$LOG_FILE"
-grep -q controlport "$LOG_FILE"
-grep -q nick "$LOG_FILE"
-grep -q authorities "$LOG_FILE"
-grep -q dir "$LOG_FILE"
-
-
 echo "$myname: running Traffic.py tests"
 
 LOG_FILE=$(mktemp)

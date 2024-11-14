@@ -6,15 +6,15 @@ Attempt to use chutney as a module.
 import os
 
 from chutney import TorNet
-from chutney.TorNet import Node, TorEnviron
+from chutney.TorNet import NodeConfig
 from chutney.network_tests import verify
 
-env = TorEnviron(controlling_pid=os.getpid())
-network = TorNet.Network(env)
+network = TorNet.Network()
 
-Authority = Node(network, tag="a", authority=1, relay=1, torrc="authority.tmpl")
-ExitRelay = Node(network, tag="r", relay=1, exit=1, torrc="relay.tmpl")
-Client = Node(network, tag="c", client=1, torrc="client.tmpl")
+base = NodeConfig(controlling_pid=os.getpid())
+Authority = base.specialize(tag="a", authority=1, relay=1, torrc="authority.tmpl")
+ExitRelay = base.specialize(tag="r", relay=1, exit=1, torrc="relay.tmpl")
+Client = base.specialize(tag="c", client=1, torrc="client.tmpl")
 
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 

@@ -9,6 +9,7 @@ import chutney.TorNet
 import chutney.Traffic
 
 from . import NetworkTestFailure
+from chutney.Util import getenv_int, getenv_bool
 
 # Try to verify twice each consensus, but don't verify too fast
 V3_AUTH_VOTING_INTERVAL = chutney.TorNet.V3_AUTH_VOTING_INTERVAL
@@ -17,7 +18,7 @@ TIMEOUT_INTERVAL = max(VERIFY_ATTEMPT_INTERVAL - 1.0, 5.0)
 
 
 def run_test(network: chutney.TorNet.Network) -> None:
-    wait_time = network._dfltEnv["bootstrap_time"]
+    wait_time = network.bootstrap_time
     start_time = time.time()
     end_time = start_time + wait_time
     print("Verifying data transmission: (retrying for up to %d seconds)" % wait_time)
@@ -48,7 +49,9 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
     """Verify (parts of) the network by sending traffic through it
     and verify what is received."""
     # TODO: IPv6 SOCKSPorts, SOCKSPorts with IPv6Traffic, and IPv6 Exits
-    LISTEN_ADDR = network._dfltEnv["ip"]
+    # XXX don't hard-code this.
+    # LISTEN_ADDR = network._dfltEnv["ip"]
+    LISTEN_ADDR = "127.0.0.1"
     LISTEN_PORT = 4747  # FIXME: Do better! Note the default exit policy.
     # HSs must have a HiddenServiceDir with
     # "HiddenServicePort <HS_PORT> <CHUTNEY_LISTEN_ADDRESS>:<LISTEN_PORT>"
@@ -58,13 +61,14 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
     # each time the source connects.
     # We create a source-sink pair for each (bridge) client to an exit,
     # and a source-sink pair for a (bridge) client to each hidden service
-    DATALEN = network._dfltEnv["data_bytes"]
+    DATALEN: int = getenv_int("CHUTNEY_DATA_BYTES", 10 * 1024)
     # Print a dot each time a sink verifies this much data
     DOTDATALEN = 5 * 1024 * 1024  # Octets
     # Calculate the amount of random data we should use
     randomlen = _calculate_randomlen(DATALEN)
     reps = _calculate_reps(DATALEN, randomlen)
-    connection_count = network._dfltEnv["connection_count"]
+    # connection_count: the number of times each client will connect
+    connection_count = getenv_int("CHUTNEY_CONNECTIONS", 1)
     # sanity check
     if reps == 0:
         DATALEN = 0
@@ -88,24 +92,18 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         repetitions=reps,
         dot_repetitions=dot_reps,
     )
-    # _env does not implement get() due to its fallback to parent behaviour
     client_list = list(
         filter(
-            lambda n: n._env["tag"].startswith("c")
-            or n._env["tag"].startswith("bc")
-            or ("client" in n._env.keys() and n._env["client"] == 1),
+            lambda n: n.tag.startswith("c")
+            or n.tag.startswith("bc")
+            or n._config.client,
             network._nodes,
         )
     )
-    exit_list = list(
-        filter(
-            lambda n: ("exit" in n._env.keys() and n._env["exit"] == 1), network._nodes
-        )
-    )
+    exit_list = list(filter(lambda n: n._config.exit, network._nodes))
     hs_list = list(
         filter(
-            lambda n: n._env["tag"].startswith("h")
-            or ("hs" in n._env.keys() and n._env["hs"] == 1),
+            lambda n: n.tag.startswith("h") or n._config.hs,
             network._nodes,
         )
     )
@@ -133,6 +131,9 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         LISTEN_PORT,
         connection_count,
     )
+    # If 1, every client connects to every HS. If 0, one client connects to each
+    # HS. (Clients choose an exit at random, so this doesn't apply to exits.)
+    hs_multi_client = getenv_bool("CHUTNEY_HS_MULTI_CLIENT", False)
     total_path_node_count += _configure_hs(
         tt,
         tmpdata,
@@ -143,7 +144,7 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         LISTEN_ADDR,
         LISTEN_PORT,
         connection_count,
-        network._dfltEnv["hs_multi_client"],
+        hs_multi_client,
     )
     print("Transmitting Data:")
     start_time = time.time()
@@ -204,10 +205,10 @@ def _configure_exits(
         for op in client_list:
             print(
                 "  Exit to %s:%d via client %s:%s"
-                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op._env["socksport"])
+                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op.socksport)
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(op._env["socksport"]))
+                proxy = ("localhost", int(op.socksport))
                 tt.add_client(bind_to, proxy)
     return exit_path_node_count
 
@@ -241,21 +242,21 @@ def _configure_hs(
         hs_client_list = client_list[:1]
     # Setup the connections from each client in hs_client_list to each hs
     for hs in hs_list:
-        hs_bind_to = (hs._env["hs_hostname"], HS_PORT)
+        hs_bind_to = (hs.hs_hostname, HS_PORT)
         for client in hs_client_list:
             print(
                 "  HS to %s:%d (%s:%d) via client %s:%s"
                 % (
-                    hs._env["hs_hostname"],
+                    hs.hs_hostname,
                     HS_PORT,
                     LISTEN_ADDR,
                     LISTEN_PORT,
                     "localhost",
-                    client._env["socksport"],
+                    client.socksport,
                 )
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(client._env["socksport"]))
+                proxy = ("localhost", int(client.socksport))
                 tt.add_client(hs_bind_to, proxy)
 
     return hs_path_node_count

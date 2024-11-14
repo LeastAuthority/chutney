@@ -1,14 +1,23 @@
+# [pep 0536](https://peps.python.org/pep-0563/) - Lazy annotation eval via
+# stringification.
+from __future__ import annotations
+
 # Future imports for Python 2.7, mandatory in 3.0
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import os
+import stat
+
 from collections.abc import Iterable
-from typing import Callable, TypeVar, Any
+from pathlib import Path
+from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union
 from typing_extensions import ParamSpec
 
 P = ParamSpec("P")
 T = TypeVar("T")
+V = TypeVar("V")
 
 
 def memoized(fn: Callable[P, T]) -> Callable[P, T]:
@@ -28,3 +37,257 @@ def memoized(fn: Callable[P, T]) -> Callable[P, T]:
         return result
 
     return memoized_fn
+
+
+class Option(Generic[T]):
+    """A wrapper for values that may be None
+
+    Modeled after Rust's Option type.  Unlike typing.Optional, this is a real
+    object wrapper that provides methods for safely manipulating the value, and
+    that forces to the user to explicitly extract the inner value.
+
+    The default `__str__` method is overridden to fail at runtime, meaning e.g.
+    `str(Option(val))` will also fail. Calling code must use methods to access
+    the inner value to perform a string conversion. This is done to prevent
+    accidental substitution of a value like "None" in string templates, and to
+    force call-sites of such conversions to be explicit about how to handle the
+    `None` case.
+    """
+
+    def __init__(self, val: Optional[T]):
+        self._val = val
+
+    def unwrap(
+        self, failure_msg: Union[str, Callable[[], str]] = "Unwrapped None"
+    ) -> T:
+        """Asserts v is not None and returns it"""
+        if self._val is not None:
+            return self._val
+        if not isinstance(failure_msg, str):
+            failure_msg = failure_msg()
+        raise AssertionError(failure_msg)
+
+    def as_optional(self) -> Optional[T]:
+        """Returns the value, or None"""
+        return self._val
+
+    def unwrap_or(self, default: T) -> T:
+        return self._val if self._val is not None else default
+
+    def is_some(self) -> bool:
+        return self._val is not None
+
+    def is_none(self) -> bool:
+        return self._val is None
+
+    def replace(self, val: T) -> Optional[T]:
+        """Assigns `val` and returns the previous value"""
+        prev = self._val
+        self._val = val
+        return prev
+
+    def map(self, f: Callable[[T], V]) -> Option[V]:
+        if self._val is None:
+            return Option(None)
+        else:
+            return Option(f(self._val))
+
+    # Suppress string conversion to prevent unchecked usage
+    # in templates, etc. (`repr` still works).
+    #
+    # Python allows assigning `__str__ = None` here, in which case string
+    # conversions will fail at runtime. However doing so requires opting out of
+    # mypy (which requires __str__ to be a callable with the expected
+    # signature), and likewise doesn't have the benefit one might hope of mypy
+    # statically preventing string conversions.
+    def __str__(self) -> str:
+        raise AssertionError(
+            "Option doesn't support str conversion. Get the inner value instead."
+        )
+
+
+class OptionalConversionDescriptor(Generic[T]):
+    """A Conversion Descriptor for Option-type fields
+
+    A field of this type is *read* as `Option[T]`, but may be *assigned*
+    from an `Option[T]`, `T`, or `None`.
+
+    Will not work as expected with `T=Option[]`.
+
+    Based on an example in the dataclasses documentation:
+    <https://docs.python.org/3/library/dataclasses.html#descriptor-typed-fields>
+
+    See also the more general documentation about such field descriptors:
+    <https://docs.python.org/3/reference/datamodel.html#implementing-descriptors>
+    """
+
+    def __init__(self, *, default: Option[T]):
+        self._default = default
+
+    def __set_name__(self, owner: Any, name: str) -> None:
+        # `name` is the name of this field, of type
+        # `OptionalConversionDescriptor`, on the `owner`. We use this to derive
+        # a `_name`, which we'll use to store the actual value of type
+        # `Option[T]`.
+        self._name = "_" + name
+
+    def __get__(
+        self, instance: Optional[Any], owner: Optional[Any] = None
+    ) -> Option[T]:
+        if instance is None:
+            # This is a class-access, not an instance-access.
+            # Return the default value.
+            return self._default
+
+        return getattr(instance, self._name, self._default)
+
+    def __set__(self, obj: Any, value: Union[Option[T], Optional[T]]) -> None:
+        # We need the conversion implemented by this function to be idempotent;
+        # e.g. `obj.f = obj.f` shouldn't change the value of `f`.
+        #
+        # For that reason we can't unconditionally wrap with `Option`; we need to check
+        # whether it's already been wrapped and not wrap it again.
+        #
+        # Unfortunately this means that using `T=Option[_]` won't work as
+        # expected. (This is documented in the class doc).
+        if not isinstance(value, Option):
+            value = Option(value)
+        setattr(obj, self._name, value)
+
+
+@overload
+def getenv_type(
+    env_var: str,
+    default: None,
+    type_: Callable[[str], T],
+    type_name: Optional[str] = None,
+) -> Optional[T]: ...
+
+
+@overload
+def getenv_type(
+    env_var: str, default: T, type_: Callable[[str], T], type_name: Optional[str] = None
+) -> T: ...
+
+
+def getenv_type(
+    env_var: str,
+    default: Optional[T],
+    type_: Callable[[str], T],
+    type_name: Optional[str] = None,
+) -> Optional[T]:
+    """
+    Return the value of the environment variable 'envar' as type_,
+    or 'default' if no such variable exists.
+
+    Raise ValueError using type_name if the environment variable is set,
+    but type_() raises a ValueError on its value. (If type_name is None
+    or empty, the ValueError uses type_'s string representation instead.)
+    """
+    strval = os.environ.get(env_var)
+    if strval is None:
+        return default
+    try:
+        return type_(strval)
+    except ValueError:
+        if not type_name:
+            type_name = str(type_)
+        raise ValueError(
+            (
+                "Invalid value for environment variable '{}': "
+                "expected {}, but got '{}'"
+            ).format(env_var, type_name, strval)
+        )
+
+
+@overload
+def getenv_int(env_var: str, default: None) -> Optional[int]: ...
+
+
+@overload
+def getenv_int(env_var: str, default: int) -> int: ...
+
+
+def getenv_int(env_var: str, default: Optional[int]) -> Optional[int]:
+    """
+    Return the value of the environment variable 'envar' as an int,
+    or 'default' if no such variable exists.
+
+    Raise ValueError if the environment variable is set, but is not an int.
+    """
+    return getenv_type(env_var, default, int, type_name="an int")
+
+
+def getenv_bool(env_var: str, default: bool) -> bool:
+    """
+    Return the value of the environment variable 'envar' as a bool,
+    or 'default' if no such variable exists.
+
+    Unlike bool(), converts 0, "False", and "No" to False.
+
+    Raise ValueError if the environment variable is set, but is not a bool.
+    """
+    # TODO: consider simplifying this and:
+    # * rejecting ints other than 0 or 1
+    # * accepting 'yes' for True
+    try:
+        # Handle integer values
+        return bool(getenv_int(env_var, int(default)))
+    except ValueError:
+        # Handle values that the user probably expects to be False
+        strval = os.environ.get(env_var)
+        # If the env var weren't set, the int path above would have succeeded,
+        # returning the default.
+        assert strval is not None
+        if strval.lower() in ["false", "no"]:
+            return False
+        else:
+            return getenv_type(env_var, default, bool, type_name="a bool")
+
+
+def find_executable_on_path(
+    basename: str, path: Optional[Iterable[Path]] = None
+) -> Optional[Path]:
+    """Find the first executable file named `basename` in `path`
+
+    Roughly, mostly, emulates bash's PATH search:
+    Returns the first file with *any* executable bit set on the given `path`.
+    Does *not* attempt to fully validate that the current user actually has
+    permission to execute it.
+
+    Unlike bash, skips empty strings and other relative paths in the search
+    path.
+
+    Uses the `PATH` environment variable if `path` is not provided.
+    """
+    _path: Iterable[Path]
+    if path is None:
+        env_path = os.getenv("PATH")
+        if env_path is None:
+            _path = []
+        else:
+            _path = map(Path, env_path.split(":"))
+    else:
+        _path = path
+    for location in _path:
+        if not location.is_absolute():
+            # Technically relative paths function in shell search of PATH
+            # (at least for bash), including the empty string effectively
+            # meaning "search the current directory".
+            #
+            # We probably don't want that behavior here.
+            continue
+        p = Path(location, basename)
+        if not p.is_file():
+            # Not a file
+            continue
+        mode = 0
+        try:
+            mode = p.stat().st_mode
+        except OSError:
+            pass
+        if not (mode & (stat.S_IXOTH | stat.S_IXGRP | stat.S_IXUSR)):
+            # Not executable
+            continue
+        return p
+    return None

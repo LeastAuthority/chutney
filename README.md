@@ -388,10 +388,12 @@ be referenced by their basename (e.g. `basic`). Alternatively you can provide a
 path to a configuration file, which isn't required to be one of chutney's
 built-in files.
 
-The configuration files refer to torrc template files in
-`lib/chutney/data/torrc_templates/`. Chutney uses a templating system to
-produce torrc files from the templates. These torrc files can be modified using
-various chutney options.
+The configuration files refer to `torrc` template modules in
+`lib/chutney/torrc_templates/`. For backwards compatibility, `-` and `.` in the
+`torrc` string are translated to `_`. e.g., both of the strings `client.tmpl`
+and `client_tmpl` refer to `lib/chutney/torrc_templates/client_tmpl.py`, and
+result in the function `chutney.torrc_templates.client_tmpl.format` being used
+to generate the torrc file.
 
 ## The working files
 
