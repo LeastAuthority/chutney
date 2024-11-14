@@ -502,8 +502,7 @@ class Node(object):
     def dir(self) -> Path:
         """Directory where this node stores its configuration and data (DataDirectory)"""
         return Path(
-            self._config.net_base_dir,
-            "nodes",
+            self._network.dir,
             "%03d%s" % (self.nodenum, self._config.tag),
         ).resolve()
 
@@ -2226,8 +2225,6 @@ class NodeConfig:
     hs_directory: str = "hidden_service"
     # connlimit: value of ConnLimit torrc option
     connlimit: int = 60
-    # net_base_dir: path to the chutney net directory
-    net_base_dir: Path = get_absolute_net_path()
     # tor: path of the tor binary
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
     # auth_cert_lifetime: lifetime of authority certs, in months
