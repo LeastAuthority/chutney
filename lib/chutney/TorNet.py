@@ -709,7 +709,7 @@ class LocalNodeBuilder(NodeBuilder):
                     )
                 f.writelines([line])
         # Verify that the resulting config parses.  If we move or remove this
-        # check, ensure that `tests/config-tests` and `tests/network-config-tests`
+        # check, ensure that `tests/torrc-template-tests` and `tests/network-config-tests`
         # still actually validate the generated config files.
         run_tor(
             [

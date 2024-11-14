@@ -192,14 +192,14 @@ unit-tests:
       python3
   - ./tests/unit-tests.sh
 
-config-tests:
+torrc-template-tests:
   <<: *debian-template
   script:
   - apt-get install
       python3-pip
       tor
   - python3 -m pip install --user .
-  - ./tests/config-tests
+  - ./tests/torrc-template-tests
 
 shellcheck:
   <<: *debian-template
