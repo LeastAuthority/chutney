@@ -30,6 +30,7 @@ import re
 import signal
 import subprocess
 import sys
+import textwrap
 import time
 import base64
 
@@ -258,12 +259,18 @@ def run_tor(cmdline: List[str]) -> str:
     if not debug_flag:
         cmdline.append("--hush")
     try:
-        stdouterr = subprocess.check_output(
-            cmdline, stderr=subprocess.STDOUT, universal_newlines=True
+        res = subprocess.run(
+            cmdline,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
         )
-        debug(stdouterr)
     except FileNotFoundError as e:
         raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
+    stdouterr = res.stdout
+    if res.returncode != 0:
+        raise ChutneyError(f"Failed to run cmdline: {cmdline}. Output: {stdouterr}")
+    debug("Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    "))
     return stdouterr
 
 
