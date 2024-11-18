@@ -2243,9 +2243,6 @@ class NodeConfig:
     disableipv6: bool = getenv_bool("CHUTNEY_DISABLE_IPV6", False)
     # dirserver_flags: used only if authority=True
     dirserver_flags: str = "no-v2"
-    # chutney_dir: directory of the chutney source code
-    # TODO: Remove?
-    chutney_dir: Path = get_absolute_chutney_path()
     # poll_launch_time: None means wait on launch (requires RunAsDaemon),
     # otherwise, poll after that many seconds (can be fractional/decimal)
     poll_launch_time: Optional[float] = None
