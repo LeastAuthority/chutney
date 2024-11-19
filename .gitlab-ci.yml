@@ -135,6 +135,8 @@ tor-debian-integration:
     # 120 is what e.g. bootstrap-network.sh uses.
     # Give even a bit more than that since we're not using retries (as test-network.sh does)
     CHUTNEY_START_TIME: 300
+    # We generally want debug output, in tests running chutney
+    CHUTNEY_DEBUG: 1
   cache:
     key: $CI_JOB_NAME_SLUG-apt
     paths:
@@ -190,14 +192,23 @@ unit-tests:
       python3
   - ./tests/unit-tests.sh
 
-config-tests:
+torrc-template-tests:
   <<: *debian-template
   script:
   - apt-get install
       python3-pip
       tor
   - python3 -m pip install --user .
-  - ./tests/config-tests
+  - ./tests/torrc-template-tests
+
+network-config-tests:
+  <<: *debian-template
+  script:
+  - apt-get install
+      python3-pip
+      tor
+  - python3 -m pip install --user .
+  - ./tests/network-config-tests
 
 shellcheck:
   <<: *debian-template

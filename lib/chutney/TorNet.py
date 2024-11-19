@@ -30,6 +30,7 @@ import re
 import signal
 import subprocess
 import sys
+import textwrap
 import time
 import base64
 
@@ -258,12 +259,18 @@ def run_tor(cmdline: List[str]) -> str:
     if not debug_flag:
         cmdline.append("--hush")
     try:
-        stdouterr = subprocess.check_output(
-            cmdline, stderr=subprocess.STDOUT, universal_newlines=True
+        res = subprocess.run(
+            cmdline,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
         )
-        debug(stdouterr)
     except FileNotFoundError as e:
         raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
+    stdouterr = res.stdout
+    if res.returncode != 0:
+        raise ChutneyError(f"Failed to run cmdline: {cmdline}. Output: {stdouterr}")
+    debug("Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    "))
     return stdouterr
 
 
@@ -495,8 +502,7 @@ class Node(object):
     def dir(self) -> Path:
         """Directory where this node stores its configuration and data (DataDirectory)"""
         return Path(
-            self._config.net_base_dir,
-            "nodes",
+            self._network.dir,
             "%03d%s" % (self.nodenum, self._config.tag),
         ).resolve()
 
@@ -702,6 +708,17 @@ class LocalNodeBuilder(NodeBuilder):
                         tor, tor_version, line
                     )
                 f.writelines([line])
+        # Verify that the resulting config parses.  If we move or remove this
+        # check, ensure that `tests/torrc-template-tests` and `tests/network-config-tests`
+        # still actually validate the generated config files.
+        run_tor(
+            [
+                str(self._node._config.tor),
+                "-f",
+                self._node.torrc_fname,
+                "--verify-config",
+            ]
+        )
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
@@ -966,7 +983,9 @@ class LocalNodeBuilder(NodeBuilder):
         if self._node._config.pt_bridge:
             port = self._node.ptport
             transport = self._node._config.pt_transport
-            extra = self._node._config.pt_extra
+            # TODO: can we make this just an `unwrap`?
+            # Currently doing so breaks the `bridges-obfs4` network;
+            extra = self._node.getController().getPtExtra().unwrap_or("")
         else:
             # the orport is the same on IPv4 and IPv6
             port = self._node.orport
@@ -1051,6 +1070,39 @@ class LocalNodeController(NodeController):
                 )
             return Option(ed25519_id)
 
+    def _loadPtExtraObfs4(self) -> Option[str]:
+        """_loadPtExtra impl for the obfs4 transport"""
+        assert self._node._config.pt_transport == "obfs4"
+        location = Path(self._node.dir, "pt_state", "obfs4_bridgeline.txt")
+        if not location.exists():
+            return Option(None)
+        # read the file and find the actual line
+        with open(location, "r") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                if line.isspace():
+                    continue
+                m = re.match(r"(.*<FINGERPRINT>) (cert.*)", line)
+                if m:
+                    return Option(m.group(2))
+        return Option(None)
+
+    def _loadPtExtra(self) -> Option[str]:
+        """Load extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        # `match` would be nice here, but requires python 3.10.
+        ptt = self._node._config.pt_transport
+        if ptt == "":
+            return Option("")
+        elif ptt == "obfs4":
+            return self._loadPtExtraObfs4()
+        else:
+            raise ChutneyError("Unhandled pt_transport: " + ptt)
+
     def getNick(self) -> str:
         """Return the nickname for this node."""
         return check_type(self._node.nick, str)
@@ -1061,6 +1113,16 @@ class LocalNodeController(NodeController):
             return check_type(self._node._config.bridge, int)
         except KeyError:
             return 0
+
+    def getPtExtra(self) -> Option[str]:
+        """Get extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        # TODO: cache result? I don't really think it's worth the extra complexity,
+        # but not doing so is inconsistent with the other accessors.
+        return self._loadPtExtra()
 
     def getEd25519Id(self) -> Option[str]:
         """Return the base64-encoded ed25519 public key of this node."""
@@ -2154,18 +2216,15 @@ class NodeConfig:
     bridge: bool = False
     # pt_bridge: whether a node is a potential bridge
     pt_bridge: bool = False
-    # pt_transport, pt_extra: a potential bridge's transport and extra-info
-    # parameters, that will be used in the Bridge torrc option
+    # pt_transport: a potential bridge's transport,
+    # which will be used in the Bridge torrc option
     pt_transport: str = ""
-    pt_extra: str = ""
     # hs: whether a node has a hidden service
     hs: bool = False
     # hs_directory: directory (relative to datadir) to store hidden service info
     hs_directory: str = "hidden_service"
     # connlimit: value of ConnLimit torrc option
     connlimit: int = 60
-    # net_base_dir: path to the chutney net directory
-    net_base_dir: Path = get_absolute_net_path()
     # tor: path of the tor binary
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
     # auth_cert_lifetime: lifetime of authority certs, in months
@@ -2184,9 +2243,6 @@ class NodeConfig:
     disableipv6: bool = getenv_bool("CHUTNEY_DISABLE_IPV6", False)
     # dirserver_flags: used only if authority=True
     dirserver_flags: str = "no-v2"
-    # chutney_dir: directory of the chutney source code
-    # TODO: Remove?
-    chutney_dir: Path = get_absolute_chutney_path()
     # poll_launch_time: None means wait on launch (requires RunAsDaemon),
     # otherwise, poll after that many seconds (can be fractional/decimal)
     poll_launch_time: Optional[float] = None
@@ -2307,9 +2363,9 @@ class Network(object):
         # Keys into `KNOWN_REQUIREMENTS`
         self._requirements: list[str] = []
         self._nextnodenum = 0
-        # Assigned in `create_new_nodes_dir`
-        # TODO: assign here or don't make it a member.
-        self.dir: Path
+        # Use the "nodes" symlink by default. This is overwritten by
+        # `create_new_nodes_dir` when we configure a new network.
+        self.dir: Path = get_absolute_nodes_path()
 
         # Whether a bridge authority has been added.
         self.hasbridgeauth = False
