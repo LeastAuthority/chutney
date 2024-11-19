@@ -2208,8 +2208,6 @@ class NodeConfig:
     authority: bool = False
     # bridgeauthority: whether a node is a bridge authority
     bridgeauthority: bool = False
-    # hasbridgeauth: whether a node has a bridge authority
-    hasbridgeauth: bool = False
     # relay: whether a node is a relay, exit, or bridge
     relay: bool = False
     # bridge: whether a node is a bridge
