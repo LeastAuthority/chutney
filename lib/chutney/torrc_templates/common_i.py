@@ -64,4 +64,6 @@ Sandbox {int(n._config.sandbox)}
 {n._config.owning_controller_process}
 
 {n._network.authorities}
+
+SocksPort {n.socksport.unwrap_or(0)}
 """

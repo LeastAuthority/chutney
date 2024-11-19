@@ -479,9 +479,12 @@ class Node(object):
         return self._network.controlport_base + self.nodenum
 
     @property
-    def socksport(self) -> int:
-        """SocksPort that this node exposes"""
-        return self._network.socksport_base + self.nodenum
+    def socksport(self) -> Option[int]:
+        """SocksPort that this node exposes, if any."""
+        if self._config.client:
+            return Option(self._network.socksport_base + self.nodenum)
+        else:
+            return Option(None)
 
     @property
     def dirport(self) -> int:

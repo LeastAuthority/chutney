@@ -1,11 +1,11 @@
+import re
 from chutney.TorNet import Node
 from . import common_i
 
 
 def format(n: Node) -> str:
-    return f"""\
+    res = f"""\
 {common_i.format(n)}
-SocksPort 0
 OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
 Address {n._config.ip}
 
@@ -23,3 +23,9 @@ ServerDNSTestAddresses
 # (If the following line is commented out, tor uses /etc/resolv.conf.)
 {n._config.server_dns_resolv_conf}
 """
+    # XXX Replace with a friendlier error message.
+    # (Done at end of this MR; This XXX comment has been patched back into the
+    # first commit in the MR adding this style of assertion, but not all of the
+    # similar assertions added in all of the other commits.)
+    assert re.search(r"^SocksPort 0", res, flags=re.MULTILINE), res
+    return res
