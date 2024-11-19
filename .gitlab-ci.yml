@@ -15,8 +15,9 @@ include:
 # A more stripped-down debian template for tests that aren't specifically
 # replicating tor's CI.
 .debian-template: &debian-template
-  <<: *tor-x86-64-template
   image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
+  tags:
+    - amd64
   variables:
     DEBIAN_FRONTEND: "noninteractive"
     # Number of seconds to allow for bootstrap, overriding the default of 60.
