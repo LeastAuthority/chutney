@@ -1,134 +1,21 @@
-# This CI is largely copy-pasta from tor's CI. Basically we want to ensure
-# that changes to chutney don't break tor's CI.
-#
-# TODO: It'd be nice to deduplicate. It may be possible using gitlab's `trigger`
-# mechanism to trigger tor's CI pipeline, but we'd need to work out how to
-# override tor's CI to use chutney from *this* branch. We'd also ideally only
-# run the job(s) that use chutney.
-
 # These variables are set everywhere, unconditionally.
 variables:
   TERM: "ansi"
   DEBUG_CI: "yes"
-  # Which tor to test against
-  TOR_REPO: https://gitlab.torproject.org/tpo/core/tor.git
-  # TODO: To really be thorough we'd ideally test the tips of all of the current
-  # maint branches too.
-  TOR_BRANCH: main
-  # Test for a recent tor commit. We could probably get away with just using HEAD,
-  # but it may cause more problems/confusion than it solves.
-  # main@2024-11-19
-  TOR_COMMIT: 89e5e03dd535c9b8a8b3a7e40da57145fdd558ba
 
-# This template is for exporting ephemeral things from the scripts.  By
-# convention we expect our scripts to copy stuff into artifacts/, rather than
-# having a big list of files that be treated as artifacts.
-.artifacts-template: &artifacts-template
-  artifacts:
-    name: "${CI_PROJECT_PATH}_${CI_JOB_STAGE}_${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHA}"
-    expire_in: 1 week
-    when: always
-    paths:
-      - artifacts/
-
-# This template is used for x86-64 builds.
-.x86-64-template: &x86-64-template
-  tags:
-    - amd64
-    - physical
-
-# This template should be usable on any system that's based on apt.
-.apt-template: &apt-template |
-      export LC_ALL=C.UTF-8
-      echo Etc/UTC > /etc/timezone
-      mkdir -p apt-cache
-      export APT_CACHE_DIR="$(pwd)/apt-cache"
-      rm -f /etc/apt/apt.conf.d/docker-clean
-      echo 'quiet "1";' \
-           'Acquire::Retries "20";' \
-           'APT::Install-Recommends "0";' \
-           'APT::Install-Suggests "0";' \
-           'APT::Get::Assume-Yes "true";' \
-           'Dpkg::Use-Pty "0";' \
-           "Dir::Cache::Archives \"${APT_CACHE_DIR}\"; " \
-        >> /etc/apt/apt.conf.d/99gitlab
-      apt-get update -qq
-      apt-get upgrade -qy
-
-# This template sets us up for Debian system in particular.
-# This is copied from tor's CI and should stay closely aligned with it.
-.tor-debian-template: &tor-debian-template
-  <<: *artifacts-template
-  <<: *x86-64-template
-  variables:
-    DEBIAN_FRONTEND: "noninteractive"
-  # TODO: Using "cache" in this way speeds up our downloads.  It would be
-  # even better, though, to start with a pre-upgraded debian image.
-  #
-  # TODO: Will we have to do this differently once we have more than one
-  # debian version that we're using?
-  cache:
-    key: apt
-    paths:
-      - apt-cache
-  before_script:
-    - *apt-template
-    - mkdir artifacts
-    # Install patches unconditionally.
-    - apt-get install
-        apt-utils
-        automake
-        build-essential
-        ca-certificates
-        file
-        git
-        libevent-dev
-        liblzma-dev
-        libscrypt-dev
-        libseccomp-dev
-        libssl-dev
-        pkg-config
-        python3
-        zlib1g-dev
-    # Install patches that we only need for some use cases.
-    - if [ "$ASCIIDOC" = yes ]; then apt-get install asciidoc xmlto; fi
-    - if [ "$DOXYGEN" = yes ]; then apt-get install doxygen; fi
-    - if [ "$STEM" = yes ]; then apt-get install timelimit; fi
-    - if [ "$CC" = clang ]; then apt-get install clang; fi
-    - if [ "$NSS" = yes ]; then apt-get install libnss3 libnss3-dev; fi
-    # llvm-symbolizer for sanitizer backtrace
-    - if [ "$HARDENING" = yes ]; then apt-get install llvm; fi
-    # TODO: This next line should not be debian-only.
-    - if [ "$STEM" = yes ]; then git clone --depth 1 https://gitlab.torproject.org/tpo/network-health/stem.git ; export STEM_PATH="$(pwd)/stem"; fi
-    # TODO: This next line should not be debian-only.
-    # Unlike tor's CI pipeline, we want to use chutney from *this branch*
-    - export CHUTNEY_PATH="$CI_PROJECT_DIR"
-    # Install chutney to get its dependencies.
-    - apt-get install python3-pip
-    - python3 -m pip install --user .
-
-    - if [ "$TRACING" = yes ]; then apt install liblttng-ust-dev; fi
-
-tor-debian-integration:
-  image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
-  <<: *tor-debian-template
-  variables:
-    CHECK: "no"
-    CHUTNEY: "yes"
-    CHUTNEY_MAKE_TARGET: "test-network-all"
-    STEM: "no"
-    ALL_BUGS_ARE_FATAL: "yes"
-  script:
-    - mkdir ~/src
-    - git clone --shallow-since=2024-01-01 -b $TOR_BRANCH $TOR_REPO ~/src/tor
-    - cd ~/src/tor
-    - git checkout $TOR_COMMIT
-    - ./scripts/ci/ci-driver.sh
+include:
+  # Run our clone of tor's CI
+  - local: ci/tor-gitlab-ci.yml
+    inputs:
+      tor-repo: https://gitlab.torproject.org/tpo/core/tor.git
+      tor-branch: main
+      # main@2024-11-19
+      tor-commit: 89e5e03dd535c9b8a8b3a7e40da57145fdd558ba
 
 # A more stripped-down debian template for tests that aren't specifically
 # replicating tor's CI.
 .debian-template: &debian-template
-  <<: *x86-64-template
+  <<: *tor-x86-64-template
   image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
   variables:
     DEBIAN_FRONTEND: "noninteractive"
@@ -143,7 +30,7 @@ tor-debian-integration:
     paths:
       - apt-cache
   before_script:
-    - *apt-template
+    - *tor-apt-template
     # This is where pip installs binaries.
     - export PATH="$PATH:$HOME/.local/bin"
   artifacts:
