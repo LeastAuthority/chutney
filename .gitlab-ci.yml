@@ -11,6 +11,10 @@ include:
       tor-branch: main
       # main@2024-11-19
       tor-commit: 89e5e03dd535c9b8a8b3a7e40da57145fdd558ba
+  - project: tpo/tpa/ci-templates
+    file: scripts/apt.yml
+    # main@2024-11-19
+    ref: c800c775550109d6842756e00a397e02962b3534
 
 # A more stripped-down debian template for tests that aren't specifically
 # replicating tor's CI.
@@ -29,9 +33,11 @@ include:
   cache:
     key: $CI_JOB_NAME_SLUG-apt
     paths:
-      - apt-cache
+      # tpo/tpa/ci-templates's [.apt-init] puts the apt cache here
+      - .cache/apt
   before_script:
-    - *tor-apt-template
+    # Defined in tpo/tpa/ci-templates
+    - !reference [.apt-init]
     # This is where pip installs binaries.
     - export PATH="$PATH:$HOME/.local/bin"
   artifacts:
