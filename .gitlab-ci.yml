@@ -17,7 +17,8 @@ variables:
   TOR_BRANCH: main
   # Test for a recent tor commit. We could probably get away with just using HEAD,
   # but it may cause more problems/confusion than it solves.
-  TOR_COMMIT: a56350abc8a8c18bfe0b60c751cce5f851db0d3e
+  # main@2024-11-19
+  TOR_COMMIT: 89e5e03dd535c9b8a8b3a7e40da57145fdd558ba
 
 # This template is for exporting ephemeral things from the scripts.  By
 # convention we expect our scripts to copy stuff into artifacts/, rather than
