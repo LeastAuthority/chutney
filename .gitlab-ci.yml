@@ -110,7 +110,7 @@ variables:
     - if [ "$TRACING" = yes ]; then apt install liblttng-ust-dev; fi
 
 tor-debian-integration:
-  image: amd64/debian:bullseye
+  image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
   <<: *tor-debian-template
   variables:
     CHECK: "no"
@@ -129,7 +129,7 @@ tor-debian-integration:
 # replicating tor's CI.
 .debian-template: &debian-template
   <<: *x86-64-template
-  image: amd64/debian:bullseye
+  image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
   variables:
     DEBIAN_FRONTEND: "noninteractive"
     # Number of seconds to allow for bootstrap, overriding the default of 60.
