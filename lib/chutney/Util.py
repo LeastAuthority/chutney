@@ -63,7 +63,7 @@ class Option(Generic[T]):
         """Asserts v is not None and returns it"""
         if self._val is not None:
             return self._val
-        if not isinstance(failure_msg, str):
+        if callable(failure_msg):
             failure_msg = failure_msg()
         raise AssertionError(failure_msg)
 
@@ -73,6 +73,13 @@ class Option(Generic[T]):
 
     def unwrap_or(self, default: T) -> T:
         return self._val if self._val is not None else default
+
+    def unwrap_or_raise(self, exc: Union[Exception, Callable[[], Exception]]) -> T:
+        if self._val is not None:
+            return self._val
+        if callable(exc):
+            exc = exc()
+        raise exc
 
     def is_some(self) -> bool:
         return self._val is not None

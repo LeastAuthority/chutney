@@ -7,7 +7,7 @@ from . import common_i
 def format(n: Node) -> str:
     res = f"""\
 {common_i.format(n)}
-Address {n._config.ip}
+Address {n._config.ip.unwrap("XXX Currently only called in ipv4 contexts")}
 
 HiddenServiceDir {n.dir}/hidden_service
 

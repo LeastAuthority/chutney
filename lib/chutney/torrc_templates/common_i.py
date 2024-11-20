@@ -75,10 +75,13 @@ def format(n: Node) -> str:
     # TODO: `authorities` shouldn't be "pre-rendered" text.
     res += f"{n._network.authorities.strip()}\n"
     if n._config.relay:
+        ipv4 = n._config.ip.unwrap_or_raise(
+            ChutneyError("ipv4 address is mandatory for relays")
+        )
         res += textwrap.dedent(
             f"""
             OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
-            Address {n._config.ip}
+            Address {ipv4}
 
             ExitRelay {int(n._config.exit)}
 

@@ -815,7 +815,7 @@ class LocalNodeBuilder(NodeBuilder):
         idfile = Path(datadir, "keys", "authority_identity_key")
         skfile = Path(datadir, "keys", "authority_signing_key")
         certfile = Path(datadir, "keys", "authority_certificate")
-        addr = f"{self._node._config.ip}:{self._node.dirport.unwrap()}"
+        addr = f"{self._node._config.ip.unwrap()}:{self._node.dirport.unwrap()}"
         passphrase = self._node.auth_passphrase
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
@@ -940,7 +940,7 @@ class LocalNodeBuilder(NodeBuilder):
                 )
             authlines += " %s %s:%s %s\n" % (
                 self._node._config.dirserver_flags,
-                self._node._config.ip,
+                self._node._config.ip.unwrap(),
                 self._node.dirport.unwrap(),
                 self._node.fingerprint.unwrap(),
             )
@@ -948,7 +948,7 @@ class LocalNodeBuilder(NodeBuilder):
         # generate arti configuartion if supported
         arti_lines = ("", "")
         if arti:
-            addrs = '"%s:%s"' % (self._node._config.ip, self._node.orport)
+            addrs = '"%s:%s"' % (self._node._config.ip.unwrap(), self._node.orport)
             if self._node._config.ipv6_addr.is_some():
                 addrs += ', "%s:%s"' % (
                     self._node._config.ipv6_addr.unwrap(),
@@ -1002,7 +1002,7 @@ class LocalNodeBuilder(NodeBuilder):
 
         bridgelines = BRIDGE_LINE_TEMPLATE % (
             transport,
-            self._node._config.ip,
+            self._node._config.ip.unwrap(),
             port,
             self._node.fingerprint.unwrap(),
             extra,
@@ -2233,8 +2233,11 @@ class NodeConfig:
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
     # auth_cert_lifetime: lifetime of authority certs, in months
     auth_cert_lifetime: int = 12
-    # ip: primary IP address (usually IPv4) to listen on
-    ip: str = os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1")
+    # ip: primary IP address (usually IPv4) to listen on.
+    # Setting to None disables ipv4.
+    ip: OptionalConversionDescriptor[str] = OptionalConversionDescriptor(
+        default=Option(os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1"))
+    )
     # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
     # ipv6_addr=None to support IPv4-only systems.
     # We use OptionalConversionDescriptor here to get `Option[str]`'s
