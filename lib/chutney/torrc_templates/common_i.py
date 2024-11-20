@@ -72,9 +72,7 @@ SocksPort {n.socksport.unwrap_or(0)}
 OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
 Address {n._config.ip}
 
-# Must be included before exit-v{{4,6}}.i
-# XXX set this based on n._config.exit
-ExitRelay 0
+ExitRelay {int(n._config.exit)}
 
 # These options are set here so they apply to IPv4 and IPv6 Exits
 #

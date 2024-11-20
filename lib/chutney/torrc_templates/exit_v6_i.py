@@ -6,9 +6,6 @@ def format(n: Node) -> str:
     return f"""\
 {orport_v6_i.format(n)}
 
-# Must be included after relay-non-exit.tmpl
-ExitRelay 1
-
 # 1. Allow exiting to IPv6 localhost and private networks by default
 # ------------------------------------------------------------------
 IPv6Exit 1
