@@ -86,5 +86,7 @@ ServerDNSTestAddresses
 # will not use DNS. Otherwise, DNS is enabled with this config.
 # (If the following line is commented out, tor uses /etc/resolv.conf.)
 {n._config.server_dns_resolv_conf}
+
+DirPort {n.dirport.unwrap_or(0)}
 """
     return res

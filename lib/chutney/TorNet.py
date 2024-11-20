@@ -487,9 +487,12 @@ class Node(object):
             return Option(None)
 
     @property
-    def dirport(self) -> int:
+    def dirport(self) -> Option[int]:
         """DirPort that this node exposes"""
-        return self._network.dirport_base + self.nodenum
+        if self._config.relay and not self._config.bridge:
+            return Option(self._network.dirport_base + self.nodenum)
+        else:
+            return Option(None)
 
     @property
     def extorport(self) -> int:
@@ -812,7 +815,7 @@ class LocalNodeBuilder(NodeBuilder):
         idfile = Path(datadir, "keys", "authority_identity_key")
         skfile = Path(datadir, "keys", "authority_signing_key")
         certfile = Path(datadir, "keys", "authority_certificate")
-        addr = f"{self._node._config.ip}:{self._node.dirport}"
+        addr = f"{self._node._config.ip}:{self._node.dirport.unwrap()}"
         passphrase = self._node.auth_passphrase
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
@@ -938,7 +941,7 @@ class LocalNodeBuilder(NodeBuilder):
             authlines += " %s %s:%s %s\n" % (
                 self._node._config.dirserver_flags,
                 self._node._config.ip,
-                self._node.dirport,
+                self._node.dirport.unwrap(),
                 self._node.fingerprint.unwrap(),
             )
 
