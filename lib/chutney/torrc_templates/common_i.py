@@ -1,5 +1,4 @@
 from chutney.TorNet import Node, ChutneyError
-from . import orport_v6_i
 
 
 def format(n: Node) -> str:
@@ -123,12 +122,16 @@ ExitPolicy accept *:*
 # ------------------------------------------------------------------
 ExitPolicy reject *:*
 """
+    if n._config.relay and n._config.ipv6_addr.is_some():
+        # TODO: Avoid potential redundancy/conflict with OrPort emitted above.
+        res += f"""\
+# Tor uses the first IPv6 ORPort address as its IPv6 address
+OrPort {n._config.ipv6_addr.unwrap()}:{n.orport} IPv6Only
+"""
     if n._config.exit and n._config.ipv6_addr.is_some():
         if not n._config.relay:
             raise ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
-        res += f"""\
-{orport_v6_i.format(n)}
-
+        res += """\
 # 1. Allow exiting to IPv6 localhost and private networks by default
 # ------------------------------------------------------------------
 IPv6Exit 1
