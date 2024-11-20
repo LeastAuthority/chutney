@@ -153,11 +153,14 @@ ExitPolicy accept6 private:*
 # ------------------------------------------------------------------
 ExitPolicy reject6 *:*
 """
-    if n._config.authority and not n._config.bridgeauthority:
+    if n._config.authority:
         res += f"""
 AuthoritativeDirectory 1
-V3AuthoritativeDirectory 1
 ContactInfo auth{n.nodenum}@test.test
+"""
+    if n._config.authority and not n._config.bridgeauthority:
+        res += f"""
+V3AuthoritativeDirectory 1
 
 # Disable authority to relay/bridge reachability checks
 # These checks happen every half hour, even in testing networks
@@ -195,11 +198,8 @@ ConsensusParams cc_alg=2
             raise ChutneyError(
                 f"'bridgeauthority' set without 'authority' in node {n.nick}"
             )
-        # XXX Dedupe with above
         res += """
-AuthoritativeDirectory 1
 BridgeAuthoritativeDir 1
-ContactInfo bridgeauth{n.nodenum}@test.test
 """
 
     return res
