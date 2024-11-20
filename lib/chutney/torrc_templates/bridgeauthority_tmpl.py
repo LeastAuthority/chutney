@@ -1,9 +1,10 @@
+import re
+
 from chutney.TorNet import Node
-from . import relay_non_exit_tmpl, bridgeauthority_i
+from . import relay_non_exit_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{relay_non_exit_tmpl.format(n)}
-{bridgeauthority_i.format(n)}
-"""
+    res = relay_non_exit_tmpl.format(n)
+    assert re.search(r"^BridgeAuthoritativeDir 1", res, re.MULTILINE), res
+    return res

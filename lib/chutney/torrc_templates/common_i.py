@@ -190,5 +190,16 @@ V3AuthDistDelay 4
 
 ConsensusParams cc_alg=2
 """
+    if n._config.bridgeauthority:
+        if not n._config.authority:
+            raise ChutneyError(
+                f"'bridgeauthority' set without 'authority' in node {n.nick}"
+            )
+        # XXX Dedupe with above
+        res += """
+AuthoritativeDirectory 1
+BridgeAuthoritativeDir 1
+ContactInfo bridgeauth{n.nodenum}@test.test
+"""
 
     return res
