@@ -1,4 +1,5 @@
-from chutney.TorNet import Node
+from chutney.TorNet import Node, ChutneyError
+from . import orport_v6_i
 
 
 def format(n: Node) -> str:
@@ -121,6 +122,33 @@ ExitPolicy accept *:*
 # 4. Finally, reject all IPv4 addresses which haven't been permitted
 # ------------------------------------------------------------------
 ExitPolicy reject *:*
+"""
+    if n._config.exit and n._config.ipv6_addr.is_some():
+        if not n._config.relay:
+            raise ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
+        res += f"""\
+{orport_v6_i.format(n)}
+
+# 1. Allow exiting to IPv6 localhost and private networks by default
+# ------------------------------------------------------------------
+IPv6Exit 1
+
+# Each IPv6 tor instance is configured with Address [::1] by default
+# This currently only applies to bridges
+ExitPolicy accept6 [::1]:*
+
+# If you only want tor to connect to localhost, disable these lines:
+# This may cause network failures in some circumstances
+ExitPolicyRejectPrivate 0
+ExitPolicy accept6 private:*
+
+# 2. Optionally: Accept all IPv6 addresses, that is, the public internet
+# ----------------------------------------------------------------------
+# ExitPolicy accept6 *:*
+
+# 3. Finally, reject all IPv6 addresses which haven't been permitted
+# ------------------------------------------------------------------
+ExitPolicy reject6 *:*
 """
 
     return res

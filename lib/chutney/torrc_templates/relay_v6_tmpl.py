@@ -1,7 +1,7 @@
 import re
 
 from chutney.TorNet import Node
-from . import exit_v6_i, relay_non_exit_tmpl
+from . import relay_non_exit_tmpl
 
 # This file is named "relay.tmpl" for compatibility with previous
 # chutney versions
@@ -11,9 +11,7 @@ from . import exit_v6_i, relay_non_exit_tmpl
 
 
 def format(n: Node) -> str:
-    res = f"""\
-{relay_non_exit_tmpl.format(n)}
-{exit_v6_i.format(n)}
-"""
+    res = relay_non_exit_tmpl.format(n)
     assert re.search(r"^ExitPolicy accept 127.0.0.0/8:*", res, flags=re.MULTILINE), res
+    assert re.search(r"^IPv6Exit 1", res, flags=re.MULTILINE), res
     return res
