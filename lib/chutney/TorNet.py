@@ -3027,6 +3027,19 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             _THE_NETWORK.addNode(n)
 
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
+        # Set options based on torrc for backwards compatibility.
+        torrc: str = check_type(kwargs["torrc"], str)
+        if torrc == "client-only-v6-md.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "client-only-v6.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "hs-v3-only-v6-md.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "hs-v3-only-v6.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "single-onion-v3-only-v6-md.tmpl":
+            kwargs["ip"] = None
+
         if parent is None:
             return NodeConfig(**kwargs)
         else:

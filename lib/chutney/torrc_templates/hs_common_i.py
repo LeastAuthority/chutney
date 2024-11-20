@@ -7,13 +7,14 @@ from . import common_i
 def format(n: Node) -> str:
     res = f"""\
 {common_i.format(n)}
-Address {n._config.ip.unwrap("XXX Currently only called in ipv4 contexts")}
 
 HiddenServiceDir {n.dir}/hidden_service
 
 # Redirect requests to the port used by chutney verify
 HiddenServicePort 5858 127.0.0.1:4747
 """
+    if n._config.ip.is_some():
+        res += "Address {n._config.ip.unwrap()}\n"
     # XXX Replace with a friendlier error message.
     # (Done at end of this MR; This XXX comment has been patched back into the
     # first commit in the MR adding this style of assertion, but not all of the

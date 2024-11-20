@@ -79,12 +79,14 @@ configs = [
         torrc="client-only-v6-md.tmpl",
         tag="c",
         client=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
         torrc="client-only-v6.tmpl",
         tag="c",
         client=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
@@ -96,12 +98,14 @@ configs = [
         torrc="hs-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
         torrc="hs-v3-only-v6.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
@@ -138,6 +142,8 @@ configs = [
         tag="r",
         relay=True,
         exit=True,
+        # XXX clear ip?
+        # do we really support v6-only exits?
         ipv6_addr="[::1]",
     ),
     NodeConfig(
@@ -169,6 +175,7 @@ configs = [
         torrc="single-onion-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
 ]

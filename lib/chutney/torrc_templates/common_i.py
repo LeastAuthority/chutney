@@ -70,6 +70,12 @@ def format(n: Node) -> str:
         SocksPort {n.socksport.unwrap_or(0)}
         """
     )
+    if n._config.ip.is_none():
+        if n._config.disableipv6:
+            raise ChutneyError("No ipv4 address and ipv6 disabled")
+        if not n._config.client and not n._config.hs:
+            raise ChutneyError("No ipv4 address for non-client, non-hs")
+        res += "ClientUseIPv4 0\n"
     # `authorities` contains multiple lines, which breaks dedent if we include
     # it inline above.
     # TODO: `authorities` shouldn't be "pre-rendered" text.

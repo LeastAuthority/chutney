@@ -1,10 +1,10 @@
+import re
+
 from chutney.TorNet import Node
-from . import single_onion_v3_tmpl, client_only_v6_md_i
+from . import single_onion_v3_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{single_onion_v3_tmpl.format(n)}
-# Onion services are just another kind of client
-{client_only_v6_md_i.format(n)}
-"""
+    res = single_onion_v3_tmpl.format(n)
+    assert re.search(r"^ClientUseIPv4 0", res, re.MULTILINE), res
+    return res
