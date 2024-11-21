@@ -2227,6 +2227,8 @@ class NodeConfig:
     hs: bool = False
     # hs_directory: directory (relative to datadir) to store hidden service info
     hs_directory: str = "hidden_service"
+    # if creating a hidden service, whether to configure it as single-hop.
+    hs_singlehop: bool = False
     # connlimit: value of ConnLimit torrc option
     connlimit: int = 60
     # tor: path of the tor binary
@@ -3044,8 +3046,11 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
         elif torrc == "hs-v3-only-v6.tmpl":
             kwargs["ip"] = None
             kwargs["use_microdescriptors"] = False
+        elif torrc == "single-onion-v3.tmpl":
+            kwargs["hs_singlehop"] = True
         elif torrc == "single-onion-v3-only-v6-md.tmpl":
             kwargs["ip"] = None
+            kwargs["hs_singlehop"] = True
 
         if parent is None:
             return NodeConfig(**kwargs)

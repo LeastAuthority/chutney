@@ -172,6 +172,7 @@ configs = [
         torrc="single-onion-v3.tmpl",
         tag="h",
         hs=True,
+        hs_singlehop=True,
     ),
     NodeConfig(
         torrc="single-onion-v3-only-v6-md.tmpl",
@@ -179,6 +180,7 @@ configs = [
         hs=True,
         ip=None,
         ipv6_addr="[::1]",
+        hs_singlehop=True,
     ),
 ]
 
