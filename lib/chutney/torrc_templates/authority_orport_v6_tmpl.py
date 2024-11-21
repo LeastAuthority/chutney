@@ -5,11 +5,7 @@ from . import authority_tmpl
 
 
 def format(n: Node) -> str:
-    res = f"""\
-{authority_tmpl.format(n)}
-
-# And has IPv6 connectivity
-AuthDirHasIPv6Connectivity 1
-"""
+    res = authority_tmpl.format(n)
     assert re.search(r"^OrPort.*IPv6Only", res, re.MULTILINE), res
+    assert re.search(r"^AuthDirHasIPv6Connectivity 1", res, re.MULTILINE), res
     return res

@@ -222,6 +222,13 @@ def format(n: Node) -> str:
             ContactInfo auth{n.nodenum}@test.test
             """
         )
+        if n._config.ipv6_addr.is_some() and not n._config.disableipv6:
+            res += textwrap.dedent(
+                """
+                # And has IPv6 connectivity
+                AuthDirHasIPv6Connectivity 1
+                """
+            )
     if n._config.authority and not n._config.bridgeauthority:
         res += textwrap.dedent(
             f"""
