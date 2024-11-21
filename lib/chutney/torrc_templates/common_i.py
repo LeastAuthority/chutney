@@ -79,6 +79,9 @@ def format(n: Node) -> str:
 
             # Redirect requests to the port used by chutney verify
             HiddenServicePort 5858 127.0.0.1:4747
+
+            # v3 is the only current supported version.
+            HiddenServiceVersion 3
             """
         )
         if n._config.ip.is_some():
