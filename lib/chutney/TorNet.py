@@ -2279,6 +2279,11 @@ class NodeConfig:
     sandbox: bool = getenv_bool("CHUTNEY_TOR_SANDBOX", platform.system() == "Linux")
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     enable_controlsocket: bool = getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True)
+    # Whether to use microdescriptors (via UseMicrodescriptors in torrc).
+    #
+    # Due to Tor bug #19608, microdescriptors can't be used by IPv6-only clients
+    # running tor 0.2.9 and earlier.
+    use_microdescriptors: bool = True
 
     @property
     def tor_gencert(self) -> str:
@@ -3033,10 +3038,12 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             kwargs["ip"] = None
         elif torrc == "client-only-v6.tmpl":
             kwargs["ip"] = None
+            kwargs["use_microdescriptors"] = False
         elif torrc == "hs-v3-only-v6-md.tmpl":
             kwargs["ip"] = None
         elif torrc == "hs-v3-only-v6.tmpl":
             kwargs["ip"] = None
+            kwargs["use_microdescriptors"] = False
         elif torrc == "single-onion-v3-only-v6-md.tmpl":
             kwargs["ip"] = None
 

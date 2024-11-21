@@ -88,6 +88,7 @@ configs = [
         client=True,
         ip=None,
         ipv6_addr="[::1]",
+        use_microdescriptors=False,
     ),
     NodeConfig(
         torrc="client.tmpl",
@@ -107,6 +108,7 @@ configs = [
         hs=True,
         ip=None,
         ipv6_addr="[::1]",
+        use_microdescriptors=False,
     ),
     NodeConfig(
         torrc="hs-v3.tmpl",

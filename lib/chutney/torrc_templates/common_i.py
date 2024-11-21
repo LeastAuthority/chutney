@@ -66,8 +66,9 @@ def format(n: Node) -> str:
         # disabled)
         {n._config.owning_controller_process}
 
-
         SocksPort {n.socksport.unwrap_or(0)}
+
+        UseMicrodescriptors {int(n._config.use_microdescriptors)}
         """
     )
     if n._config.ip.is_none():
