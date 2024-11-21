@@ -37,6 +37,7 @@ configs = [
         torrc="bridgeclient-obfs4.tmpl",
         tag="bc",
         client=True,
+        bridgeclient=True,
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
@@ -44,6 +45,7 @@ configs = [
         torrc="bridgeclient.tmpl",
         tag="bc",
         client=True,
+        bridgeclient=True,
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),

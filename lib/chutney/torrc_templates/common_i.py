@@ -301,6 +301,9 @@ def format(n: Node) -> str:
             ServerTransportListenAddr obfs4 {ipv4}:{n.ptport}
             """
         )
+    if n._config.bridgeclient:
+        res += "UseBridges 1\n"
+        res += n._network.bridges
     res += n._config.extra_raw_torrc + "\n"
 
     return res
