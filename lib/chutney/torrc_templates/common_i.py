@@ -283,5 +283,6 @@ def format(n: Node) -> str:
             BridgeRecordUsageByCountry 0
             """
         )
+    res += n._config.extra_raw_torrc + "\n"
 
     return res

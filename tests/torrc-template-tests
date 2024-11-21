@@ -74,6 +74,20 @@ configs = [
         torrc="client_bwscanner.tmpl",
         tag="c",
         client=True,
+        use_microdescriptors=False,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            UseEntryGuards 0
+            FetchDirInfoEarly 1
+            FetchDirInfoExtraEarly 1
+            FetchUselessDescriptors 1
+            LearnCircuitBuildTimeout 0
+            CircuitBuildTimeout 60
+            ConnectionPadding 0
+            __DisablePredictedCircuits 1
+            __LeaveStreamsUnattached 1
+            """
+        )
     ),
     NodeConfig(
         torrc="client-only-v6-md.tmpl",

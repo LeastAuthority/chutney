@@ -2287,6 +2287,12 @@ class NodeConfig:
     # running tor 0.2.9 and earlier.
     use_microdescriptors: bool = True
 
+    # "Escape hatch" for injecting raw lines at the end of the generated torrc.
+    # Generally this should only be used as a short-term workaround. For
+    # long-term usage, prefer to add more-specific (and arti-compatible)
+    # configuration options.
+    extra_raw_torrc: str = ""
+
     @property
     def tor_gencert(self) -> str:
         """name or path of the tor-gencert binary (if present)"""
@@ -3036,7 +3042,24 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
         # Set options based on torrc for backwards compatibility.
         torrc: str = check_type(kwargs["torrc"], str)
-        if torrc == "client-only-v6-md.tmpl":
+        if torrc == "client_bwscanner.tmpl":
+            kwargs["use_microdescriptors"] = False
+            # TODO: If we want to keep this, consider porting
+            # to individual options.
+            kwargs["extra_raw_torrc"] = textwrap.dedent(
+                """
+                UseEntryGuards 0
+                FetchDirInfoEarly 1
+                FetchDirInfoExtraEarly 1
+                FetchUselessDescriptors 1
+                LearnCircuitBuildTimeout 0
+                CircuitBuildTimeout 60
+                ConnectionPadding 0
+                __DisablePredictedCircuits 1
+                __LeaveStreamsUnattached 1
+                """
+            )
+        elif torrc == "client-only-v6-md.tmpl":
             kwargs["ip"] = None
         elif torrc == "client-only-v6.tmpl":
             kwargs["ip"] = None
