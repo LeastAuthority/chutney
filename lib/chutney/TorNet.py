@@ -2691,7 +2691,7 @@ bridges = '''
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
     def wait_for_bootstrap(
-        self, limit_secs: int = getenv_int("CHUTNEY_START_TIME", 60)
+        self, limit_secs: int = getenv_int("CHUTNEY_START_TIME", 300)
     ) -> None:
         """
         Wait for the network to bootstrap. Raises `TimeoutException` on timeout.
