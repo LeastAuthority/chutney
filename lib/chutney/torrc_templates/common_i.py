@@ -1,3 +1,4 @@
+
 import textwrap
 
 from chutney.TorNet import Node, ChutneyError, V3_AUTH_VOTING_INTERVAL
@@ -71,6 +72,18 @@ def format(n: Node) -> str:
         UseMicrodescriptors {int(n._config.use_microdescriptors)}
         """
     )
+    if n._config.hs:
+        res += textwrap.dedent(
+            f"""
+            HiddenServiceDir {n.dir}/hidden_service
+
+            # Redirect requests to the port used by chutney verify
+            HiddenServicePort 5858 127.0.0.1:4747
+            """
+        )
+        if n._config.ip.is_some():
+            # TODO: Unify "Address" directives
+            res += f"Address {n._config.ip.unwrap()}\n"
     if n._config.ip.is_none():
         if n._config.disableipv6:
             raise ChutneyError("No ipv4 address and ipv6 disabled")

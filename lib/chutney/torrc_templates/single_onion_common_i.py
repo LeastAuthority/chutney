@@ -1,10 +1,12 @@
+import re
+
 from chutney.TorNet import Node
-from . import hs_common_i
+from . import common_i
 
 
 def format(n: Node) -> str:
-    return f"""\
-{hs_common_i.format(n)}
+    res = f"""\
+{common_i.format(n)}
 
 # Make this hidden service instance a Single Onion Service
 HiddenServiceSingleHopMode 1
@@ -26,3 +28,6 @@ LongLivedPorts
 # This disables everything except hidden service preemptive 3-hop circuits.
 # See #17360.
 """
+    assert re.search(r"^SocksPort 0", res, flags=re.MULTILINE), res
+    assert re.search(r"^HiddenServicePort [1-9]", res, flags=re.MULTILINE), res
+    return res
