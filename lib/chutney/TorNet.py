@@ -1009,7 +1009,7 @@ class LocalNodeBuilder(NodeBuilder):
                 self._node.fingerprint.unwrap(),
                 extra,
             )
-        return ("Bridge " + bridgelines, bridgelines)
+        return (textwrap.indent(bridgelines, "Bridge "), bridgelines)
 
 
 class LocalNodeController(NodeController):
