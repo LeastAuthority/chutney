@@ -978,44 +978,54 @@ class LocalNodeBuilder(NodeBuilder):
             )
         return (authlines, arti_lines)
 
-    def _getBridgeLines(self) -> tuple[str, str]:
-        """Return tuple of string containing potential Bridge line for this Node.
-        First element is the line in torrc format, and 2nd is the same line in raw/arti format.
-        Non-bridge relays return ("", "").
+    def _getBridgeLines(self) -> list[BridgeLine]:
+        """Return descriptors that a client can use to connect to this bridge.
+        Non-bridge relays return [].
         """
         if not self._node._config.bridge:
-            return ("", "")
+            return []
 
         if self._node._config.pt_bridge:
             port = self._node.ptport
-            transport = self._node._config.pt_transport
-            # TODO: can we make this just an `unwrap`?
-            # Currently doing so breaks the `bridges-obfs4` network;
-            extra = self._node.getController().getPtExtra().unwrap_or("")
+            pt_transport = Option(self._node._config.pt_transport)
+            pt_extra = self._node.getController().getPtExtra()
+            if pt_extra.is_none():
+                # obfs4 pt bridges (and possibly others) don't generate their
+                # `pt_extra` until after they've *started*.  We should probably
+                # return `[]` here, or avoid calling this function at all for a
+                # pt bridge that hasn't started yet.  For now we preserve legacy
+                # behavior of just setting pt_extra to an empty string, which
+                # causes validation to pass, but a pt bridge client won't
+                # actually be able to connect.
+                # TODO(#40023): Once #40023 is fixed, revisit doing something else here.
+                debug(f"Couldn't load pt_extra from {self._node.dir}")
+                pt_extra = Option("")
         else:
             # the orport is the same on IPv4 and IPv6
             port = self._node.orport
-            transport = ""
-            extra = ""
+            pt_transport = Option(None)
+            pt_extra = Option(None)
 
-        BRIDGE_LINE_TEMPLATE = "%s %s:%s %s %s\n"
-
-        bridgelines = BRIDGE_LINE_TEMPLATE % (
-            transport,
-            self._node._config.ip.unwrap(),
-            port,
-            self._node.fingerprint.unwrap(),
-            extra,
-        )
+        res = [
+            BridgeLine(
+                ipaddr=self._node._config.ip.unwrap(),
+                port=port,
+                fingerprint=self._node.fingerprint.unwrap(),
+                pt_transport=pt_transport,
+                pt_extra=pt_extra,
+            ),
+        ]
         if self._node._config.ipv6_addr.is_some():
-            bridgelines += BRIDGE_LINE_TEMPLATE % (
-                transport,
-                self._node._config.ipv6_addr.unwrap(),
-                port,
-                self._node.fingerprint.unwrap(),
-                extra,
+            res.append(
+                BridgeLine(
+                    ipaddr=self._node._config.ipv6_addr.unwrap(),
+                    port=port,
+                    fingerprint=self._node.fingerprint.unwrap(),
+                    pt_transport=pt_transport,
+                    pt_extra=pt_extra,
+                )
             )
-        return (textwrap.indent(bridgelines, "Bridge "), bridgelines)
+        return res
 
 
 class LocalNodeController(NodeController):
@@ -2374,6 +2384,15 @@ class NodeConfig:
         return dataclasses.replace(self, **kwargs)
 
 
+@dataclasses.dataclass
+class BridgeLine:
+    ipaddr: str
+    port: int
+    fingerprint: str
+    pt_transport: Option[str] = Option(None)
+    pt_extra: Option[str] = Option(None)
+
+
 KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
 
 
@@ -2394,9 +2413,8 @@ class Network(object):
         # authorities: combination of AlternateDirAuthority and
         # AlternateBridgeAuthority torrc lines. there is no default for this option
         self.authorities = "AlternateDirAuthority bleargh bad torrc file!"
-        # bridges: potential Bridge torrc lines for this node. there is no default
-        # for this option
-        self.bridges: str = "Bridge bleargh bad torrc file!"
+        # bridges: potential Bridge descriptors in this network.
+        self.bridges: list[BridgeLine] = []
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -2493,10 +2511,6 @@ class Network(object):
         nodeslink.symlink_to(newnodesdir)
         self.dir = newnodesdir
 
-    def _checkConfig(self) -> None:
-        for n in self._nodes:
-            n.getBuilder().checkConfig(self)
-
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
         and host information we have, and prints the result.
@@ -2526,10 +2540,8 @@ class Network(object):
         bridgelines = []
         arti_fallback_lines = []
         arti_auth_lines = []
-        arti_bridgelines = []
         all_builders = [n.getBuilder() for n in self._nodes]
         builders = [b for b in all_builders if b._node._config.config_phase == phase]
-        self._checkConfig()
 
         # XXX don't change node names or types or count if anything is
         # XXX running!
@@ -2542,12 +2554,10 @@ class Network(object):
             altauthlines.append(tor_auth_line)
             arti_fallback_lines.append(arti_fallback)
             arti_auth_lines.append(arti_auth)
-            tor_bridgeline, arti_bridgeline = b._getBridgeLines()
-            bridgelines.append(tor_bridgeline)
-            arti_bridgelines.append(arti_bridgeline)
+            bridgelines.extend(b._getBridgeLines())
 
         self.authorities = "".join(altauthlines)
-        self.bridges = "".join(bridgelines)
+        self.bridges = bridgelines
 
         for b in builders:
             b.config(network)
@@ -2590,7 +2600,25 @@ enabled = "auto"
 bridges = '''
 """
             )
-            f.write("".join(arti_bridgelines))
+            for bd in bridgelines:
+                bridgeline: str
+                if bd.pt_transport.is_some():
+                    bridgeline = "{transport} {ip}:{port} {fp} {pt_extra}\n".format(
+                        transport=bd.pt_transport.unwrap(),
+                        ip=bd.ipaddr,
+                        port=bd.port,
+                        fp=bd.fingerprint,
+                        pt_extra=bd.pt_extra.unwrap_or_raise(
+                            ChutneyError("Missing pt_extra")
+                        ),
+                    )
+                else:
+                    bridgeline = "{ip}:{port} {fp}\n".format(
+                        ip=bd.ipaddr,
+                        port=bd.port,
+                        fp=bd.fingerprint,
+                    )
+                f.write(bridgeline)
             f.write("'''\n")
 
         for b in builders:

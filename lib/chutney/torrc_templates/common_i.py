@@ -303,7 +303,23 @@ def format(n: Node) -> str:
         )
     if n._config.bridgeclient:
         res += "UseBridges 1\n"
-        res += n._network.bridges
+        for bd in n._network.bridges:
+            if bd.pt_transport.is_some():
+                res += "Bridge {transport} {ip}:{port} {fp} {pt_extra}\n".format(
+                    transport=bd.pt_transport.unwrap(),
+                    ip=bd.ipaddr,
+                    port=bd.port,
+                    fp=bd.fingerprint,
+                    pt_extra=bd.pt_extra.unwrap_or_raise(
+                        ChutneyError("bridge descriptor is missing pt_extra")
+                    ),
+                )
+            else:
+                res += "Bridge {ip}:{port} {fp}\n".format(
+                    ip=bd.ipaddr,
+                    port=bd.port,
+                    fp=bd.fingerprint,
+                )
     res += n._config.extra_raw_torrc + "\n"
 
     return res
