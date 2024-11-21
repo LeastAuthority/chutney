@@ -3,6 +3,4 @@ from . import relay_v6_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{relay_v6_tmpl.format(n)}
-"""
+    return relay_v6_tmpl.format(n)
