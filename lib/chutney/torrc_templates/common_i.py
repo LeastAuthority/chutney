@@ -2,6 +2,7 @@
 import textwrap
 
 from chutney.TorNet import Node, ChutneyError, V3_AUTH_VOTING_INTERVAL
+from chutney.Util import find_executable_on_path
 
 
 def format(n: Node) -> str:
@@ -281,6 +282,23 @@ def format(n: Node) -> str:
             BridgeRelay 1
             # Nor do we have GEOIP files in any reliable location
             BridgeRecordUsageByCountry 0
+            """
+        )
+    if n._config.pt_bridge:
+        ipv4 = n._config.ip.unwrap_or_raise(
+            ChutneyError("ipv4 is mandatory for bridges")
+        )
+        pt_executable = find_executable_on_path(n._config.pt_executable)
+        if pt_executable is None:
+            raise ChutneyError(
+                "pt_bridge is set, but couldn't locate pt_executable "
+                + f"'{n._config.pt_executable}'"
+            )
+        res += textwrap.dedent(
+            f"""
+            ServerTransportPlugin {n._config.pt_transport} exec {pt_executable}
+            ExtOrPort {n.extorport}
+            ServerTransportListenAddr obfs4 {ipv4}:{n.ptport}
             """
         )
     res += n._config.extra_raw_torrc + "\n"

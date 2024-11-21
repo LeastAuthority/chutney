@@ -253,7 +253,7 @@ def getenv_bool(env_var: str, default: bool) -> bool:
 
 
 def find_executable_on_path(
-    basename: str, path: Optional[Iterable[Path]] = None
+    basename: Union[str, Path], path: Optional[Iterable[Path]] = None
 ) -> Optional[Path]:
     """Find the first executable file named `basename` in `path`
 

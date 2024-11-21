@@ -2223,6 +2223,8 @@ class NodeConfig:
     # pt_transport: a potential bridge's transport,
     # which will be used in the Bridge torrc option
     pt_transport: str = ""
+    # Executable that implements the pluggable transport.
+    pt_executable: Path = Path("obfs4proxy")
     # hs: whether a node has a hidden service
     hs: bool = False
     # hs_directory: directory (relative to datadir) to store hidden service info
