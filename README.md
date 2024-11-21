@@ -269,7 +269,7 @@ Chutney expects a tor network to bootstrap in these stages:
 The `tools/test-network.sh` script uses the chutney `wait_for_bootstrap`
 command to wait for the network to bootstrap.
 
-`wait_for_bootstrap` waits up to `CHUTNEY_START_TIME` seconds (default: 120),
+`wait_for_bootstrap` waits up to `CHUTNEY_START_TIME` seconds (default: 300),
 checking whether:
 
 * the logged bootstrapped status for every node is 100% (steps 9 and 14),

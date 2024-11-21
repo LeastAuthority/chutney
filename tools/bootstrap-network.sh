@@ -105,7 +105,7 @@ for launch_idx in $(seq 1 "$CHUTNEY_LAUNCH_PHASES"); do
 
     # We allow up to CHUTNEY_START_TIME for each bootstrap phase to
     # complete.
-    export CHUTNEY_START_TIME="${CHUTNEY_START_TIME:-120}"
+    export CHUTNEY_START_TIME="${CHUTNEY_START_TIME:-300}"
 
     if [ "$CHUTNEY_START_TIME" -ge 0 ]; then
 	$ECHO "Waiting up to $CHUTNEY_START_TIME seconds for all nodes in phase ${launch_idx} to bootstrap..."
