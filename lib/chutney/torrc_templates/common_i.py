@@ -272,5 +272,13 @@ def format(n: Node) -> str:
                 f"'bridgeauthority' set without 'authority' in node {n.nick}"
             )
         res += "BridgeAuthoritativeDir 1\n"
+    if n._config.bridge:
+        res += textwrap.dedent(
+            """
+            BridgeRelay 1
+            # Nor do we have GEOIP files in any reliable location
+            BridgeRecordUsageByCountry 0
+            """
+        )
 
     return res
