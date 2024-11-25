@@ -38,6 +38,7 @@ configs = [
         tag="bc",
         client=True,
         bridgeclient=True,
+        pt_transport="obfs4",
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),

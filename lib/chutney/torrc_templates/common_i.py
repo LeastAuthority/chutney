@@ -1,11 +1,12 @@
+from __future__ import annotations
 
+import chutney.TorNet as TorNet
 import textwrap
 
-from chutney.TorNet import Node, ChutneyError, V3_AUTH_VOTING_INTERVAL
 from chutney.Util import find_executable_on_path
 
 
-def format(n: Node) -> str:
+def format(n: TorNet.Node) -> str:
     res = textwrap.dedent(
         f"""
         TestingTorNetwork 1
@@ -114,9 +115,9 @@ def format(n: Node) -> str:
             )
     if n._config.ip.is_none():
         if n._config.disableipv6:
-            raise ChutneyError("No ipv4 address and ipv6 disabled")
+            raise TorNet.ChutneyError("No ipv4 address and ipv6 disabled")
         if not n._config.client and not n._config.hs:
-            raise ChutneyError("No ipv4 address for non-client, non-hs")
+            raise TorNet.ChutneyError("No ipv4 address for non-client, non-hs")
         res += "ClientUseIPv4 0\n"
     # `authorities` contains multiple lines, which breaks dedent if we include
     # it inline above.
@@ -124,7 +125,7 @@ def format(n: Node) -> str:
     res += f"{n._network.authorities.strip()}\n"
     if n._config.relay:
         ipv4 = n._config.ip.unwrap_or_raise(
-            ChutneyError("ipv4 address is mandatory for relays")
+            TorNet.ChutneyError("ipv4 address is mandatory for relays")
         )
         res += textwrap.dedent(
             f"""
@@ -149,7 +150,7 @@ def format(n: Node) -> str:
         )
     if n._config.exit:
         if not n._config.relay:
-            raise ChutneyError("'exit' set without 'relay'")
+            raise TorNet.ChutneyError("'exit' set without 'relay'")
         res += textwrap.dedent(
             """
             # 1. Allow exiting to IPv4 localhost and private networks by default
@@ -194,7 +195,7 @@ def format(n: Node) -> str:
         )
     if n._config.exit and n._config.ipv6_addr.is_some():
         if not n._config.relay:
-            raise ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
+            raise TorNet.ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
         res += textwrap.dedent(
             """
             # 1. Allow exiting to IPv6 localhost and private networks by default
@@ -263,7 +264,7 @@ def format(n: Node) -> str:
             # Vote + Dist must be less than Interval/2, because when there's no consensus,
             # tor uses Interval/2 as the voting interval
             #
-            V3AuthVotingInterval {V3_AUTH_VOTING_INTERVAL}
+            V3AuthVotingInterval {TorNet.V3_AUTH_VOTING_INTERVAL}
             V3AuthVoteDelay 4
             V3AuthDistDelay 4
 
@@ -272,7 +273,7 @@ def format(n: Node) -> str:
         )
     if n._config.bridgeauthority:
         if not n._config.authority:
-            raise ChutneyError(
+            raise TorNet.ChutneyError(
                 f"'bridgeauthority' set without 'authority' in node {n.nick}"
             )
         res += "BridgeAuthoritativeDir 1\n"
@@ -286,11 +287,11 @@ def format(n: Node) -> str:
         )
     if n._config.pt_bridge:
         ipv4 = n._config.ip.unwrap_or_raise(
-            ChutneyError("ipv4 is mandatory for bridges")
+            TorNet.ChutneyError("ipv4 is mandatory for bridges")
         )
         pt_executable = find_executable_on_path(n._config.pt_executable)
         if pt_executable is None:
-            raise ChutneyError(
+            raise TorNet.ChutneyError(
                 "pt_bridge is set, but couldn't locate pt_executable "
                 + f"'{n._config.pt_executable}'"
             )
@@ -311,7 +312,7 @@ def format(n: Node) -> str:
                     port=bd.port,
                     fp=bd.fingerprint,
                     pt_extra=bd.pt_extra.unwrap_or_raise(
-                        ChutneyError("bridge descriptor is missing pt_extra")
+                        TorNet.ChutneyError("bridge descriptor is missing pt_extra")
                     ),
                 )
             else:
@@ -320,6 +321,17 @@ def format(n: Node) -> str:
                     port=bd.port,
                     fp=bd.fingerprint,
                 )
+        if n._config.pt_transport:
+            pt_executable = find_executable_on_path(n._config.pt_executable)
+            if pt_executable is None:
+                raise TorNet.ChutneyError(
+                    "'pt_transport' is set, but couldn't locate pt_executable "
+                    + f"'{n._config.pt_executable}'"
+                )
+            res += (
+                f"ClientTransportPlugin {n._config.pt_transport} exec {pt_executable}\n"
+            )
+
     res += n._config.extra_raw_torrc + "\n"
 
     return res

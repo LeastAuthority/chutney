@@ -2231,7 +2231,7 @@ class NodeConfig:
     # pt_bridge: whether a node is a potential bridge
     pt_bridge: bool = False
     # pt_transport: a potential bridge's transport,
-    # which will be used in the Bridge torrc option
+    # which will be used in the Bridge and ClientTransportPlugin torrc options.
     pt_transport: str = ""
     # Executable that implements the pluggable transport.
     pt_executable: Path = Path("obfs4proxy")
@@ -3072,7 +3072,9 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
         # Set options based on torrc for backwards compatibility.
         torrc: str = check_type(kwargs["torrc"], str)
-        if torrc == "client_bwscanner.tmpl":
+        if torrc == "bridgeclient-obfs4.tmpl":
+            kwargs["pt_transport"] = "obfs4"
+        elif torrc == "client_bwscanner.tmpl":
             kwargs["use_microdescriptors"] = False
             # TODO: If we want to keep this, consider porting
             # to individual options.
