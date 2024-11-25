@@ -100,6 +100,22 @@ class ChutneyTimeoutError(ChutneyError):
     pass
 
 
+class ChutneyInconsistentTemplateError(ChutneyError):
+    def __init__(self, template_name: str, pattern: str, contents: str):
+        self._template_name = template_name
+        self._pattern = pattern
+        self._contents = contents
+
+    def __str__(self) -> str:
+        return (
+            f"Couldn't find expected pattern '{self._pattern}'."
+            + " Check that other config options have been set consistently"
+            + f" with specified template name '{self._template_name}'."
+            + "\nFull generated torrc:\n"
+            + textwrap.indent(self._contents, "  ")
+        )
+
+
 class ChutneyErrorGroup(ChutneyError):
     """A list of errors.
 
@@ -577,6 +593,15 @@ class Node(object):
         if self._controller is None:
             self._controller = LocalNodeController(self._network, self)
         return self._controller
+
+    def _check_expected_pattern(self, pattern: str, contents: str) -> None:
+        """Raises `ChutneyInconsistentTemplateError` if `pattern` is not found in `contents`"""
+        if not re.search(pattern, contents, re.MULTILINE):
+            # Only intended for use in nodes that specify a torrc.
+            assert self._config.torrc is not None
+            raise ChutneyInconsistentTemplateError(
+                self._config.torrc, pattern, contents
+            )
 
 
 class NodeBuilder:

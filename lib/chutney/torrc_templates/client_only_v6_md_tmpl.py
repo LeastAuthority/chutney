@@ -1,10 +1,8 @@
-import re
-
 from chutney.TorNet import Node
 from . import client_tmpl
 
 
 def format(n: Node) -> str:
     res = client_tmpl.format(n)
-    assert re.search(r"^ClientUseIPv4 0", res, re.MULTILINE), res
+    n._check_expected_pattern(r"^ClientUseIPv4 0", res)
     return res

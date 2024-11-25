@@ -1,11 +1,9 @@
-import re
-
 from chutney.TorNet import Node
 from . import client_tmpl
 
 
 def format(n: Node) -> str:
     res = client_tmpl.format(n)
-    assert re.search(r"^UseBridges 1", res, re.MULTILINE), res
-    assert re.search(r"^Bridge ", res, re.MULTILINE), res
+    n._check_expected_pattern(r"^UseBridges 1", res)
+    n._check_expected_pattern(r"^Bridge ", res)
     return res
