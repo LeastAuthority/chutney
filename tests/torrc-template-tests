@@ -143,6 +143,12 @@ configs = [
         tag="relay1mbyteMBR",
         relay=True,
         exit=True,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            Nickname relay1mbyteMBR
+            RelayBandwidthRate 1 MBytes
+            """
+        )
     ),
     NodeConfig(
         torrc="relay-non-dir.tmpl",

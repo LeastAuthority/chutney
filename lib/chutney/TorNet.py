@@ -3101,6 +3101,15 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
         elif torrc == "hs-v3-only-v6.tmpl":
             kwargs["ip"] = None
             kwargs["use_microdescriptors"] = False
+        elif torrc == "relay-MBR.tmpl":
+            # TODO: If we want to keep this, consider porting
+            # to individual options.
+            kwargs["extra_raw_torrc"] = textwrap.dedent(
+                """
+                Nickname relay1mbyteMBR
+                RelayBandwidthRate 1 MBytes
+                """
+            )
         elif torrc == "single-onion-v3.tmpl":
             kwargs["hs_singlehop"] = True
         elif torrc == "single-onion-v3-only-v6-md.tmpl":
