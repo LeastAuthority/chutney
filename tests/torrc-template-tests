@@ -12,6 +12,10 @@ from pathlib import Path
 network = TorNet.Network()
 
 # Generate configs for all torrc templates, using their legacy names.
+# TODO: Drop the 'torrc' parameters, which are no longer required.
+# Keeping them in the MR that removes the need for it, to keep the validatation
+# they currently enable that the generated torrc is consistent with the legacy
+# template name.
 configs = [
     NodeConfig(
         torrc="authority-orport-v6.tmpl",
@@ -219,7 +223,7 @@ def template_to_basename(s: str) -> str:
 
 
 checked_template_basenames: set[str] = {
-    template_to_basename(n.torrc) for n in nodes
+    template_to_basename(n._config.torrc) for n in nodes
 }
 all_template_basenames: set[str] = {
     Path(s).name for s in glob.glob("lib/chutney/torrc_templates/*_tmpl.py")

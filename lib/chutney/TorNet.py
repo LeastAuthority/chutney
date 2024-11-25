@@ -41,6 +41,7 @@ from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type, TypeCheckError
 
+import chutney.torrc_templates.common_i
 import chutney.Host
 import chutney.Util
 
@@ -449,9 +450,6 @@ class Node(object):
 
         # Validate some fields. NodeConfig permits these to be None
         # for use with templating; e.g. NodeConfig.specialize.
-        self.torrc: str = Option(config.torrc).unwrap(
-            lambda: f"Config is missing 'torrc': {config}"
-        )
         self.tag: str = Option(config.tag).unwrap(
             lambda: f"Config is missing 'tag': {config}"
         )
@@ -728,12 +726,19 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
+
+        torrc = self._node._config.torrc
+        if torrc is None:
+            return chutney.torrc_templates.common_i.format(self._node)
+
+        # Legacy path:
+
         # TODO: Maybe make this a (big) explicit `match` statement?
-        module_name = self._node.torrc.translate({ord("."): "_", ord("-"): "_"})
+        module_name = torrc.translate({ord("."): "_", ord("-"): "_"})
         try:
             mod = importlib.import_module("chutney.torrc_templates." + module_name)
         except ModuleNotFoundError as e:
-            raise ChutneyError(f"Unrecognized torrc_template {self._node.torrc}") from e
+            raise ChutneyError(f"Unrecognized torrc_template {torrc}") from e
         try:
             f = check_type(getattr(mod, "format"), Callable[[Node], str])
         except (AttributeError, TypeCheckError) as e:
@@ -2197,11 +2202,14 @@ class NodeConfig:
     """Properties of a Tor Node"""
 
     # Name of the template module to use to generate the config file.
+    #
     # This should be the name of a module in `chutney.torrc_templates`.
     # For backwards compatibility '-' and '.' are translated to `_`
     # when loading the module.
-    # TODO: Get rid of this and build the config file based on other attributes
-    # like "client", "exit", etc.
+    #
+    # Deprecated. New code should leave this as None. The torrc generation is
+    # now completely specified through other attributes like "client", "exit",
+    # etc.
     torrc: Optional[str] = None
     # a short text string that represents the type of node.
     # Some special tag prefixes:
@@ -2210,49 +2218,45 @@ class NodeConfig:
     #   (as does setting the `client` attribute).
     # TODO: Get rid of these special tag meanings in favor of explicit attributes.
     tag: Optional[str] = None
-    # Whether this node is configured to use a bridge.
-    # (should agree with `torrc`)
+    # Whether to configure this node to use a bridge.
     bridgeclient: bool = False
-    # Whether this node is configured as a client.
-    # (should agree with `torrc`)
+    # Whether to configure this node to act as a client.
     client: bool = False
-    # Whether this node is configured as an exit.
-    # (should agree with `torrc`)
+    # Whether to configure this node to act as an exit.
     exit: bool = False
 
-    # authority: whether a node is an authority or bridge authority
+    # Whether to configure this node to act as an authority (or bridge authority).
     authority: bool = False
-    # bridgeauthority: whether a node is a bridge authority
+    # Whether to configure this node as a bridge authority
     bridgeauthority: bool = False
-    # relay: whether a node is a relay, exit, or bridge
+    # Whether to configure this node as a relay; including as an exit, or bridge
     relay: bool = False
-    # bridge: whether a node is a bridge
+    # Whether to configure this node as a bridge.
     bridge: bool = False
-    # pt_bridge: whether a node is a potential bridge
+    # Whether to configure this node as a pluggable transport bridge.
     pt_bridge: bool = False
-    # pt_transport: a potential bridge's transport,
-    # which will be used in the Bridge and ClientTransportPlugin torrc options.
+    # Name of pluggable transport to use for a bridge or bridge client.
     pt_transport: str = ""
     # Executable that implements the pluggable transport.
     pt_executable: Path = Path("obfs4proxy")
-    # hs: whether a node has a hidden service
+    # Whether to configure this node as a hidden service
     hs: bool = False
-    # hs_directory: directory (relative to datadir) to store hidden service info
+    # directory (relative to datadir) to store hidden service info
     hs_directory: str = "hidden_service"
     # if creating a hidden service, whether to configure it as single-hop.
     hs_singlehop: bool = False
-    # connlimit: value of ConnLimit torrc option
+    # value of ConnLimit torrc option
     connlimit: int = 60
-    # tor: path of the tor binary
+    # path of the tor binary
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
-    # auth_cert_lifetime: lifetime of authority certs, in months
+    # lifetime of authority certs, in months
     auth_cert_lifetime: int = 12
-    # ip: primary IP address (usually IPv4) to listen on.
+    # primary IP address (usually IPv4) to listen on.
     # Setting to None disables ipv4.
     ip: OptionalConversionDescriptor[str] = OptionalConversionDescriptor(
         default=Option(os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1"))
     )
-    # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
+    # secondary IP address (usually IPv6) to listen on. we default to
     # ipv6_addr=None to support IPv4-only systems.
     # We use OptionalConversionDescriptor here to get `Option[str]`'s
     # enforcement for our internal usage, but allow callers to initialize and
@@ -2262,30 +2266,30 @@ class NodeConfig:
     )
     # Whether to disable all ipv6 functionality
     disableipv6: bool = getenv_bool("CHUTNEY_DISABLE_IPV6", False)
-    # dirserver_flags: used only if authority=True
+    # Directory server flags. Used only if authority=True
     dirserver_flags: str = "no-v2"
-    # poll_launch_time: None means wait on launch (requires RunAsDaemon),
+    # None means wait on launch (requires RunAsDaemon),
     # otherwise, poll after that many seconds (can be fractional/decimal)
     poll_launch_time: Optional[float] = None
-    # poll_launch_time_default: Used when poll_launch_time is None, but
+    # Used when poll_launch_time is None, but
     # RunAsDaemon is not set Set low so that we don't interfere with the
     # voting interval
     poll_launch_time_default: float = 0.1
-    # controlling_pid: the PID of the controlling script
+    # The PID of the controlling script
     # (for __OwningControllerProcess)
     controlling_pid: int = getenv_int("CHUTNEY_CONTROLLING_PID", 0)
-    # dns_conf: the path to a DNS config file for Tor Exits. If this file
+    # The path to a DNS config file for Tor Exits. If this file
     # is empty or unreadable, Tor will try 127.0.0.1:53.
     dns_conf: Optional[str] = (
         os.environ.get("CHUTNEY_DNS_CONF", "/etc/resolv.conf")
         if "CHUTNEY_DNS_CONF" in os.environ
         else None
     )
-    # config_phase, launch_phase: The phase at which this instance needs to be
-    # configured/launched, if we're doing multiphase configuration/launch.
+    # The phase at which this instance needs to be configured.
     config_phase: int = 1
+    # The phase at which this instance needs to be launched.
     launch_phase: int = 1
-    # sandbox: the Sandbox torrc option value
+    # The Sandbox torrc option value.
     # defaults to 1 on Linux, and 0 otherwise
     # Chutney users can disable the sandbox using:
     #    export CHUTNEY_TOR_SANDBOX=0

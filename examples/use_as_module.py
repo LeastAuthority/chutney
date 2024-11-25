@@ -15,6 +15,10 @@ base = NodeConfig(controlling_pid=os.getpid())
 Authority = base.specialize(tag="a", authority=1, relay=1, torrc="authority.tmpl")
 ExitRelay = base.specialize(tag="r", relay=1, exit=1, torrc="relay.tmpl")
 Client = base.specialize(tag="c", client=1, torrc="client.tmpl")
+# TODO: Drop the 'torrc' parameters, which are no longer required.
+# Keeping them in the MR that removes the need for it, to keep the validatation
+# they currently enable that the generated torrc is consistent with the legacy
+# template name.
 
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
