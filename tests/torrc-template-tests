@@ -141,6 +141,12 @@ configs = [
         tag="relay1mbyteMAB",
         relay=True,
         exit=True,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            Nickname relay1mbyteMAB
+            MaxAdvertisedBandwidth 1 MBytes
+            """
+        )
     ),
     NodeConfig(
         torrc="relay-MBR.tmpl",
