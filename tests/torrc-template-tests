@@ -140,7 +140,6 @@ configs = [
         torrc="relay-MAB.tmpl",
         tag="relay1mbyteMAB",
         relay=True,
-        exit=True,
         extra_raw_torrc=textwrap.dedent(
             """
             Nickname relay1mbyteMAB
@@ -152,7 +151,6 @@ configs = [
         torrc="relay-MBR.tmpl",
         tag="relay1mbyteMBR",
         relay=True,
-        exit=True,
         extra_raw_torrc=textwrap.dedent(
             """
             Nickname relay1mbyteMBR
