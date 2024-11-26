@@ -2323,9 +2323,6 @@ class NodeConfig:
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     enable_controlsocket: bool = getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True)
     # Whether to use microdescriptors (via UseMicrodescriptors in torrc).
-    #
-    # Due to Tor bug #19608, microdescriptors can't be used by IPv6-only clients
-    # running tor 0.2.9 and earlier.
     use_microdescriptors: bool = True
 
     # "Escape hatch" for injecting raw lines at the end of the generated torrc.
