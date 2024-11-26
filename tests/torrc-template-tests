@@ -162,7 +162,6 @@ configs = [
         torrc="relay-non-dir.tmpl",
         tag="r",
         relay=True,
-        exit=True,
     ),
     NodeConfig(
         torrc="relay-non-exit.tmpl",
