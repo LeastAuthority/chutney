@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+# Runs ./tests/network-config-tests at head, and at a specified commit and
+# compares the generated networks. These are run under shadow for deterministic
+# results.
+#
+# The generated networks are compared with diffoscope. If there is any
+# difference, the diff is displayed and saved, and this script exits with an
+# error.
+#
+# Generated results are saved to REPO_TOP_LEVEL/artifacts/network-diff-test.
+
+set -xeuo pipefail
+
+# Check for prereqs
+check_prereq() {
+    local bin="$1"
+    local hint="$2"
+    if ! type -p "$bin"; then
+        echo "Missing $bin. $hint"
+        exit 1
+    fi
+}
+check_prereq shadow "Install from https://github.com/shadow/shadow/"
+check_prereq shadow-exec "Install from shadowtools: https://github.com/shadow/shadow/tree/main/shadowtools"
+check_prereq diffoscope "Install from your package manager"
+check_prereq tee "Install from your package manager"
+
+base_commit="$1"
+if [ -z "$base_commit" ]; then
+    echo "Error: must provide base commit"
+    exit 1
+fi
+head_top_level="$(git rev-parse --show-toplevel)"
+artifacts="$head_top_level"/artifacts/network-diff-test
+
+# Run tests from chutney checkout at directory $1,
+# saving results to directory $2.
+#
+# Tests are run under shadow for deterministic results.
+shadow_network_config_tests () {
+    local chutney_top="$1"
+    local label="$2"
+
+    # The direct destination when running the test has to be the same regardless
+    # of label, since the generated output contains absolute paths. i.e. using
+    # different *direct* destinations would result in spurious diffs.
+    local dst="$artifacts/current"
+    # After we run the test, we move the results here.
+    local final_dst="$artifacts/$label"
+
+    if [ -d "$dst" ]; then
+        echo "Target dir already exists: $dst"
+        exit 1
+    fi
+    if [ -d "$final_dst" ]; then
+        echo "Target dir already exists: $final_dst"
+        exit 1
+    fi
+    mkdir -p "$dst"/net
+    mkdir -p "$dst"/shadow
+    shadow-exec --temp-dir="$dst"/shadow --preserve=always -- bash -c "
+        set -xeuo pipefail
+        export PATH='$PATH'
+        export CHUTNEY_DATA_DIR='$dst/net'
+        cd '$chutney_top'
+        ./tests/network-config-tests"
+    mv "$dst" "$final_dst"
+}
+
+# Run at head
+shadow_network_config_tests "$head_top_level" head
+
+# Run at specified commit
+tmpdir="$(mktemp -d network-diff-test.XXXX)"
+git clone "$head_top_level" "$tmpdir"/chutney
+git -C "$tmpdir"/chutney checkout "$base_commit"
+python3 -m venv "$tmpdir"/venv
+# shellcheck disable=SC1091
+source "$tmpdir"/venv/bin/activate
+python3 -m pip install --ignore-installed "$tmpdir"/chutney
+shadow_network_config_tests "$tmpdir"/chutney base
+rm -rf "$tmpdir"
+
+# Compare
+if diffoscope \
+  --exclude=keys \
+  --exclude-directory-metadata=yes  \
+  "$artifacts"/base/net \
+  "$artifacts"/head/net \
+  | tee "$artifacts"/diff.txt; then
+    echo "Success: diff is clean"
+else
+    cat <<- EOF
+There was a diff in generated configs. Exiting with failure to raise attention.
+Manually validate that the differences reported above (and saved to
+$artifacts/diff.txt) are expected.  If so, you may safely ignore this failure.
+EOF
+    exit 1
+fi
