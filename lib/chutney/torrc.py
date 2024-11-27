@@ -77,8 +77,12 @@ def format(n: TorNet.Node) -> str:
         UseMicrodescriptors {int(n._config.use_microdescriptors)}
         """
     )
-    if n._config.ip.is_some() and (n._config.hs or n._config.relay):
-        res += f"Address {n._config.ip.unwrap()}\n"
+    if n._config.ip.is_some():
+        if n._config.hs or n._config.relay:
+            res += f"Address {n._config.ip.unwrap()}\n"
+    else:
+        if n._config.client or n._config.hs:
+            res += "ClientUseIPv4 0\n"
     if n._config.hs:
         res += textwrap.dedent(
             f"""
@@ -115,12 +119,6 @@ def format(n: TorNet.Node) -> str:
                 # See #17360.
                 """
             )
-    if n._config.ip.is_none():
-        if n._config.disableipv6:
-            raise TorNet.ChutneyError("No ipv4 address and ipv6 disabled")
-        if not n._config.client and not n._config.hs:
-            raise TorNet.ChutneyError("No ipv4 address for non-client, non-hs")
-        res += "ClientUseIPv4 0\n"
     # `authorities` contains multiple lines, which breaks dedent if we include
     # it inline above.
     # TODO: `authorities` shouldn't be "pre-rendered" text.
