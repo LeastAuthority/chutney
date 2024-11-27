@@ -1,9 +1,9 @@
 from chutney.TorNet import Node
-from . import single_onion_common_i
+from . import common_i
 
 
 def format(n: Node) -> str:
-    return f"""\
-{single_onion_common_i.format(n)}
-HiddenServiceVersion 3
-"""
+    res = common_i.format(n)
+    n._check_expected_pattern(r"^HiddenServiceSingleHopMode 1", res)
+    n._check_expected_pattern(r"^HiddenServiceVersion 3", res)
+    return res

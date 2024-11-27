@@ -1,9 +1,8 @@
 from chutney.TorNet import Node
-from . import relay_non_exit_tmpl, authority_i
+from . import relay_non_exit_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{relay_non_exit_tmpl.format(n)}
-{authority_i.format(n)}
-"""
+    res = relay_non_exit_tmpl.format(n)
+    n._check_expected_pattern(r"AuthoritativeDirectory 1", res)
+    return res

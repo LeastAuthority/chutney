@@ -1,10 +1,9 @@
 from chutney.TorNet import Node
-from . import hs_v3_tmpl, client_only_v6_i
+from . import hs_v3_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{hs_v3_tmpl.format(n)}
-# Hidden services are just another kind of client
-{client_only_v6_i.format(n)}
-"""
+    res = hs_v3_tmpl.format(n)
+    n._check_expected_pattern(r"^ClientUseIPv4 0", res)
+    n._check_expected_pattern(r"^UseMicrodescriptors 0", res)
+    return res

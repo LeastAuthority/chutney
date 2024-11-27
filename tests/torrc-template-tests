@@ -12,6 +12,10 @@ from pathlib import Path
 network = TorNet.Network()
 
 # Generate configs for all torrc templates, using their legacy names.
+# TODO: Drop the 'torrc' parameters, which are no longer required.
+# Keeping them in the MR that removes the need for it, to keep the validatation
+# they currently enable that the generated torrc is consistent with the legacy
+# template name.
 configs = [
     NodeConfig(
         torrc="authority-orport-v6.tmpl",
@@ -37,6 +41,8 @@ configs = [
         torrc="bridgeclient-obfs4.tmpl",
         tag="bc",
         client=True,
+        bridgeclient=True,
+        pt_transport="obfs4",
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
@@ -44,6 +50,7 @@ configs = [
         torrc="bridgeclient.tmpl",
         tag="bc",
         client=True,
+        bridgeclient=True,
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
@@ -74,18 +81,35 @@ configs = [
         torrc="client_bwscanner.tmpl",
         tag="c",
         client=True,
+        use_microdescriptors=False,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            UseEntryGuards 0
+            FetchDirInfoEarly 1
+            FetchDirInfoExtraEarly 1
+            FetchUselessDescriptors 1
+            LearnCircuitBuildTimeout 0
+            CircuitBuildTimeout 60
+            ConnectionPadding 0
+            __DisablePredictedCircuits 1
+            __LeaveStreamsUnattached 1
+            """
+        )
     ),
     NodeConfig(
         torrc="client-only-v6-md.tmpl",
         tag="c",
         client=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
         torrc="client-only-v6.tmpl",
         tag="c",
         client=True,
+        ip=None,
         ipv6_addr="[::1]",
+        use_microdescriptors=False,
     ),
     NodeConfig(
         torrc="client.tmpl",
@@ -96,13 +120,16 @@ configs = [
         torrc="hs-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
     ),
     NodeConfig(
         torrc="hs-v3-only-v6.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
+        use_microdescriptors=False,
     ),
     NodeConfig(
         torrc="hs-v3.tmpl",
@@ -113,19 +140,28 @@ configs = [
         torrc="relay-MAB.tmpl",
         tag="relay1mbyteMAB",
         relay=True,
-        exit=True,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            Nickname relay1mbyteMAB
+            MaxAdvertisedBandwidth 1 MBytes
+            """
+        )
     ),
     NodeConfig(
         torrc="relay-MBR.tmpl",
         tag="relay1mbyteMBR",
         relay=True,
-        exit=True,
+        extra_raw_torrc=textwrap.dedent(
+            """
+            Nickname relay1mbyteMBR
+            RelayBandwidthRate 1 MBytes
+            """
+        )
     ),
     NodeConfig(
         torrc="relay-non-dir.tmpl",
         tag="r",
         relay=True,
-        exit=True,
     ),
     NodeConfig(
         torrc="relay-non-exit.tmpl",
@@ -138,6 +174,8 @@ configs = [
         tag="r",
         relay=True,
         exit=True,
+        # XXX clear ip?
+        # do we really support v6-only exits?
         ipv6_addr="[::1]",
     ),
     NodeConfig(
@@ -164,12 +202,15 @@ configs = [
         torrc="single-onion-v3.tmpl",
         tag="h",
         hs=True,
+        hs_singlehop=True,
     ),
     NodeConfig(
         torrc="single-onion-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
+        ip=None,
         ipv6_addr="[::1]",
+        hs_singlehop=True,
     ),
 ]
 
@@ -185,7 +226,7 @@ def template_to_basename(s: str) -> str:
 
 
 checked_template_basenames: set[str] = {
-    template_to_basename(n.torrc) for n in nodes
+    template_to_basename(n._config.torrc) for n in nodes
 }
 all_template_basenames: set[str] = {
     Path(s).name for s in glob.glob("lib/chutney/torrc_templates/*_tmpl.py")

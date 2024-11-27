@@ -1,9 +1,9 @@
 from chutney.TorNet import Node
-from . import client_tmpl, client_only_v6_i
+from . import client_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{client_tmpl.format(n)}
-{client_only_v6_i.format(n)}
-"""
+    res = client_tmpl.format(n)
+    n._check_expected_pattern(r"^ClientUseIPv4 0", res)
+    n._check_expected_pattern(r"^UseMicrodescriptors 0", res)
+    return res

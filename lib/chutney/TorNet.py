@@ -41,6 +41,7 @@ from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type, TypeCheckError
 
+import chutney.torrc_templates.common_i
 import chutney.Host
 import chutney.Util
 
@@ -97,6 +98,22 @@ class ChutneyMissingBinaryError(ChutneyError):
 
 class ChutneyTimeoutError(ChutneyError):
     pass
+
+
+class ChutneyInconsistentTemplateError(ChutneyError):
+    def __init__(self, template_name: str, pattern: str, contents: str):
+        self._template_name = template_name
+        self._pattern = pattern
+        self._contents = contents
+
+    def __str__(self) -> str:
+        return (
+            f"Couldn't find expected pattern '{self._pattern}'."
+            + " Check that other config options have been set consistently"
+            + f" with specified template name '{self._template_name}'."
+            + "\nFull generated torrc:\n"
+            + textwrap.indent(self._contents, "  ")
+        )
 
 
 class ChutneyErrorGroup(ChutneyError):
@@ -449,9 +466,6 @@ class Node(object):
 
         # Validate some fields. NodeConfig permits these to be None
         # for use with templating; e.g. NodeConfig.specialize.
-        self.torrc: str = Option(config.torrc).unwrap(
-            lambda: f"Config is missing 'torrc': {config}"
-        )
         self.tag: str = Option(config.tag).unwrap(
             lambda: f"Config is missing 'tag': {config}"
         )
@@ -479,14 +493,20 @@ class Node(object):
         return self._network.controlport_base + self.nodenum
 
     @property
-    def socksport(self) -> int:
-        """SocksPort that this node exposes"""
-        return self._network.socksport_base + self.nodenum
+    def socksport(self) -> Option[int]:
+        """SocksPort that this node exposes, if any."""
+        if self._config.client:
+            return Option(self._network.socksport_base + self.nodenum)
+        else:
+            return Option(None)
 
     @property
-    def dirport(self) -> int:
+    def dirport(self) -> Option[int]:
         """DirPort that this node exposes"""
-        return self._network.dirport_base + self.nodenum
+        if self._config.relay and not self._config.bridge:
+            return Option(self._network.dirport_base + self.nodenum)
+        else:
+            return Option(None)
 
     @property
     def extorport(self) -> int:
@@ -573,6 +593,15 @@ class Node(object):
         if self._controller is None:
             self._controller = LocalNodeController(self._network, self)
         return self._controller
+
+    def _check_expected_pattern(self, pattern: str, contents: str) -> None:
+        """Raises `ChutneyInconsistentTemplateError` if `pattern` is not found in `contents`"""
+        if not re.search(pattern, contents, re.MULTILINE):
+            # Only intended for use in nodes that specify a torrc.
+            assert self._config.torrc is not None
+            raise ChutneyInconsistentTemplateError(
+                self._config.torrc, pattern, contents
+            )
 
 
 class NodeBuilder:
@@ -722,12 +751,19 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
+
+        torrc = self._node._config.torrc
+        if torrc is None:
+            return chutney.torrc_templates.common_i.format(self._node)
+
+        # Legacy path:
+
         # TODO: Maybe make this a (big) explicit `match` statement?
-        module_name = self._node.torrc.translate({ord("."): "_", ord("-"): "_"})
+        module_name = torrc.translate({ord("."): "_", ord("-"): "_"})
         try:
             mod = importlib.import_module("chutney.torrc_templates." + module_name)
         except ModuleNotFoundError as e:
-            raise ChutneyError(f"Unrecognized torrc_template {self._node.torrc}") from e
+            raise ChutneyError(f"Unrecognized torrc_template {torrc}") from e
         try:
             f = check_type(getattr(mod, "format"), Callable[[Node], str])
         except (AttributeError, TypeCheckError) as e:
@@ -809,7 +845,7 @@ class LocalNodeBuilder(NodeBuilder):
         idfile = Path(datadir, "keys", "authority_identity_key")
         skfile = Path(datadir, "keys", "authority_signing_key")
         certfile = Path(datadir, "keys", "authority_certificate")
-        addr = f"{self._node._config.ip}:{self._node.dirport}"
+        addr = f"{self._node._config.ip.unwrap()}:{self._node.dirport.unwrap()}"
         passphrase = self._node.auth_passphrase
         if all(f.exists() for f in [idfile, skfile, certfile]):
             return
@@ -934,15 +970,15 @@ class LocalNodeBuilder(NodeBuilder):
                 )
             authlines += " %s %s:%s %s\n" % (
                 self._node._config.dirserver_flags,
-                self._node._config.ip,
-                self._node.dirport,
+                self._node._config.ip.unwrap(),
+                self._node.dirport.unwrap(),
                 self._node.fingerprint.unwrap(),
             )
 
         # generate arti configuartion if supported
         arti_lines = ("", "")
         if arti:
-            addrs = '"%s:%s"' % (self._node._config.ip, self._node.orport)
+            addrs = '"%s:%s"' % (self._node._config.ip.unwrap(), self._node.orport)
             if self._node._config.ipv6_addr.is_some():
                 addrs += ', "%s:%s"' % (
                     self._node._config.ipv6_addr.unwrap(),
@@ -972,44 +1008,54 @@ class LocalNodeBuilder(NodeBuilder):
             )
         return (authlines, arti_lines)
 
-    def _getBridgeLines(self) -> tuple[str, str]:
-        """Return tuple of string containing potential Bridge line for this Node.
-        First element is the line in torrc format, and 2nd is the same line in raw/arti format.
-        Non-bridge relays return ("", "").
+    def _getBridgeLines(self) -> list[BridgeLine]:
+        """Return descriptors that a client can use to connect to this bridge.
+        Non-bridge relays return [].
         """
         if not self._node._config.bridge:
-            return ("", "")
+            return []
 
         if self._node._config.pt_bridge:
             port = self._node.ptport
-            transport = self._node._config.pt_transport
-            # TODO: can we make this just an `unwrap`?
-            # Currently doing so breaks the `bridges-obfs4` network;
-            extra = self._node.getController().getPtExtra().unwrap_or("")
+            pt_transport = Option(self._node._config.pt_transport)
+            pt_extra = self._node.getController().getPtExtra()
+            if pt_extra.is_none():
+                # obfs4 pt bridges (and possibly others) don't generate their
+                # `pt_extra` until after they've *started*.  We should probably
+                # return `[]` here, or avoid calling this function at all for a
+                # pt bridge that hasn't started yet.  For now we preserve legacy
+                # behavior of just setting pt_extra to an empty string, which
+                # causes validation to pass, but a pt bridge client won't
+                # actually be able to connect.
+                # TODO(#40023): Once #40023 is fixed, revisit doing something else here.
+                debug(f"Couldn't load pt_extra from {self._node.dir}")
+                pt_extra = Option("")
         else:
             # the orport is the same on IPv4 and IPv6
             port = self._node.orport
-            transport = ""
-            extra = ""
+            pt_transport = Option(None)
+            pt_extra = Option(None)
 
-        BRIDGE_LINE_TEMPLATE = "%s %s:%s %s %s\n"
-
-        bridgelines = BRIDGE_LINE_TEMPLATE % (
-            transport,
-            self._node._config.ip,
-            port,
-            self._node.fingerprint.unwrap(),
-            extra,
-        )
+        res = [
+            BridgeLine(
+                ipaddr=self._node._config.ip.unwrap(),
+                port=port,
+                fingerprint=self._node.fingerprint.unwrap(),
+                pt_transport=pt_transport,
+                pt_extra=pt_extra,
+            ),
+        ]
         if self._node._config.ipv6_addr.is_some():
-            bridgelines += BRIDGE_LINE_TEMPLATE % (
-                transport,
-                self._node._config.ipv6_addr.unwrap(),
-                port,
-                self._node.fingerprint.unwrap(),
-                extra,
+            res.append(
+                BridgeLine(
+                    ipaddr=self._node._config.ipv6_addr.unwrap(),
+                    port=port,
+                    fingerprint=self._node.fingerprint.unwrap(),
+                    pt_transport=pt_transport,
+                    pt_extra=pt_extra,
+                )
             )
-        return (textwrap.indent(bridgelines, "Bridge "), bridgelines)
+        return res
 
 
 class LocalNodeController(NodeController):
@@ -2181,11 +2227,14 @@ class NodeConfig:
     """Properties of a Tor Node"""
 
     # Name of the template module to use to generate the config file.
+    #
     # This should be the name of a module in `chutney.torrc_templates`.
     # For backwards compatibility '-' and '.' are translated to `_`
     # when loading the module.
-    # TODO: Get rid of this and build the config file based on other attributes
-    # like "client", "exit", etc.
+    #
+    # Deprecated. New code should leave this as None. The torrc generation is
+    # now completely specified through other attributes like "client", "exit",
+    # etc.
     torrc: Optional[str] = None
     # a short text string that represents the type of node.
     # Some special tag prefixes:
@@ -2194,44 +2243,45 @@ class NodeConfig:
     #   (as does setting the `client` attribute).
     # TODO: Get rid of these special tag meanings in favor of explicit attributes.
     tag: Optional[str] = None
-    # Whether this node is configured to use a bridge.
-    # (should agree with `torrc`)
+    # Whether to configure this node to use a bridge.
     bridgeclient: bool = False
-    # Whether this node is configured as a client.
-    # (should agree with `torrc`)
+    # Whether to configure this node to act as a client.
     client: bool = False
-    # Whether this node is configured as an exit.
-    # (should agree with `torrc`)
+    # Whether to configure this node to act as an exit.
     exit: bool = False
 
-    # authority: whether a node is an authority or bridge authority
+    # Whether to configure this node to act as an authority (or bridge authority).
     authority: bool = False
-    # bridgeauthority: whether a node is a bridge authority
+    # Whether to configure this node as a bridge authority
     bridgeauthority: bool = False
-    # hasbridgeauth: whether a node has a bridge authority
-    hasbridgeauth: bool = False
-    # relay: whether a node is a relay, exit, or bridge
+    # Whether to configure this node as a relay; including as an exit, or bridge
     relay: bool = False
-    # bridge: whether a node is a bridge
+    # Whether to configure this node as a bridge.
     bridge: bool = False
-    # pt_bridge: whether a node is a potential bridge
+    # Whether to configure this node as a pluggable transport bridge.
     pt_bridge: bool = False
-    # pt_transport: a potential bridge's transport,
-    # which will be used in the Bridge torrc option
+    # Name of pluggable transport to use for a bridge or bridge client.
     pt_transport: str = ""
-    # hs: whether a node has a hidden service
+    # Executable that implements the pluggable transport.
+    pt_executable: Path = Path("obfs4proxy")
+    # Whether to configure this node as a hidden service
     hs: bool = False
-    # hs_directory: directory (relative to datadir) to store hidden service info
+    # directory (relative to datadir) to store hidden service info
     hs_directory: str = "hidden_service"
-    # connlimit: value of ConnLimit torrc option
+    # if creating a hidden service, whether to configure it as single-hop.
+    hs_singlehop: bool = False
+    # value of ConnLimit torrc option
     connlimit: int = 60
-    # tor: path of the tor binary
+    # path of the tor binary
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
-    # auth_cert_lifetime: lifetime of authority certs, in months
+    # lifetime of authority certs, in months
     auth_cert_lifetime: int = 12
-    # ip: primary IP address (usually IPv4) to listen on
-    ip: str = os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1")
-    # ipv6_addr: secondary IP address (usually IPv6) to listen on. we default to
+    # primary IP address (usually IPv4) to listen on.
+    # Setting to None disables ipv4.
+    ip: OptionalConversionDescriptor[str] = OptionalConversionDescriptor(
+        default=Option(os.environ.get("CHUTNEY_LISTEN_ADDRESS", "127.0.0.1"))
+    )
+    # secondary IP address (usually IPv6) to listen on. we default to
     # ipv6_addr=None to support IPv4-only systems.
     # We use OptionalConversionDescriptor here to get `Option[str]`'s
     # enforcement for our internal usage, but allow callers to initialize and
@@ -2241,30 +2291,30 @@ class NodeConfig:
     )
     # Whether to disable all ipv6 functionality
     disableipv6: bool = getenv_bool("CHUTNEY_DISABLE_IPV6", False)
-    # dirserver_flags: used only if authority=True
+    # Directory server flags. Used only if authority=True
     dirserver_flags: str = "no-v2"
-    # poll_launch_time: None means wait on launch (requires RunAsDaemon),
+    # None means wait on launch (requires RunAsDaemon),
     # otherwise, poll after that many seconds (can be fractional/decimal)
     poll_launch_time: Optional[float] = None
-    # poll_launch_time_default: Used when poll_launch_time is None, but
+    # Used when poll_launch_time is None, but
     # RunAsDaemon is not set Set low so that we don't interfere with the
     # voting interval
     poll_launch_time_default: float = 0.1
-    # controlling_pid: the PID of the controlling script
+    # The PID of the controlling script
     # (for __OwningControllerProcess)
     controlling_pid: int = getenv_int("CHUTNEY_CONTROLLING_PID", 0)
-    # dns_conf: the path to a DNS config file for Tor Exits. If this file
+    # The path to a DNS config file for Tor Exits. If this file
     # is empty or unreadable, Tor will try 127.0.0.1:53.
     dns_conf: Optional[str] = (
         os.environ.get("CHUTNEY_DNS_CONF", "/etc/resolv.conf")
         if "CHUTNEY_DNS_CONF" in os.environ
         else None
     )
-    # config_phase, launch_phase: The phase at which this instance needs to be
-    # configured/launched, if we're doing multiphase configuration/launch.
+    # The phase at which this instance needs to be configured.
     config_phase: int = 1
+    # The phase at which this instance needs to be launched.
     launch_phase: int = 1
-    # sandbox: the Sandbox torrc option value
+    # The Sandbox torrc option value.
     # defaults to 1 on Linux, and 0 otherwise
     # Chutney users can disable the sandbox using:
     #    export CHUTNEY_TOR_SANDBOX=0
@@ -2272,6 +2322,14 @@ class NodeConfig:
     sandbox: bool = getenv_bool("CHUTNEY_TOR_SANDBOX", platform.system() == "Linux")
     # Whether to enable a unix control socket (via ControlSocket in torrc)
     enable_controlsocket: bool = getenv_bool("CHUTNEY_ENABLE_CONTROLSOCKET", True)
+    # Whether to use microdescriptors (via UseMicrodescriptors in torrc).
+    use_microdescriptors: bool = True
+
+    # "Escape hatch" for injecting raw lines at the end of the generated torrc.
+    # Generally this should only be used as a short-term workaround. For
+    # long-term usage, prefer to add more-specific (and arti-compatible)
+    # configuration options.
+    extra_raw_torrc: str = ""
 
     @property
     def tor_gencert(self) -> str:
@@ -2352,6 +2410,15 @@ class NodeConfig:
         return dataclasses.replace(self, **kwargs)
 
 
+@dataclasses.dataclass
+class BridgeLine:
+    ipaddr: str
+    port: int
+    fingerprint: str
+    pt_transport: Option[str] = Option(None)
+    pt_extra: Option[str] = Option(None)
+
+
 KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
 
 
@@ -2372,9 +2439,8 @@ class Network(object):
         # authorities: combination of AlternateDirAuthority and
         # AlternateBridgeAuthority torrc lines. there is no default for this option
         self.authorities = "AlternateDirAuthority bleargh bad torrc file!"
-        # bridges: potential Bridge torrc lines for this node. there is no default
-        # for this option
-        self.bridges: str = "Bridge bleargh bad torrc file!"
+        # bridges: potential Bridge descriptors in this network.
+        self.bridges: list[BridgeLine] = []
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -2471,10 +2537,6 @@ class Network(object):
         nodeslink.symlink_to(newnodesdir)
         self.dir = newnodesdir
 
-    def _checkConfig(self) -> None:
-        for n in self._nodes:
-            n.getBuilder().checkConfig(self)
-
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
         and host information we have, and prints the result.
@@ -2504,10 +2566,8 @@ class Network(object):
         bridgelines = []
         arti_fallback_lines = []
         arti_auth_lines = []
-        arti_bridgelines = []
         all_builders = [n.getBuilder() for n in self._nodes]
         builders = [b for b in all_builders if b._node._config.config_phase == phase]
-        self._checkConfig()
 
         # XXX don't change node names or types or count if anything is
         # XXX running!
@@ -2520,12 +2580,10 @@ class Network(object):
             altauthlines.append(tor_auth_line)
             arti_fallback_lines.append(arti_fallback)
             arti_auth_lines.append(arti_auth)
-            tor_bridgeline, arti_bridgeline = b._getBridgeLines()
-            bridgelines.append(tor_bridgeline)
-            arti_bridgelines.append(arti_bridgeline)
+            bridgelines.extend(b._getBridgeLines())
 
         self.authorities = "".join(altauthlines)
-        self.bridges = "".join(bridgelines)
+        self.bridges = bridgelines
 
         for b in builders:
             b.config(network)
@@ -2568,7 +2626,25 @@ enabled = "auto"
 bridges = '''
 """
             )
-            f.write("".join(arti_bridgelines))
+            for bd in bridgelines:
+                bridgeline: str
+                if bd.pt_transport.is_some():
+                    bridgeline = "{transport} {ip}:{port} {fp} {pt_extra}\n".format(
+                        transport=bd.pt_transport.unwrap(),
+                        ip=bd.ipaddr,
+                        port=bd.port,
+                        fp=bd.fingerprint,
+                        pt_extra=bd.pt_extra.unwrap_or_raise(
+                            ChutneyError("Missing pt_extra")
+                        ),
+                    )
+                else:
+                    bridgeline = "{ip}:{port} {fp}\n".format(
+                        ip=bd.ipaddr,
+                        port=bd.port,
+                        fp=bd.fingerprint,
+                    )
+                f.write(bridgeline)
             f.write("'''\n")
 
         for b in builders:
@@ -3020,6 +3096,61 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             _THE_NETWORK.addNode(n)
 
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
+        # Set options based on torrc for backwards compatibility.
+        torrc: str = check_type(kwargs["torrc"], str)
+        if torrc == "bridgeclient-obfs4.tmpl":
+            kwargs["pt_transport"] = "obfs4"
+        elif torrc == "client_bwscanner.tmpl":
+            kwargs["use_microdescriptors"] = False
+            # TODO: If we want to keep this, consider porting
+            # to individual options.
+            kwargs["extra_raw_torrc"] = textwrap.dedent(
+                """
+                UseEntryGuards 0
+                FetchDirInfoEarly 1
+                FetchDirInfoExtraEarly 1
+                FetchUselessDescriptors 1
+                LearnCircuitBuildTimeout 0
+                CircuitBuildTimeout 60
+                ConnectionPadding 0
+                __DisablePredictedCircuits 1
+                __LeaveStreamsUnattached 1
+                """
+            )
+        elif torrc == "client-only-v6-md.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "client-only-v6.tmpl":
+            kwargs["ip"] = None
+            kwargs["use_microdescriptors"] = False
+        elif torrc == "hs-v3-only-v6-md.tmpl":
+            kwargs["ip"] = None
+        elif torrc == "hs-v3-only-v6.tmpl":
+            kwargs["ip"] = None
+            kwargs["use_microdescriptors"] = False
+        elif torrc == "relay-MAB.tmpl":
+            # TODO: If we want to keep this, consider porting
+            # to individual options.
+            kwargs["extra_raw_torrc"] = textwrap.dedent(
+                """
+                Nickname relay1mbyteMAB
+                MaxAdvertisedBandwidth 1 MBytes
+                """
+            )
+        elif torrc == "relay-MBR.tmpl":
+            # TODO: If we want to keep this, consider porting
+            # to individual options.
+            kwargs["extra_raw_torrc"] = textwrap.dedent(
+                """
+                Nickname relay1mbyteMBR
+                RelayBandwidthRate 1 MBytes
+                """
+            )
+        elif torrc == "single-onion-v3.tmpl":
+            kwargs["hs_singlehop"] = True
+        elif torrc == "single-onion-v3-only-v6-md.tmpl":
+            kwargs["ip"] = None
+            kwargs["hs_singlehop"] = True
+
         if parent is None:
             return NodeConfig(**kwargs)
         else:

@@ -205,10 +205,10 @@ def _configure_exits(
         for op in client_list:
             print(
                 "  Exit to %s:%d via client %s:%s"
-                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op.socksport)
+                % (LISTEN_ADDR, LISTEN_PORT, "localhost", op.socksport.unwrap())
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(op.socksport))
+                proxy = ("localhost", op.socksport.unwrap())
                 tt.add_client(bind_to, proxy)
     return exit_path_node_count
 
@@ -252,11 +252,11 @@ def _configure_hs(
                     LISTEN_ADDR,
                     LISTEN_PORT,
                     "localhost",
-                    client.socksport,
+                    client.socksport.unwrap(),
                 )
             )
             for _ in range(connection_count):
-                proxy = ("localhost", int(client.socksport))
+                proxy = ("localhost", client.socksport.unwrap())
                 tt.add_client(hs_bind_to, proxy)
 
     return hs_path_node_count

@@ -1,14 +1,9 @@
 from chutney.TorNet import Node
-from . import authority_tmpl, orport_v6_i
+from . import authority_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{authority_tmpl.format(n)}
-
-# An authority that has an IPv6 ORPort
-{orport_v6_i.format(n)}
-
-# And has IPv6 connectivity
-AuthDirHasIPv6Connectivity 1
-"""
+    res = authority_tmpl.format(n)
+    n._check_expected_pattern(r"^OrPort.*IPv6Only", res)
+    n._check_expected_pattern(r"^AuthDirHasIPv6Connectivity 1", res)
+    return res

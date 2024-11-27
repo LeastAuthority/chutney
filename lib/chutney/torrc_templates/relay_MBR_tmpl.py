@@ -3,9 +3,7 @@ from . import relay_non_exit_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{relay_non_exit_tmpl.format(n)}
-
-Nickname relay1mbyteMBR
-RelayBandwidthRate 1 MBytes
-"""
+    res = relay_non_exit_tmpl.format(n)
+    n._check_expected_pattern(r"^Nickname relay1mbyteMBR", res)
+    n._check_expected_pattern(r"^RelayBandwidthRate 1 MBytes", res)
+    return res

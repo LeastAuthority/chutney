@@ -93,6 +93,9 @@ torrc-template-tests:
   - apt-get install
       python3-pip
       tor
+  # chutney wants to find this executable when testing pt configs, but for this
+  # test doesn't actually run it.
+  - ln -s /bin/true /usr/local/bin/obfs4proxy
   - python3 -m pip install --user .
   - ./tests/torrc-template-tests
 
@@ -102,6 +105,9 @@ network-config-tests:
   - apt-get install
       python3-pip
       tor
+  # chutney wants to find this executable when testing pt configs, but for this
+  # test doesn't actually run it.
+  - ln -s /bin/true /usr/local/bin/obfs4proxy
   - python3 -m pip install --user .
   - ./tests/network-config-tests
 

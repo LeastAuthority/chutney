@@ -1,11 +1,8 @@
 from chutney.TorNet import Node
-from . import relay_non_exit_tmpl, orport_v6_i
+from . import relay_non_exit_tmpl
 
 
 def format(n: Node) -> str:
-    return f"""\
-{relay_non_exit_tmpl.format(n)}
-
-# A relay that has an IPv6 ORPort
-{orport_v6_i.format(n)}
-"""
+    res = relay_non_exit_tmpl.format(n)
+    n._check_expected_pattern(r"^OrPort.*IPv6Only", res)
+    return res
