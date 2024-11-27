@@ -31,6 +31,8 @@ def max_config_phase(network_name: str) -> int:
 
 
 network_names = [Path(s).name for s in glob.glob("lib/chutney/data/networks/*")]
+# Use a consistent order, instead of the arbitrary order returned by glob.
+network_names.sort()
 # Verify that an arbitrary one is present, to validate that the above glob gave
 # us something like what we expect.
 assert "basic-min" in network_names
