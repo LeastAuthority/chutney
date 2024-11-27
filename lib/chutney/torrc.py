@@ -77,6 +77,8 @@ def format(n: TorNet.Node) -> str:
         UseMicrodescriptors {int(n._config.use_microdescriptors)}
         """
     )
+    if n._config.ip.is_some() and (n._config.hs or n._config.relay):
+        res += f"Address {n._config.ip.unwrap()}\n"
     if n._config.hs:
         res += textwrap.dedent(
             f"""
@@ -89,9 +91,6 @@ def format(n: TorNet.Node) -> str:
             HiddenServiceVersion 3
             """
         )
-        if n._config.ip.is_some():
-            # TODO: Unify "Address" directives
-            res += f"Address {n._config.ip.unwrap()}\n"
         if n._config.hs_singlehop:
             res += textwrap.dedent(
                 f"""
@@ -127,13 +126,9 @@ def format(n: TorNet.Node) -> str:
     # TODO: `authorities` shouldn't be "pre-rendered" text.
     res += f"{n._network.authorities.strip()}\n"
     if n._config.relay:
-        ipv4 = n._config.ip.unwrap_or_raise(
-            TorNet.ChutneyError("ipv4 address is mandatory for relays")
-        )
         res += textwrap.dedent(
             f"""
             OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
-            Address {ipv4}
 
             ExitRelay {int(n._config.exit)}
 
