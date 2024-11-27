@@ -83,6 +83,14 @@ def format(n: TorNet.Node) -> str:
     else:
         if n._config.client or n._config.hs:
             res += "ClientUseIPv4 0\n"
+    if n._config.relay:
+        ip = n._config.ip.unwrap_or_raise(lambda: TorNet.ChutneyError("'relay' set with no ipv4 address"))
+        # Note that explicitly specifying the ipv4 address instead of just the
+        # port means that this will only bind to this *ipv4* address.
+        # We potentially enable ipv6 separately below.
+        res += f'OrPort {ip}:{n.orport}\n'
+        if n._config.ipv6_addr.is_some():
+            res += f'OrPort {n._config.ipv6_addr.unwrap()}:{n.orport}\n'
     if n._config.hs:
         res += textwrap.dedent(
             f"""
@@ -126,8 +134,6 @@ def format(n: TorNet.Node) -> str:
     if n._config.relay:
         res += textwrap.dedent(
             f"""
-            OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
-
             ExitRelay {int(n._config.exit)}
 
             # These options are set here so they apply to IPv4 and IPv6 Exits
@@ -179,14 +185,6 @@ def format(n: TorNet.Node) -> str:
             # 4. Finally, reject all IPv4 addresses which haven't been permitted
             # ------------------------------------------------------------------
             ExitPolicy reject *:*
-            """
-        )
-    if n._config.relay and n._config.ipv6_addr.is_some():
-        # TODO: Avoid potential redundancy/conflict with OrPort emitted above.
-        res += textwrap.dedent(
-            f"""
-            # Tor uses the first IPv6 ORPort address as its IPv6 address
-            OrPort {n._config.ipv6_addr.unwrap()}:{n.orport} IPv6Only
             """
         )
     if n._config.exit and n._config.ipv6_addr.is_some():
