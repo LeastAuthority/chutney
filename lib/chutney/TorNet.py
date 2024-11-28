@@ -877,22 +877,12 @@ class LocalNodeBuilder(NodeBuilder):
             s = open(ed_fn).read().strip().split()[1]
             self._node.fingerprint_ed25519.replace(s)
 
-    def _getAltAuthLines(
-        self, hasbridgeauth: bool = False
-    ) -> tuple[Optional[AuthorityLine], tuple[str, str]]:
-        """Return a set of lines to configure other nodes to use this Node as
-        an authority.  For C tor, this is a combination of
-        AternateDirAuthority and AlternateBridgeAuthority.  For Arti,
-        this is a pair of lines to use this node as an authority and
-        as a fallback.  (Arti does not automatically use authorities
-        as fallbacks.)
-
-        The answers are returned as: (tor-auth, (arti-auth, arti-fallback))
-
-        If this node not an authority, the returned strings are empty.
+    def _getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
+        """Return the information needed to use this node as an authority,
+        if it is configured as one.
         """
         if not self._node._config.authority:
-            return (None, ("", ""))
+            return None
 
         datadir = self._node.dir
         certfile = Path(datadir, "keys", "authority_certificate")
@@ -905,7 +895,7 @@ class LocalNodeBuilder(NodeBuilder):
 
         assert v3id is not None
 
-        auth = AuthorityLine(
+        return AuthorityLine(
             nick=self._node.nick,
             ipv4=self._node._config.ip.unwrap(),
             ipv6=self._node._config.ipv6_addr,
@@ -914,46 +904,10 @@ class LocalNodeBuilder(NodeBuilder):
             v3id=v3id,
             fingerprint=self._node.fingerprint.unwrap(),
             fingerprint_ed25519=self._node.fingerprint_ed25519.unwrap(),
-            # If the network doesn't have some other bridge auth, we pretend to be one.
-            # XXX
-            # alt_bridge_auth=self._node._config.bridgeauthority or not hasbridgeauth,
             alt_bridge_auth=self._node._config.bridgeauthority,
             alt_dir_auth=not self._node._config.bridgeauthority,
             extra_flags=self._node._config.dirserver_flags.split(),
         )
-
-        # generate arti configuartion if supported
-        arti_lines = ("", "")
-        if not self._node._config.bridgeauthority:
-            addrs = '"%s:%s"' % (auth.ipv4, auth.orport)
-            if auth.ipv6.is_some():
-                addrs += ', "%s:%s"' % (
-                    auth.ipv6.unwrap(),
-                    auth.orport,
-                )
-            elts = {
-                "fp": auth.fingerprint.replace(" ", ""),
-                "ed_fp": auth.fingerprint_ed25519,
-                "orports": addrs,
-                "nick": auth.nick,
-                "v3id": auth.v3id,
-            }
-            arti_lines = (
-                (
-                    "    {"
-                    + f'rsa_identity = "{elts["fp"]}"'
-                    + f', ed_identity = "{elts["ed_fp"]}"'
-                    + f', orports = [{elts["orports"]}]'
-                    + "},\n"
-                ),
-                (
-                    "    {"
-                    + f'name = "{elts["nick"]}"'
-                    + f', v3ident = "{elts["v3id"]}"'
-                    + "},\n"
-                ),
-            )
-        return (auth, arti_lines)
 
     def _getBridgeLines(self) -> list[BridgeLine]:
         """Return descriptors that a client can use to connect to this bridge.
@@ -2516,8 +2470,6 @@ class Network(object):
         network = self
         altauthlines = []
         bridgelines = []
-        arti_fallback_lines = []
-        arti_auth_lines = []
         all_builders = [n.getBuilder() for n in self._nodes]
         builders = [b for b in all_builders if b._node._config.config_phase == phase]
 
@@ -2526,13 +2478,9 @@ class Network(object):
 
         for b in all_builders:
             b.preConfig(network)
-            auth_line, (arti_fallback, arti_auth) = b._getAltAuthLines(
-                self.hasbridgeauth
-            )
+            auth_line = b._getAltAuthLines(self.hasbridgeauth)
             if auth_line is not None:
                 altauthlines.append(auth_line)
-            arti_fallback_lines.append(arti_fallback)
-            arti_auth_lines.append(arti_auth)
             bridgelines.extend(b._getBridgeLines())
 
         self.authorities = altauthlines
@@ -2541,13 +2489,41 @@ class Network(object):
         for b in builders:
             b.config(network)
 
+        arti_fallback_lines = []
+        arti_auth_lines = []
+        for auth in self.authorities:
+            if not auth.alt_dir_auth:
+                # We only configure dir auths, not bridge auths.
+                # TODO: configure bridge auths too, once arti supports them.
+                continue
+
+            addrs = '"%s:%s"' % (auth.ipv4, auth.orport)
+            if auth.ipv6.is_some():
+                addrs += ', "%s:%s"' % (
+                    auth.ipv6.unwrap(),
+                    auth.orport,
+                )
+            arti_fallback_lines.append(
+                "    {"
+                + f'rsa_identity = "{auth.fingerprint.replace(" ", "")}"'
+                + f', ed_identity = "{auth.fingerprint_ed25519}"'
+                + f", orports = [{addrs}]"
+                + "},\n"
+            )
+            arti_auth_lines.append(
+                "    {"
+                + f'name = "{auth.nick}"'
+                + f', v3ident = "{auth.v3id}"'
+                + "},\n"
+            )
+
         with open(os.path.join(get_absolute_nodes_path(), "arti.toml"), "w") as f:
             f.write(
                 textwrap.dedent(
-                    """
+                    f"""
                     [storage]
-                    cache_dir = "{path}/arti/cache"
-                    state_dir = "{path}/arti/state"
+                    cache_dir = "{self.dir}/arti/cache"
+                    state_dir = "{self.dir}/arti/state"
 
                     [path_rules]
                     # These values disable enforce_distance entirely; we can replace them
@@ -2559,9 +2535,7 @@ class Network(object):
                     [address_filter]
                     # Allow the client to accept requests to connect to e.g. 127.0.0.1
                     allow_local_addrs = true
-                    """.format(
-                        path=self.dir
-                    )
+                    """
                 )
             )
             f.write(
