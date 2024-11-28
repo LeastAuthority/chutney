@@ -84,13 +84,15 @@ def format(n: TorNet.Node) -> str:
         if n._config.client or n._config.hs:
             res += "ClientUseIPv4 0\n"
     if n._config.relay:
-        ip = n._config.ip.unwrap_or_raise(lambda: TorNet.ChutneyError("'relay' set with no ipv4 address"))
+        ip = n._config.ip.unwrap_or_raise(
+            lambda: TorNet.ChutneyError("'relay' set with no ipv4 address")
+        )
         # Note that explicitly specifying the ipv4 address instead of just the
         # port means that this will only bind to this *ipv4* address.
         # We potentially enable ipv6 separately below.
-        res += f'OrPort {ip}:{n.orport}\n'
+        res += f"OrPort {ip}:{n.orport}\n"
         if n._config.ipv6_addr.is_some():
-            res += f'OrPort {n._config.ipv6_addr.unwrap()}:{n.orport}\n'
+            res += f"OrPort {n._config.ipv6_addr.unwrap()}:{n.orport}\n"
     if n._config.hs:
         res += textwrap.dedent(
             f"""
@@ -127,10 +129,38 @@ def format(n: TorNet.Node) -> str:
                 # See #17360.
                 """
             )
-    # `authorities` contains multiple lines, which breaks dedent if we include
-    # it inline above.
-    # TODO: `authorities` shouldn't be "pre-rendered" text.
-    res += f"{n._network.authorities.strip()}\n"
+    for auth in n._network.authorities:
+        directive: str
+        if auth.alt_dir_auth and (auth.alt_bridge_auth or not n._network.hasbridgeauth):
+            # Generally 'DirAuthority' means to treat as both a dir-auth and a
+            # bridge-auth.
+            #
+            # tor rejects configurations with TestingTorNetwork that don't have
+            # some 'DirAuthority' or both of 'AlternateBridgeAuthority' and
+            # 'AlternateDirAuthority', so if there are no true bridge auths in
+            # the network we use 'DirAuthority' here.
+            #
+            # We *don't* artificially add the 'bridge' flag below though. It
+            # appears to be unnecessary and results in logged warnings due to
+            # the authority not actually being configured as a bridge auth.
+            directive = "DirAuthority"
+        elif auth.alt_bridge_auth:
+            directive = "AlternateBridgeAuthority"
+        else:
+            assert auth.alt_dir_auth
+            directive = "AlternateDirAuthority"
+        # This is currently ~always "no-v2"; none of the built-in templates or
+        # networks override it.
+        flags = auth.extra_flags.copy()
+        flags.append(f"orport={auth.orport}")
+        if auth.alt_bridge_auth:
+            flags.append("bridge")
+        if auth.alt_dir_auth:
+            flags.append(f"v3ident={auth.v3id}")
+        if auth.ipv6.is_some():
+            flags.append(f"ipv6={auth.ipv6.unwrap()}:{auth.orport}")
+        res += f"{directive} {auth.nick} {' '.join(flags)}"
+        res += f" {auth.ipv4}:{auth.dirport} {auth.fingerprint}\n"
     if n._config.relay:
         res += textwrap.dedent(
             f"""

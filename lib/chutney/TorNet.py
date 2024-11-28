@@ -879,7 +879,7 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getAltAuthLines(
         self, hasbridgeauth: bool = False
-    ) -> tuple[str, tuple[str, str]]:
+    ) -> tuple[Optional[AuthorityLine], tuple[str, str]]:
         """Return a set of lines to configure other nodes to use this Node as
         an authority.  For C tor, this is a combination of
         AternateDirAuthority and AlternateBridgeAuthority.  For Arti,
@@ -892,7 +892,7 @@ class LocalNodeBuilder(NodeBuilder):
         If this node not an authority, the returned strings are empty.
         """
         if not self._node._config.authority:
-            return ("", ("", ""))
+            return (None, ("", ""))
 
         datadir = self._node.dir
         certfile = Path(datadir, "keys", "authority_certificate")
@@ -905,61 +905,38 @@ class LocalNodeBuilder(NodeBuilder):
 
         assert v3id is not None
 
-        if self._node._config.bridgeauthority:
-            # Bridge authorities return AlternateBridgeAuthority with
-            # the 'bridge' flag set.
-            options = ("AlternateBridgeAuthority",)
-            self._node._config.dirserver_flags += " bridge"
-            arti = False
-        else:
-            # Directory authorities return AlternateDirAuthority with
-            # the 'v3ident' flag set.
-            # XXXX This next line is needed for 'bridges' but breaks
-            # 'basic'
-            if hasbridgeauth:
-                options = ("AlternateDirAuthority",)
-            else:
-                options = ("DirAuthority",)
-            self._node._config.dirserver_flags += " v3ident=%s" % v3id
-            arti = True
-
-        authlines = ""
-        for authopt in options:
-            authlines += "%s %s orport=%s" % (
-                authopt,
-                self._node.nick,
-                self._node.orport,
-            )
-            # It's ok to give an authority's IPv6 address to an IPv4-only
-            # client or relay: it will and must ignore it
-            # and yes, the orport is the same on IPv4 and IPv6
-            if self._node._config.ipv6_addr.is_some():
-                authlines += " ipv6=%s:%s" % (
-                    self._node._config.ipv6_addr.unwrap(),
-                    self._node.orport,
-                )
-            authlines += " %s %s:%s %s\n" % (
-                self._node._config.dirserver_flags,
-                self._node._config.ip.unwrap(),
-                self._node.dirport.unwrap(),
-                self._node.fingerprint.unwrap(),
-            )
+        auth = AuthorityLine(
+            nick=self._node.nick,
+            ipv4=self._node._config.ip.unwrap(),
+            ipv6=self._node._config.ipv6_addr,
+            orport=self._node.orport,
+            dirport=self._node.dirport.unwrap(),
+            v3id=v3id,
+            fingerprint=self._node.fingerprint.unwrap(),
+            fingerprint_ed25519=self._node.fingerprint_ed25519.unwrap(),
+            # If the network doesn't have some other bridge auth, we pretend to be one.
+            # XXX
+            # alt_bridge_auth=self._node._config.bridgeauthority or not hasbridgeauth,
+            alt_bridge_auth=self._node._config.bridgeauthority,
+            alt_dir_auth=not self._node._config.bridgeauthority,
+            extra_flags=self._node._config.dirserver_flags.split(),
+        )
 
         # generate arti configuartion if supported
         arti_lines = ("", "")
-        if arti:
-            addrs = '"%s:%s"' % (self._node._config.ip.unwrap(), self._node.orport)
-            if self._node._config.ipv6_addr.is_some():
+        if not self._node._config.bridgeauthority:
+            addrs = '"%s:%s"' % (auth.ipv4, auth.orport)
+            if auth.ipv6.is_some():
                 addrs += ', "%s:%s"' % (
-                    self._node._config.ipv6_addr.unwrap(),
-                    self._node.orport,
+                    auth.ipv6.unwrap(),
+                    auth.orport,
                 )
             elts = {
-                "fp": self._node.fingerprint.unwrap().replace(" ", ""),
-                "ed_fp": self._node.fingerprint_ed25519.unwrap(),
+                "fp": auth.fingerprint.replace(" ", ""),
+                "ed_fp": auth.fingerprint_ed25519,
                 "orports": addrs,
-                "nick": self._node.nick,
-                "v3id": v3id,
+                "nick": auth.nick,
+                "v3id": auth.v3id,
             }
             arti_lines = (
                 (
@@ -976,7 +953,7 @@ class LocalNodeBuilder(NodeBuilder):
                     + "},\n"
                 ),
             )
-        return (authlines, arti_lines)
+        return (auth, arti_lines)
 
     def _getBridgeLines(self) -> list[BridgeLine]:
         """Return descriptors that a client can use to connect to this bridge.
@@ -2379,6 +2356,21 @@ class BridgeLine:
     pt_extra: Option[str] = Option(None)
 
 
+@dataclasses.dataclass
+class AuthorityLine:
+    nick: str
+    ipv4: str
+    ipv6: Option[str]
+    orport: int
+    dirport: int
+    v3id: str
+    fingerprint: str
+    fingerprint_ed25519: str
+    extra_flags: list[str]
+    alt_bridge_auth: bool = False
+    alt_dir_auth: bool = False
+
+
 KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
 
 
@@ -2398,7 +2390,7 @@ class Network(object):
         self.hasbridgeauth = False
         # authorities: combination of AlternateDirAuthority and
         # AlternateBridgeAuthority torrc lines. there is no default for this option
-        self.authorities = "AlternateDirAuthority bleargh bad torrc file!"
+        self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
 
@@ -2534,15 +2526,16 @@ class Network(object):
 
         for b in all_builders:
             b.preConfig(network)
-            tor_auth_line, (arti_fallback, arti_auth) = b._getAltAuthLines(
+            auth_line, (arti_fallback, arti_auth) = b._getAltAuthLines(
                 self.hasbridgeauth
             )
-            altauthlines.append(tor_auth_line)
+            if auth_line is not None:
+                altauthlines.append(auth_line)
             arti_fallback_lines.append(arti_fallback)
             arti_auth_lines.append(arti_auth)
             bridgelines.extend(b._getBridgeLines())
 
-        self.authorities = "".join(altauthlines)
+        self.authorities = altauthlines
         self.bridges = bridgelines
 
         for b in builders:
