@@ -2550,29 +2550,34 @@ class Network(object):
 
         with open(os.path.join(get_absolute_nodes_path(), "arti.toml"), "w") as f:
             f.write(
-                """[storage]
-cache_dir = "{path}/arti/cache"
-state_dir = "{path}/arti/state"
+                textwrap.dedent(
+                    """
+                    [storage]
+                    cache_dir = "{path}/arti/cache"
+                    state_dir = "{path}/arti/state"
 
-[path_rules]
-# These values disable enforce_distance entirely; we can replace them
-# with something like Tor's "EnforceDistinceSubnets 0" if Arti ever
-# implements it.
-ipv4_subnet_family_prefix = 33
-ipv6_subnet_family_prefix = 129
+                    [path_rules]
+                    # These values disable enforce_distance entirely; we can replace them
+                    # with something like Tor's "EnforceDistinceSubnets 0" if Arti ever
+                    # implements it.
+                    ipv4_subnet_family_prefix = 33
+                    ipv6_subnet_family_prefix = 129
 
-[address_filter]
-# Allow the client to accept requests to connect to e.g. 127.0.0.1
-allow_local_addrs = true
-
-""".format(
-                    path=self.dir
+                    [address_filter]
+                    # Allow the client to accept requests to connect to e.g. 127.0.0.1
+                    allow_local_addrs = true
+                    """.format(
+                        path=self.dir
+                    )
                 )
             )
             f.write(
-                """[tor_network]
-fallback_caches = [
-"""
+                textwrap.dedent(
+                    """
+                    [tor_network]
+                    fallback_caches = [
+                    """
+                )
             )
             f.write("".join(arti_fallback_lines))
             f.write("]\n")
@@ -2581,10 +2586,13 @@ fallback_caches = [
             f.write("]\n")
 
             f.write(
-                """[bridges]
-enabled = "auto"
-bridges = '''
-"""
+                textwrap.dedent(
+                    """
+                    [bridges]
+                    enabled = "auto"
+                    bridges = '''
+                    """
+                )
             )
             for bd in bridgelines:
                 bridgeline: str
