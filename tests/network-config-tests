@@ -37,6 +37,8 @@ network_names.sort()
 # us something like what we expect.
 assert "basic-min" in network_names
 
+base_data_dir=os.environ.get("CHUTNEY_DATA_DIR", "net")
+
 for network_name in network_names:
     print("Testing network:", network_name)
     for phase in range(1, max_config_phase(network_name) + 1):
@@ -48,6 +50,9 @@ for network_name in network_names:
         env["CHUTNEY_OLD_TOR"] = env.get("CHUTNEY_TOR", "tor")
         # Needed for networks with pluggable transports.
         env["CHUTNEY_TOR_SANDBOX"] = "0"
+        # Put output into a directory named after the network, for easier
+        # debugging.
+        env["CHUTNEY_DATA_DIR"] = f"{base_data_dir}/{network_name}"
 
         # Flush to avoid child process output appearing out of order
         sys.stdout.flush()
