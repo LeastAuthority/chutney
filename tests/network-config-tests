@@ -31,9 +31,13 @@ def max_config_phase(network_name: str) -> int:
 
 
 network_names = [Path(s).name for s in glob.glob("lib/chutney/data/networks/*")]
+# Use a consistent order, instead of the arbitrary order returned by glob.
+network_names.sort()
 # Verify that an arbitrary one is present, to validate that the above glob gave
 # us something like what we expect.
 assert "basic-min" in network_names
+
+base_data_dir=os.environ.get("CHUTNEY_DATA_DIR", "net")
 
 for network_name in network_names:
     print("Testing network:", network_name)
@@ -46,6 +50,9 @@ for network_name in network_names:
         env["CHUTNEY_OLD_TOR"] = env.get("CHUTNEY_TOR", "tor")
         # Needed for networks with pluggable transports.
         env["CHUTNEY_TOR_SANDBOX"] = "0"
+        # Put output into a directory named after the network, for easier
+        # debugging.
+        env["CHUTNEY_DATA_DIR"] = f"{base_data_dir}/{network_name}"
 
         # Flush to avoid child process output appearing out of order
         sys.stdout.flush()
