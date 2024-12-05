@@ -1,3 +1,14 @@
+workflow:
+  rules:
+    # Explicitly opt into merge request pipelines.
+    # This in turn enables gitlab CI variables that are only
+    # set on merge request pipelines (as opposed to the default "push" trigger),
+    # such as CI_MERGE_REQUEST_DIFF_BASE_SHA.
+    # https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html#add-jobs-to-merge-request-pipelines
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    # Also run on pushes to main branch
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 # These variables are set everywhere, unconditionally.
 variables:
   TERM: "ansi"
