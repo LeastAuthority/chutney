@@ -1,3 +1,14 @@
+workflow:
+  rules:
+    # Explicitly opt into merge request pipelines.
+    # This in turn enables gitlab CI variables that are only
+    # set on merge request pipelines (as opposed to the default "push" trigger),
+    # such as CI_MERGE_REQUEST_DIFF_BASE_SHA.
+    # https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html#add-jobs-to-merge-request-pipelines
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    # Also run on pushes to main branch
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
 # These variables are set everywhere, unconditionally.
 variables:
   TERM: "ansi"
@@ -110,6 +121,97 @@ network-config-tests:
   - ln -s /bin/true /usr/local/bin/obfs4proxy
   - python3 -m pip install --user .
   - ./tests/network-config-tests
+
+# We currently only use shadow in one job, but building it is complex enough
+# that it's probably worth putting in its own job.
+build-shadow:
+  <<: *debian-template
+  variables:
+    JOB_SHADOW_REPO: "https://github.com/shadow/shadow.git"
+    JOB_SHADOW_BRANCH: "main"
+    # 2024-12-04
+    JOB_SHADOW_COMMIT: "91e94f3"
+  artifacts:
+    paths:
+      - opt/shadow
+      - wheels
+    # Intended for consumption later in the pipeline; no need to keep them
+    # around for longer.
+    expire_in: 1 day
+  cache:
+    - key: V3-$CI_JOB_NAME-shadow-$JOB_SHADOW_COMMIT
+      paths:
+      - opt/shadow
+      - wheels
+  tags:
+    - amd64
+  script:
+    # Build shadow
+    - |
+      if [ -f opt/shadow/bin/shadow ]
+      then
+        echo "Using shadow binary from cache"
+      else
+        echo "Building shadow"
+        apt-get install git
+        git clone --shallow-since=2021-08-01 -b $JOB_SHADOW_BRANCH $JOB_SHADOW_REPO ~/src/shadow
+        cd ~/src/shadow
+        git checkout $JOB_SHADOW_COMMIT
+        export CC=gcc CXX=g++ CONTAINER=debian:bullseye BUILDTYPE=release RUSTPROFILE=minimal
+        ci/container_scripts/install_deps.sh
+        ci/container_scripts/install_extra_deps.sh
+        export PATH="$HOME/.cargo/bin:${PATH}"
+        ./setup build --jobs $(nproc) --prefix $CI_PROJECT_DIR/opt/shadow
+        ./setup install
+        apt-get install -y python3-pip
+        mkdir $CI_PROJECT_DIR/wheels
+        python3 -m pip wheel --wheel-dir=$CI_PROJECT_DIR/wheels ./shadowtools
+      fi
+
+network-config-tests-diff:
+  <<: *debian-template
+  needs:
+  - build-shadow
+  tags:
+    - amd64
+    # Non-TPA runners may not support running shadow.
+    - tpa
+  # This job fails if there's any diff in output. Often such a diff is expected,
+  # though should be reviewed.
+  allow_failure: true
+  rules:
+    # Only run in merge-request pipelines, where CI_MERGE_REQUEST_DIFF_BASE_SHA
+    # is defined.
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  script:
+  - apt-get install
+      diffoscope-minimal
+      git
+      python3-pip
+      python3-venv
+      tor
+
+  # install shadow
+  - apt-get install stow libglib2.0-0
+  - mkdir -p "$HOME"/.local
+  - stow -d opt -t "$HOME"/.local shadow
+
+  # install shadowtools, for `shadow-exec`
+  - python3 -m pip install --user --no-index --find-links=./wheels shadowtools
+
+  # chutney wants to find this executable when testing pt configs, but
+  # doesn't actually run it for this test.
+  - ln -s /bin/true /usr/local/bin/obfs4proxy
+
+  # install chutney
+  - python3 -m pip install --user .
+
+  - ./tests/network-config-tests-diff "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+  artifacts:
+    expire_in: 1 week
+    when: on_failure
+    paths:
+      - artifacts
 
 shellcheck:
   <<: *debian-template
