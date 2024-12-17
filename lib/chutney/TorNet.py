@@ -3113,8 +3113,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
                 LearnCircuitBuildTimeout 0
                 CircuitBuildTimeout 60
                 ConnectionPadding 0
-                __DisablePredictedCircuits 1
-                __LeaveStreamsUnattached 1
                 """
             )
         elif torrc == "client-only-v6-md.tmpl":
