@@ -37,8 +37,8 @@ configs = [
         relay=True,
         bridgeauthority=True,
     ),
+    # Was: bridgeclient-obfs4.tmpl
     NodeConfig(
-        torrc="bridgeclient-obfs4.tmpl",
         tag="bc",
         client=True,
         bridgeclient=True,
