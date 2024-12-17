@@ -3097,7 +3097,7 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
 
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
         # Set options based on torrc for backwards compatibility.
-        torrc: str = check_type(kwargs["torrc"], str)
+        torrc = check_type(kwargs.get("torrc"), Optional[str])
         if torrc == "bridgeclient-obfs4.tmpl":
             kwargs["pt_transport"] = "obfs4"
         elif torrc == "client_bwscanner.tmpl":
