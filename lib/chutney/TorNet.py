@@ -3132,7 +3132,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             # to individual options.
             kwargs["extra_raw_torrc"] = textwrap.dedent(
                 """
-                Nickname relay1mbyteMAB
                 MaxAdvertisedBandwidth 1 MBytes
                 """
             )
@@ -3141,7 +3140,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             # to individual options.
             kwargs["extra_raw_torrc"] = textwrap.dedent(
                 """
-                Nickname relay1mbyteMBR
                 RelayBandwidthRate 1 MBytes
                 """
             )
