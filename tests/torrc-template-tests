@@ -123,8 +123,8 @@ configs = [
         ip=None,
         ipv6_addr="[::1]",
     ),
+    # Was: torrc="hs-v3-only-v6.tmpl"
     NodeConfig(
-        torrc="hs-v3-only-v6.tmpl",
         tag="h",
         hs=True,
         ip=None,

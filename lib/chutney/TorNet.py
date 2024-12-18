@@ -3113,9 +3113,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
                 ConnectionPadding 0
                 """
             )
-        elif torrc == "hs-v3-only-v6.tmpl":
-            kwargs["ip"] = None
-            kwargs["use_microdescriptors"] = False
         elif torrc == "relay-MAB.tmpl":
             # TODO: If we want to keep this, consider porting
             # to individual options.
