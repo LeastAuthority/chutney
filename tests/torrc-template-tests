@@ -96,8 +96,8 @@ configs = [
             """
         )
     ),
+    # Was: client-only-v6-md.tmpl
     NodeConfig(
-        torrc="client-only-v6-md.tmpl",
         tag="c",
         client=True,
         ip=None,

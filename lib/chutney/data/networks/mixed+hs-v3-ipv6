@@ -34,9 +34,9 @@ OldNonExitRelay6 = Node(tag="rOLD", relay=1,
                         tor=OLD_TOR)
 
 Client6 = Node(tag="c", client=1,
-               torrc="client-only-v6-md.tmpl", launch_phase=2)
+               ip=None, launch_phase=2)
 OldClient6 = Node(tag="cOLD", client=1,
-                  torrc="client-only-v6-md.tmpl",
+                  ip=None,
                   tor=OLD_TOR, launch_phase=2)
 
 HSv3IPv6 = Node(tag="h", hs=1,
