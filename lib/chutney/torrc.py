@@ -7,6 +7,9 @@ from chutney.Util import find_executable_on_path
 
 
 def format(n: TorNet.Node) -> str:
+    """
+    Returns the contents of a torrc config file for the given node.
+    """
     res = textwrap.dedent(
         f"""
         TestingTorNetwork 1

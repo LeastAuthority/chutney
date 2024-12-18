@@ -41,7 +41,7 @@ from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type
 
-import chutney.torrc_templates.common_i
+import chutney.torrc
 import chutney.Host
 import chutney.Util
 
@@ -742,7 +742,7 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
-        return chutney.torrc_templates.common_i.format(self._node)
+        return chutney.torrc.format(self._node)
 
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
