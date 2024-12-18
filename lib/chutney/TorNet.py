@@ -17,7 +17,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from pathlib import Path
-from typing import List, Optional, TypeVar, Any, Iterable, Union, Callable
+from typing import List, Optional, TypeVar, Any, Iterable, Union
 
 import copy
 import dataclasses
@@ -39,7 +39,7 @@ from chutney.Util import getenv_int, getenv_bool, Option, OptionalConversionDesc
 from chutney.network_tests import NetworkTestFailure
 from collections.abc import Collection
 from importlib.abc import Traversable
-from typeguard import check_type, TypeCheckError
+from typeguard import check_type
 
 import chutney.torrc_templates.common_i
 import chutney.Host
@@ -594,15 +594,6 @@ class Node(object):
             self._controller = LocalNodeController(self._network, self)
         return self._controller
 
-    def _check_expected_pattern(self, pattern: str, contents: str) -> None:
-        """Raises `ChutneyInconsistentTemplateError` if `pattern` is not found in `contents`"""
-        if not re.search(pattern, contents, re.MULTILINE):
-            # Only intended for use in nodes that specify a torrc.
-            assert self._config.torrc is not None
-            raise ChutneyInconsistentTemplateError(
-                self._config.torrc, pattern, contents
-            )
-
 
 class NodeBuilder:
     """Abstract base class.  A NodeBuilder is responsible for doing all the
@@ -751,28 +742,7 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
-
-        torrc = self._node._config.torrc
-        if torrc is None:
-            return chutney.torrc_templates.common_i.format(self._node)
-
-        # Legacy path:
-
-        # TODO: Maybe make this a (big) explicit `match` statement?
-        module_name = torrc.translate({ord("."): "_", ord("-"): "_"})
-        try:
-            mod = importlib.import_module("chutney.torrc_templates." + module_name)
-        except ModuleNotFoundError as e:
-            raise ChutneyError(f"Unrecognized torrc_template {torrc}") from e
-        try:
-            f = check_type(getattr(mod, "format"), Callable[[Node], str])
-        except (AttributeError, TypeCheckError) as e:
-            raise ChutneyInternalError(
-                f"module {module_name} didn't have expected format fn"
-            ) from e
-        # mypy still requires checking that the result is a string, even though
-        # we verified the function signature.
-        return check_type(f(self._node), str)
+        return chutney.torrc_templates.common_i.format(self._node)
 
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
@@ -2226,16 +2196,6 @@ CUR_BOOTSTRAP_PHASE: int = getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1)
 class NodeConfig:
     """Properties of a Tor Node"""
 
-    # Name of the template module to use to generate the config file.
-    #
-    # This should be the name of a module in `chutney.torrc_templates`.
-    # For backwards compatibility '-' and '.' are translated to `_`
-    # when loading the module.
-    #
-    # Deprecated. New code should leave this as None. The torrc generation is
-    # now completely specified through other attributes like "client", "exit",
-    # etc.
-    torrc: Optional[str] = None
     # a short text string that represents the type of node.
     # Some special tag prefixes:
     # * 'h' configures it to run an onion service.
