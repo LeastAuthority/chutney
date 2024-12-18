@@ -3113,14 +3113,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
                 ConnectionPadding 0
                 """
             )
-        elif torrc == "relay-MAB.tmpl":
-            # TODO: If we want to keep this, consider porting
-            # to individual options.
-            kwargs["extra_raw_torrc"] = textwrap.dedent(
-                """
-                MaxAdvertisedBandwidth 1 MBytes
-                """
-            )
         elif torrc == "relay-MBR.tmpl":
             # TODO: If we want to keep this, consider porting
             # to individual options.
