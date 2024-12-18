@@ -3113,8 +3113,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
                 ConnectionPadding 0
                 """
             )
-        elif torrc == "single-onion-v3.tmpl":
-            kwargs["hs_singlehop"] = True
         elif torrc == "single-onion-v3-only-v6-md.tmpl":
             kwargs["ip"] = None
             kwargs["hs_singlehop"] = True

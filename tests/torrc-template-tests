@@ -196,8 +196,8 @@ configs = [
         exit=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "single-onion-v3.tmpl"
     NodeConfig(
-        torrc="single-onion-v3.tmpl",
         tag="h",
         hs=True,
         hs_singlehop=True,
