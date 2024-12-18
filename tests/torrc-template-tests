@@ -202,8 +202,8 @@ configs = [
         hs=True,
         hs_singlehop=True,
     ),
+    # Was: "single-onion-v3-only-v6-md.tmpl"
     NodeConfig(
-        torrc="single-onion-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
         ip=None,
