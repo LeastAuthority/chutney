@@ -77,8 +77,8 @@ configs = [
         relay=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "client_bwscanner.tmpl"
     NodeConfig(
-        torrc="client_bwscanner.tmpl",
         tag="c",
         client=True,
         use_microdescriptors=False,

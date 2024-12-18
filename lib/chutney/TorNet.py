@@ -3096,24 +3096,6 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
             _THE_NETWORK.addNode(n)
 
     def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
-        # Set options based on torrc for backwards compatibility.
-        torrc = check_type(kwargs.get("torrc"), Optional[str])
-        if torrc == "client_bwscanner.tmpl":
-            kwargs["use_microdescriptors"] = False
-            # TODO: If we want to keep this, consider porting
-            # to individual options.
-            kwargs["extra_raw_torrc"] = textwrap.dedent(
-                """
-                UseEntryGuards 0
-                FetchDirInfoEarly 1
-                FetchDirInfoExtraEarly 1
-                FetchUselessDescriptors 1
-                LearnCircuitBuildTimeout 0
-                CircuitBuildTimeout 60
-                ConnectionPadding 0
-                """
-            )
-
         if parent is None:
             return NodeConfig(**kwargs)
         else:
