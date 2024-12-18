@@ -17,21 +17,21 @@ network = TorNet.Network()
 # they currently enable that the generated torrc is consistent with the legacy
 # template name.
 configs = [
+    # Was: "authority-orport-v6.tmpl"
     NodeConfig(
-        torrc="authority-orport-v6.tmpl",
         tag="a",
         authority=True,
         relay=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "authority.tmpl"
     NodeConfig(
-        torrc="authority.tmpl",
         tag="a",
         authority=True,
         relay=True,
     ),
+    # Was: "bridgeauthority.tmpl"
     NodeConfig(
-        torrc="bridgeauthority.tmpl",
         tag="ba",
         authority=True,
         relay=True,
@@ -46,16 +46,16 @@ configs = [
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridgeclient.tmpl",
     NodeConfig(
-        torrc="bridgeclient.tmpl",
         tag="bc",
         client=True,
         bridgeclient=True,
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridge-obfs4.tmpl"
     NodeConfig(
-        torrc="bridge-obfs4.tmpl",
         tag="br",
         bridge=True,
         pt_bridge=True,
@@ -64,14 +64,14 @@ configs = [
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridge.tmpl"
     NodeConfig(
-        torrc="bridge.tmpl",
         tag="br",
         bridge=True,
         relay=True,
     ),
+    # Was: "bridge-v6.tmpl"
     NodeConfig(
-        torrc="bridge-v6.tmpl",
         tag="br",
         bridge=True,
         relay=True,
@@ -111,8 +111,8 @@ configs = [
         ipv6_addr="[::1]",
         use_microdescriptors=False,
     ),
+    # Was: "client.tmpl"
     NodeConfig(
-        torrc="client.tmpl",
         tag="c",
         client=True,
     ),
@@ -123,7 +123,7 @@ configs = [
         ip=None,
         ipv6_addr="[::1]",
     ),
-    # Was: torrc="hs-v3-only-v6.tmpl"
+    # Was: "hs-v3-only-v6.tmpl"
     NodeConfig(
         tag="h",
         hs=True,
@@ -131,8 +131,8 @@ configs = [
         ipv6_addr="[::1]",
         use_microdescriptors=False,
     ),
+    # Was: "hs-v3.tmpl"
     NodeConfig(
-        torrc="hs-v3.tmpl",
         tag="h",
         hs=True,
     ),
@@ -156,19 +156,19 @@ configs = [
             """
         )
     ),
+    # Was: "relay-non-dir.tmpl"
     NodeConfig(
-        torrc="relay-non-dir.tmpl",
         tag="r",
         relay=True,
     ),
+    # Was: "relay-non-exit.tmpl"
     NodeConfig(
-        torrc="relay-non-exit.tmpl",
         tag="r",
         relay=True,
         exit=False,
     ),
+    # Was: "relay-exit-v6-only.tmpl"
     NodeConfig(
-        torrc="relay-exit-v6-only.tmpl",
         tag="r",
         relay=True,
         exit=True,
@@ -176,21 +176,21 @@ configs = [
         # do we really support v6-only exits?
         ipv6_addr="[::1]",
     ),
+    # Was: "relay-orport-v6-non-exit.tmpl"
     NodeConfig(
-        torrc="relay-orport-v6-non-exit.tmpl",
         tag="r",
         relay=True,
         exit=False,
         ipv6_addr="[::1]",
     ),
+    # Was: "relay.tmpl"
     NodeConfig(
-        torrc="relay.tmpl",
         tag="r",
         relay=True,
         exit=True,
     ),
+    # Was: "relay-v6.tmpl",
     NodeConfig(
-        torrc="relay-v6.tmpl",
         tag="r",
         relay=True,
         exit=True,

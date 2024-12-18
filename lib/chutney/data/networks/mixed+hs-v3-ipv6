@@ -10,27 +10,21 @@ OLD_TOR=os.getenv("CHUTNEY_OLD_TOR", "tor-stable")
 # By default, Authorities are not configured as exits
 Authority6 = Node(tag="a", authority=1, relay=1,
                   ipv6_addr=os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6',
-                                           '[::1]'),
-                  torrc="authority-orport-v6.tmpl")
+                                           '[::1]'))
 OldAuthority6 = Node(tag="aOLD", authority=1, relay=1,
                      ipv6_addr=os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6',
                                               '[::1]'),
-                     torrc="authority-orport-v6.tmpl",
                      tor=OLD_TOR)
 
-NonExitRelay = Node(tag="r", relay=1,
-                    torrc="relay-non-exit.tmpl")
+NonExitRelay = Node(tag="r", relay=1)
 OldNonExitRelay = Node(tag="rOLD", relay=1,
-                       torrc="relay-non-exit.tmpl",
                        tor=OLD_TOR)
 NonExitRelay6 = Node(tag="r", relay=1,
                      ipv6_addr=os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6',
-                                              '[::1]'),
-                     torrc="relay-orport-v6-non-exit.tmpl")
+                                              '[::1]'))
 OldNonExitRelay6 = Node(tag="rOLD", relay=1,
                         ipv6_addr=os.environ.get('CHUTNEY_LISTEN_ADDRESS_V6',
                                                  '[::1]'),
-                        torrc="relay-orport-v6-non-exit.tmpl",
                         tor=OLD_TOR)
 
 Client6 = Node(tag="c", client=1,

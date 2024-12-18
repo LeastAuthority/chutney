@@ -1,8 +1,8 @@
 # By default, Authorities are not configured as exits
-Authority = Node(tag="a", authority=1, relay=1, torrc="authority.tmpl")
+Authority = Node(tag="a", authority=1, relay=1)
 # #40013: All the relays get the EXIT flag. Why?
-NonExitRelay = Node(tag="m", relay=1, exit=0, torrc="relay-non-exit.tmpl")
-ExitRelay = Node(tag="r", relay=1, exit=1, torrc="relay.tmpl")
+NonExitRelay = Node(tag="m", relay=1, exit=0)
+ExitRelay = Node(tag="r", relay=1, exit=1)
 
 Client = Node(tag="c", client=1, use_microdescriptors=False, extra_raw_torrc="""\
 UseEntryGuards 0
