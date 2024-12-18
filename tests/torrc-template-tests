@@ -116,8 +116,8 @@ configs = [
         tag="c",
         client=True,
     ),
+    # Was: hs-v3-only-v6-md.tmpl
     NodeConfig(
-        torrc="hs-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
         ip=None,
