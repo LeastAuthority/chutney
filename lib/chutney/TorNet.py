@@ -2366,7 +2366,18 @@ class NodeConfig:
     def specialize(self, **kwargs: Any) -> NodeConfig:
         """Return a new Node based on this node's value as its defaults,
         but with the values from 'kwargs' (if any) overriding them.
+
+        DEPRECATED: use dataclasses.replace instead, which mypy knows how to type-check.
         """
+        # mypy has a plugin to understand and properly type-check
+        # dataclasses and dataclasses.replace:
+        # <https://github.com/python/mypy/blob/bcd4ff231554102a6698615882074e440ebfc3c9/mypy/plugins/dataclasses.py#L202>.
+        #
+        # Conversely, I don't see a way to allow mypy to properly check *this*
+        # function without either:
+        # * spelling out the full argument list and types above, which would duplicate
+        #   the class's field definitions and be a maintenance headache.
+        # * creating our own mypy plugin.
         return dataclasses.replace(self, **kwargs)
 
 
