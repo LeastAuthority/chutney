@@ -17,28 +17,28 @@ network = TorNet.Network()
 # they currently enable that the generated torrc is consistent with the legacy
 # template name.
 configs = [
+    # Was: "authority-orport-v6.tmpl"
     NodeConfig(
-        torrc="authority-orport-v6.tmpl",
         tag="a",
         authority=True,
         relay=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "authority.tmpl"
     NodeConfig(
-        torrc="authority.tmpl",
         tag="a",
         authority=True,
         relay=True,
     ),
+    # Was: "bridgeauthority.tmpl"
     NodeConfig(
-        torrc="bridgeauthority.tmpl",
         tag="ba",
         authority=True,
         relay=True,
         bridgeauthority=True,
     ),
+    # Was: bridgeclient-obfs4.tmpl
     NodeConfig(
-        torrc="bridgeclient-obfs4.tmpl",
         tag="bc",
         client=True,
         bridgeclient=True,
@@ -46,16 +46,16 @@ configs = [
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridgeclient.tmpl",
     NodeConfig(
-        torrc="bridgeclient.tmpl",
         tag="bc",
         client=True,
         bridgeclient=True,
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridge-obfs4.tmpl"
     NodeConfig(
-        torrc="bridge-obfs4.tmpl",
         tag="br",
         bridge=True,
         pt_bridge=True,
@@ -64,21 +64,21 @@ configs = [
         # Managed proxies are incompatible with sandboxing
         sandbox=False,
     ),
+    # Was: "bridge.tmpl"
     NodeConfig(
-        torrc="bridge.tmpl",
         tag="br",
         bridge=True,
         relay=True,
     ),
+    # Was: "bridge-v6.tmpl"
     NodeConfig(
-        torrc="bridge-v6.tmpl",
         tag="br",
         bridge=True,
         relay=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "client_bwscanner.tmpl"
     NodeConfig(
-        torrc="client_bwscanner.tmpl",
         tag="c",
         client=True,
         use_microdescriptors=False,
@@ -96,81 +96,79 @@ configs = [
             """
         )
     ),
+    # Was: client-only-v6-md.tmpl
     NodeConfig(
-        torrc="client-only-v6-md.tmpl",
         tag="c",
         client=True,
         ip=None,
         ipv6_addr="[::1]",
     ),
+    # Was: client-only-v6.tmpl
     NodeConfig(
-        torrc="client-only-v6.tmpl",
         tag="c",
         client=True,
         ip=None,
         ipv6_addr="[::1]",
         use_microdescriptors=False,
     ),
+    # Was: "client.tmpl"
     NodeConfig(
-        torrc="client.tmpl",
         tag="c",
         client=True,
     ),
+    # Was: hs-v3-only-v6-md.tmpl
     NodeConfig(
-        torrc="hs-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
         ip=None,
         ipv6_addr="[::1]",
     ),
+    # Was: "hs-v3-only-v6.tmpl"
     NodeConfig(
-        torrc="hs-v3-only-v6.tmpl",
         tag="h",
         hs=True,
         ip=None,
         ipv6_addr="[::1]",
         use_microdescriptors=False,
     ),
+    # Was: "hs-v3.tmpl"
     NodeConfig(
-        torrc="hs-v3.tmpl",
         tag="h",
         hs=True,
     ),
+    # Was: "relay-MAB.tmpl"
     NodeConfig(
-        torrc="relay-MAB.tmpl",
-        tag="relay1mbyteMAB",
+        tag="relayMAB",
         relay=True,
         extra_raw_torrc=textwrap.dedent(
             """
-            Nickname relay1mbyteMAB
             MaxAdvertisedBandwidth 1 MBytes
             """
         )
     ),
+    # Was: "relay-MBR.tmpl"
     NodeConfig(
-        torrc="relay-MBR.tmpl",
-        tag="relay1mbyteMBR",
+        tag="relayMBR",
         relay=True,
         extra_raw_torrc=textwrap.dedent(
             """
-            Nickname relay1mbyteMBR
             RelayBandwidthRate 1 MBytes
             """
         )
     ),
+    # Was: "relay-non-dir.tmpl"
     NodeConfig(
-        torrc="relay-non-dir.tmpl",
         tag="r",
         relay=True,
     ),
+    # Was: "relay-non-exit.tmpl"
     NodeConfig(
-        torrc="relay-non-exit.tmpl",
         tag="r",
         relay=True,
         exit=False,
     ),
+    # Was: "relay-exit-v6-only.tmpl"
     NodeConfig(
-        torrc="relay-exit-v6-only.tmpl",
         tag="r",
         relay=True,
         exit=True,
@@ -178,34 +176,34 @@ configs = [
         # do we really support v6-only exits?
         ipv6_addr="[::1]",
     ),
+    # Was: "relay-orport-v6-non-exit.tmpl"
     NodeConfig(
-        torrc="relay-orport-v6-non-exit.tmpl",
         tag="r",
         relay=True,
         exit=False,
         ipv6_addr="[::1]",
     ),
+    # Was: "relay.tmpl"
     NodeConfig(
-        torrc="relay.tmpl",
         tag="r",
         relay=True,
         exit=True,
     ),
+    # Was: "relay-v6.tmpl",
     NodeConfig(
-        torrc="relay-v6.tmpl",
         tag="r",
         relay=True,
         exit=True,
         ipv6_addr="[::1]",
     ),
+    # Was: "single-onion-v3.tmpl"
     NodeConfig(
-        torrc="single-onion-v3.tmpl",
         tag="h",
         hs=True,
         hs_singlehop=True,
     ),
+    # Was: "single-onion-v3-only-v6-md.tmpl"
     NodeConfig(
-        torrc="single-onion-v3-only-v6-md.tmpl",
         tag="h",
         hs=True,
         ip=None,
@@ -216,29 +214,7 @@ configs = [
 
 # Add the configs to the network, getting their corresponding Nodes.
 nodes = network.addNodes(configs)
-# Configure the network, generating the torrc files.
+# Configure the network, generating the torrc files, and validating that they are well-formed.
 network.configure()
-
-
-def template_to_basename(s: str) -> str:
-    """Map a legacy template name to  the basename of the python file implementing it"""
-    return s.translate({ord("."): "_", ord("-"): "_"}) + ".py"
-
-
-checked_template_basenames: set[str] = {
-    template_to_basename(n._config.torrc) for n in nodes
-}
-all_template_basenames: set[str] = {
-    Path(s).name for s in glob.glob("lib/chutney/torrc_templates/*_tmpl.py")
-}
-missed_template_basenames = all_template_basenames.difference(checked_template_basenames)
-
-if len(missed_template_basenames) > 0:
-    unhandled = list(missed_template_basenames)
-    unhandled.sort()
-    print("ERROR: didn't test:")
-    for basename in unhandled:
-        print("  ", basename)
-    sys.exit(1)
 
 print("Passed")
