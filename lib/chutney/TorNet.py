@@ -2698,7 +2698,7 @@ class Network(object):
 
     def print_bootstrap_status(
         self,
-        controllers: Iterable[LocalNodeController],
+        controllers: Iterable[NodeController],
         most_recent_desc_status: dict[
             str, tuple[int, Collection[str], Collection[str], str]
         ],
