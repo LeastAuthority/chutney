@@ -637,6 +637,13 @@ class NodeBuilder(ABC):
         """
         ...
 
+    @abstractmethod
+    def getBridgeLines(self) -> list[BridgeLine]:
+        """Return descriptors that a client can use to connect to this bridge.
+        Non-bridge relays return [].
+        """
+        ...
+
 
 class NodeController(ABC):
     """Abstract base class.  A NodeController is responsible for running a
@@ -920,10 +927,8 @@ class LocalNodeBuilder(NodeBuilder):
             extra_flags=self._node._config.dirserver_flags.split(),
         )
 
-    def _getBridgeLines(self) -> list[BridgeLine]:
-        """Return descriptors that a client can use to connect to this bridge.
-        Non-bridge relays return [].
-        """
+    @override
+    def getBridgeLines(self) -> list[BridgeLine]:
         if not self._node._config.bridge:
             return []
 
@@ -2499,7 +2504,7 @@ class Network(object):
             auth_line = b.getAltAuthLines(self.hasbridgeauth)
             if auth_line is not None:
                 altauthlines.append(auth_line)
-            bridgelines.extend(b._getBridgeLines())
+            bridgelines.extend(b.getBridgeLines())
 
         self.authorities = altauthlines
         self.bridges = bridgelines
