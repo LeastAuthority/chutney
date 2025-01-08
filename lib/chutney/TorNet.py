@@ -742,6 +742,17 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def getNodeDirInfoStatus(
+        self,
+    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+        """Return a 4-tuple describing the status of this node's descriptor,
+        in all the directory documents across the network.
+
+        If this node does not have a descriptor, returns None.
+        """
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -2107,14 +2118,10 @@ class LocalNodeController(NodeController):
             # client
             return None
 
+    @override
     def getNodeDirInfoStatus(
         self,
     ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
-        """Return a 4-tuple describing the status of this node's descriptor,
-        in all the directory documents across the network.
-
-        If this node does not have a descriptor, returns None.
-        """
         dir_status = self.getNodeDirInfoStatusList()
         if dir_status:
             summary = self.summariseNodeDirInfoStatus(dir_status)
