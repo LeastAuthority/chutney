@@ -732,6 +732,16 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def isBootstrapped(self) -> bool:
+        """Return true iff the logfile says that this instance is
+        bootstrapped.
+
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
+        """
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1543,13 +1553,8 @@ class LocalNodeController(NodeController):
         self.updateLastOnionServiceDescStatus()
         self.updateLastBootstrapStatus()
 
+    @override
     def isBootstrapped(self) -> bool:
-        """Return true iff the logfile says that this instance is
-        bootstrapped.
-
-        The return status depends on the last time updateLastStatus()
-        was called; that function must be called before this one.
-        """
         pct, _, _ = self.getLastBootstrapStatus()
         if pct != LocalNodeController.SUCCESS_CODE:
             return False
