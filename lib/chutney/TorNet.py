@@ -481,7 +481,7 @@ class Node(object):
 
         self._network = network
         self._config = config
-        self._builder: Optional[LocalNodeBuilder] = None
+        self._builder: Optional[NodeBuilder] = None
         self._controller: Optional[LocalNodeController] = None
 
     @property
@@ -575,9 +575,7 @@ class Node(object):
     ######
     # Chutney uses these:
 
-    # TODO: return a `NodeBuilder`. Right now a lot of code implicitly assumes
-    # this is a `LocalNodeBuilder`, though.
-    def getBuilder(self) -> LocalNodeBuilder:
+    def getBuilder(self) -> NodeBuilder:
         """Return a NodeBuilder instance to set up this node (that is, to
         write all the files that need to be in place so that this
         node can be run by a NodeController).
