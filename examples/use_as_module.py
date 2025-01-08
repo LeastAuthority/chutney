@@ -3,6 +3,7 @@
 Attempt to use chutney as a module.
 """
 
+import dataclasses
 import os
 
 from chutney import TorNet
@@ -12,9 +13,9 @@ from chutney.network_tests import verify
 network = TorNet.Network()
 
 base = NodeConfig(controlling_pid=os.getpid())
-Authority = base.specialize(tag="a", authority=1, relay=1)
-ExitRelay = base.specialize(tag="r", relay=1, exit=1)
-Client = base.specialize(tag="c", client=1)
+Authority = dataclasses.replace(base, tag="a", authority=True, relay=True)
+ExitRelay = dataclasses.replace(base, tag="r", relay=True, exit=True)
+Client = dataclasses.replace(base, tag="c", client=True)
 network.addNodes(Authority.getN(4) + ExitRelay.getN(1) + Client.getN(1))
 
 network.configure()
