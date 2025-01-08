@@ -77,6 +77,22 @@ def format(n: TorNet.Node) -> str:
         UseMicrodescriptors {int(n._config.use_microdescriptors)}
         """
     )
+    if n._config.ip.is_some():
+        if n._config.hs or n._config.relay:
+            res += f"Address {n._config.ip.unwrap()}\n"
+    else:
+        if n._config.client or n._config.hs:
+            res += "ClientUseIPv4 0\n"
+    if n._config.relay:
+        ip = n._config.ip.unwrap_or_raise(
+            lambda: TorNet.ChutneyError("'relay' set with no ipv4 address")
+        )
+        # Note that explicitly specifying the ipv4 address instead of just the
+        # port means that this will only bind to this *ipv4* address.
+        # We potentially enable ipv6 separately below.
+        res += f"OrPort {ip}:{n.orport}\n"
+        if n._config.ipv6_addr.is_some():
+            res += f"OrPort {n._config.ipv6_addr.unwrap()}:{n.orport}\n"
     if n._config.hs:
         res += textwrap.dedent(
             f"""
@@ -89,9 +105,6 @@ def format(n: TorNet.Node) -> str:
             HiddenServiceVersion 3
             """
         )
-        if n._config.ip.is_some():
-            # TODO: Unify "Address" directives
-            res += f"Address {n._config.ip.unwrap()}\n"
         if n._config.hs_singlehop:
             res += textwrap.dedent(
                 f"""
@@ -116,25 +129,41 @@ def format(n: TorNet.Node) -> str:
                 # See #17360.
                 """
             )
-    if n._config.ip.is_none():
-        if n._config.disableipv6:
-            raise TorNet.ChutneyError("No ipv4 address and ipv6 disabled")
-        if not n._config.client and not n._config.hs:
-            raise TorNet.ChutneyError("No ipv4 address for non-client, non-hs")
-        res += "ClientUseIPv4 0\n"
-    # `authorities` contains multiple lines, which breaks dedent if we include
-    # it inline above.
-    # TODO: `authorities` shouldn't be "pre-rendered" text.
-    res += f"{n._network.authorities.strip()}\n"
+    for auth in n._network.authorities:
+        directive: str
+        if auth.alt_dir_auth and (auth.alt_bridge_auth or not n._network.hasbridgeauth):
+            # Generally 'DirAuthority' means to treat as both a dir-auth and a
+            # bridge-auth.
+            #
+            # tor rejects configurations with TestingTorNetwork that don't have
+            # some 'DirAuthority' or both of 'AlternateBridgeAuthority' and
+            # 'AlternateDirAuthority', so if there are no true bridge auths in
+            # the network we use 'DirAuthority' here.
+            #
+            # We *don't* artificially add the 'bridge' flag below though. It
+            # appears to be unnecessary and results in logged warnings due to
+            # the authority not actually being configured as a bridge auth.
+            directive = "DirAuthority"
+        elif auth.alt_bridge_auth:
+            directive = "AlternateBridgeAuthority"
+        else:
+            assert auth.alt_dir_auth
+            directive = "AlternateDirAuthority"
+        # This is currently ~always "no-v2"; none of the built-in templates or
+        # networks override it.
+        flags = auth.extra_flags.copy()
+        flags.append(f"orport={auth.orport}")
+        if auth.alt_bridge_auth:
+            flags.append("bridge")
+        if auth.alt_dir_auth:
+            flags.append(f"v3ident={auth.v3id}")
+        if auth.ipv6.is_some():
+            flags.append(f"ipv6={auth.ipv6.unwrap()}:{auth.orport}")
+        res += f"{directive} {auth.nick} {' '.join(flags)}"
+        res += f" {auth.ipv4}:{auth.dirport} {auth.fingerprint}\n"
     if n._config.relay:
-        ipv4 = n._config.ip.unwrap_or_raise(
-            TorNet.ChutneyError("ipv4 address is mandatory for relays")
-        )
         res += textwrap.dedent(
             f"""
-            OrPort {n.orport}{" IPv4Only" if n._config.disableipv6 else ""}
-            Address {ipv4}
-
             ExitRelay {int(n._config.exit)}
 
             # These options are set here so they apply to IPv4 and IPv6 Exits
@@ -186,14 +215,6 @@ def format(n: TorNet.Node) -> str:
             # 4. Finally, reject all IPv4 addresses which haven't been permitted
             # ------------------------------------------------------------------
             ExitPolicy reject *:*
-            """
-        )
-    if n._config.relay and n._config.ipv6_addr.is_some():
-        # TODO: Avoid potential redundancy/conflict with OrPort emitted above.
-        res += textwrap.dedent(
-            f"""
-            # Tor uses the first IPv6 ORPort address as its IPv6 address
-            OrPort {n._config.ipv6_addr.unwrap()}:{n.orport} IPv6Only
             """
         )
     if n._config.exit and n._config.ipv6_addr.is_some():

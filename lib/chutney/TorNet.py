@@ -877,22 +877,12 @@ class LocalNodeBuilder(NodeBuilder):
             s = open(ed_fn).read().strip().split()[1]
             self._node.fingerprint_ed25519.replace(s)
 
-    def _getAltAuthLines(
-        self, hasbridgeauth: bool = False
-    ) -> tuple[str, tuple[str, str]]:
-        """Return a set of lines to configure other nodes to use this Node as
-        an authority.  For C tor, this is a combination of
-        AternateDirAuthority and AlternateBridgeAuthority.  For Arti,
-        this is a pair of lines to use this node as an authority and
-        as a fallback.  (Arti does not automatically use authorities
-        as fallbacks.)
-
-        The answers are returned as: (tor-auth, (arti-auth, arti-fallback))
-
-        If this node not an authority, the returned strings are empty.
+    def _getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
+        """Return the information needed to use this node as an authority,
+        if it is configured as one.
         """
         if not self._node._config.authority:
-            return ("", ("", ""))
+            return None
 
         datadir = self._node.dir
         certfile = Path(datadir, "keys", "authority_certificate")
@@ -905,78 +895,19 @@ class LocalNodeBuilder(NodeBuilder):
 
         assert v3id is not None
 
-        if self._node._config.bridgeauthority:
-            # Bridge authorities return AlternateBridgeAuthority with
-            # the 'bridge' flag set.
-            options = ("AlternateBridgeAuthority",)
-            self._node._config.dirserver_flags += " bridge"
-            arti = False
-        else:
-            # Directory authorities return AlternateDirAuthority with
-            # the 'v3ident' flag set.
-            # XXXX This next line is needed for 'bridges' but breaks
-            # 'basic'
-            if hasbridgeauth:
-                options = ("AlternateDirAuthority",)
-            else:
-                options = ("DirAuthority",)
-            self._node._config.dirserver_flags += " v3ident=%s" % v3id
-            arti = True
-
-        authlines = ""
-        for authopt in options:
-            authlines += "%s %s orport=%s" % (
-                authopt,
-                self._node.nick,
-                self._node.orport,
-            )
-            # It's ok to give an authority's IPv6 address to an IPv4-only
-            # client or relay: it will and must ignore it
-            # and yes, the orport is the same on IPv4 and IPv6
-            if self._node._config.ipv6_addr.is_some():
-                authlines += " ipv6=%s:%s" % (
-                    self._node._config.ipv6_addr.unwrap(),
-                    self._node.orport,
-                )
-            authlines += " %s %s:%s %s\n" % (
-                self._node._config.dirserver_flags,
-                self._node._config.ip.unwrap(),
-                self._node.dirport.unwrap(),
-                self._node.fingerprint.unwrap(),
-            )
-
-        # generate arti configuartion if supported
-        arti_lines = ("", "")
-        if arti:
-            addrs = '"%s:%s"' % (self._node._config.ip.unwrap(), self._node.orport)
-            if self._node._config.ipv6_addr.is_some():
-                addrs += ', "%s:%s"' % (
-                    self._node._config.ipv6_addr.unwrap(),
-                    self._node.orport,
-                )
-            elts = {
-                "fp": self._node.fingerprint.unwrap().replace(" ", ""),
-                "ed_fp": self._node.fingerprint_ed25519.unwrap(),
-                "orports": addrs,
-                "nick": self._node.nick,
-                "v3id": v3id,
-            }
-            arti_lines = (
-                (
-                    "    {"
-                    + f'rsa_identity = "{elts["fp"]}"'
-                    + f', ed_identity = "{elts["ed_fp"]}"'
-                    + f', orports = [{elts["orports"]}]'
-                    + "},\n"
-                ),
-                (
-                    "    {"
-                    + f'name = "{elts["nick"]}"'
-                    + f', v3ident = "{elts["v3id"]}"'
-                    + "},\n"
-                ),
-            )
-        return (authlines, arti_lines)
+        return AuthorityLine(
+            nick=self._node.nick,
+            ipv4=self._node._config.ip.unwrap(),
+            ipv6=self._node._config.ipv6_addr,
+            orport=self._node.orport,
+            dirport=self._node.dirport.unwrap(),
+            v3id=v3id,
+            fingerprint=self._node.fingerprint.unwrap(),
+            fingerprint_ed25519=self._node.fingerprint_ed25519.unwrap(),
+            alt_bridge_auth=self._node._config.bridgeauthority,
+            alt_dir_auth=not self._node._config.bridgeauthority,
+            extra_flags=self._node._config.dirserver_flags.split(),
+        )
 
     def _getBridgeLines(self) -> list[BridgeLine]:
         """Return descriptors that a client can use to connect to this bridge.
@@ -2390,6 +2321,21 @@ class BridgeLine:
     pt_extra: Option[str] = Option(None)
 
 
+@dataclasses.dataclass
+class AuthorityLine:
+    nick: str
+    ipv4: str
+    ipv6: Option[str]
+    orport: int
+    dirport: int
+    v3id: str
+    fingerprint: str
+    fingerprint_ed25519: str
+    extra_flags: list[str]
+    alt_bridge_auth: bool = False
+    alt_dir_auth: bool = False
+
+
 KNOWN_REQUIREMENTS = {"IPV6": chutney.Host.is_ipv6_supported}
 
 
@@ -2409,7 +2355,7 @@ class Network(object):
         self.hasbridgeauth = False
         # authorities: combination of AlternateDirAuthority and
         # AlternateBridgeAuthority torrc lines. there is no default for this option
-        self.authorities = "AlternateDirAuthority bleargh bad torrc file!"
+        self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
 
@@ -2535,8 +2481,6 @@ class Network(object):
         network = self
         altauthlines = []
         bridgelines = []
-        arti_fallback_lines = []
-        arti_auth_lines = []
         all_builders = [n.getBuilder() for n in self._nodes]
         builders = [b for b in all_builders if b._node._config.config_phase == phase]
 
@@ -2545,45 +2489,73 @@ class Network(object):
 
         for b in all_builders:
             b.preConfig(network)
-            tor_auth_line, (arti_fallback, arti_auth) = b._getAltAuthLines(
-                self.hasbridgeauth
-            )
-            altauthlines.append(tor_auth_line)
-            arti_fallback_lines.append(arti_fallback)
-            arti_auth_lines.append(arti_auth)
+            auth_line = b._getAltAuthLines(self.hasbridgeauth)
+            if auth_line is not None:
+                altauthlines.append(auth_line)
             bridgelines.extend(b._getBridgeLines())
 
-        self.authorities = "".join(altauthlines)
+        self.authorities = altauthlines
         self.bridges = bridgelines
 
         for b in builders:
             b.config(network)
 
+        arti_fallback_lines = []
+        arti_auth_lines = []
+        for auth in self.authorities:
+            if not auth.alt_dir_auth:
+                # We only configure dir auths, not bridge auths.
+                # TODO: configure bridge auths too, once arti supports them.
+                continue
+
+            addrs = '"%s:%s"' % (auth.ipv4, auth.orport)
+            if auth.ipv6.is_some():
+                addrs += ', "%s:%s"' % (
+                    auth.ipv6.unwrap(),
+                    auth.orport,
+                )
+            arti_fallback_lines.append(
+                "    {"
+                + f'rsa_identity = "{auth.fingerprint.replace(" ", "")}"'
+                + f', ed_identity = "{auth.fingerprint_ed25519}"'
+                + f", orports = [{addrs}]"
+                + "},\n"
+            )
+            arti_auth_lines.append(
+                "    {"
+                + f'name = "{auth.nick}"'
+                + f', v3ident = "{auth.v3id}"'
+                + "},\n"
+            )
+
         with open(os.path.join(get_absolute_nodes_path(), "arti.toml"), "w") as f:
             f.write(
-                """[storage]
-cache_dir = "{path}/arti/cache"
-state_dir = "{path}/arti/state"
+                textwrap.dedent(
+                    f"""
+                    [storage]
+                    cache_dir = "{self.dir}/arti/cache"
+                    state_dir = "{self.dir}/arti/state"
 
-[path_rules]
-# These values disable enforce_distance entirely; we can replace them
-# with something like Tor's "EnforceDistinceSubnets 0" if Arti ever
-# implements it.
-ipv4_subnet_family_prefix = 33
-ipv6_subnet_family_prefix = 129
+                    [path_rules]
+                    # These values disable enforce_distance entirely; we can replace them
+                    # with something like Tor's "EnforceDistinceSubnets 0" if Arti ever
+                    # implements it.
+                    ipv4_subnet_family_prefix = 33
+                    ipv6_subnet_family_prefix = 129
 
-[address_filter]
-# Allow the client to accept requests to connect to e.g. 127.0.0.1
-allow_local_addrs = true
-
-""".format(
-                    path=self.dir
+                    [address_filter]
+                    # Allow the client to accept requests to connect to e.g. 127.0.0.1
+                    allow_local_addrs = true
+                    """
                 )
             )
             f.write(
-                """[tor_network]
-fallback_caches = [
-"""
+                textwrap.dedent(
+                    """
+                    [tor_network]
+                    fallback_caches = [
+                    """
+                )
             )
             f.write("".join(arti_fallback_lines))
             f.write("]\n")
@@ -2592,10 +2564,13 @@ fallback_caches = [
             f.write("]\n")
 
             f.write(
-                """[bridges]
-enabled = "auto"
-bridges = '''
-"""
+                textwrap.dedent(
+                    """
+                    [bridges]
+                    enabled = "auto"
+                    bridges = '''
+                    """
+                )
             )
             for bd in bridgelines:
                 bridgeline: str
