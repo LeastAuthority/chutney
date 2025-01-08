@@ -597,33 +597,38 @@ class Node(object):
         return self._controller
 
 
-class NodeBuilder:
+class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
     one-time prep needed to set up a node in a network.
     """
 
+    @abstractmethod
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def preConfig(self, net: Network) -> None:
-        """Called on all nodes before any nodes configure: generates keys as
-        needed.
+        """Called on all nodes before any nodes configure: generates keys and
+        hidden service directories as needed.
         """
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def config(self, net: Network) -> None:
         """Called to configure a node: creates a torrc file for it."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def postConfig(self, net: Network) -> None:
         """Called on each nodes after all nodes configure."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def isSupported(self, net: Network) -> bool:
         """Return true if this node appears to have everything it needs;
         false otherwise."""
-        raise NotImplementedError()
+        ...
 
 
 class NodeController(ABC):
@@ -749,14 +754,12 @@ class LocalNodeBuilder(NodeBuilder):
         """Return the filled template used to write the torrc for this node."""
         return chutney.torrc.format(self._node)
 
+    @override
     def checkConfig(self, net: Network) -> None:
-        """Try to format our torrc; raise an exception if we can't."""
         self._createTorrcFile(checkOnly=True)
 
+    @override
     def preConfig(self, net: Network) -> None:
-        """Called on all nodes before any nodes configure: generates keys and
-        hidden service directories as needed.
-        """
         self._makeDataDir()
         if self._node._config.authority:
             self._genAuthorityKey()
@@ -765,20 +768,18 @@ class LocalNodeBuilder(NodeBuilder):
         if self._node._config.hs:
             self._makeHiddenServiceDir()
 
+    @override
     def config(self, net: Network) -> None:
-        """Called to configure a node: creates a torrc file for it."""
         self._createTorrcFile()
         # self._createScripts()
 
+    @override
     def postConfig(self, net: Network) -> None:
-        """Called on each nodes after all nodes configure."""
         # self.net.addNode(self)
         pass
 
+    @override
     def isSupported(self, net: Network) -> bool:
-        """Return true if this node appears to have everything it needs;
-        false otherwise."""
-
         if not tor_exists(self._node._config.tor):
             print("No binary found for %r" % self._node._config.tor)
             return False
