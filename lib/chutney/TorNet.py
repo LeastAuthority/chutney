@@ -2482,7 +2482,9 @@ class Network(object):
         altauthlines = []
         bridgelines = []
         all_builders = [n.getBuilder() for n in self._nodes]
-        builders = [b for b in all_builders if b._node._config.config_phase == phase]
+        builders = [
+            n.getBuilder() for n in self._nodes if n._config.config_phase == phase
+        ]
 
         # XXX don't change node names or types or count if anything is
         # XXX running!
