@@ -668,6 +668,14 @@ class NodeController(ABC):
         """Try to stop this node by sending it the signal 'sig'."""
         ...
 
+    @abstractmethod
+    def getPtExtra(self) -> Option[str]:
+        """Get extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        ...
 
 class LocalNodeBuilder(NodeBuilder):
 
@@ -1075,12 +1083,8 @@ class LocalNodeController(NodeController):
         except KeyError:
             return 0
 
+    @override
     def getPtExtra(self) -> Option[str]:
-        """Get extra bridge info to use this node as a PT bridge.
-
-        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
-        Returns None if we *expect* there to be such info but couldn't locate it (yet).
-        """
         # TODO: cache result? I don't really think it's worth the extra complexity,
         # but not doing so is inconsistent with the other accessors.
         return self._loadPtExtra()
