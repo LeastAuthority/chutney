@@ -584,9 +584,7 @@ class Node(object):
             self._builder = LocalNodeBuilder(self)
         return self._builder
 
-    # TODO: return a `NodeController`. Right now a lot of code implicitly assumes
-    # this is a `LocalNodeController`, though.
-    def getController(self) -> LocalNodeController:
+    def getController(self) -> NodeController:
         """Return a NodeController instance to control this node (that is,
         to start it, stop it, see if it's running, etc.)
         """
