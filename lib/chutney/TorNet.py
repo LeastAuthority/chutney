@@ -677,6 +677,11 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def hup(self) -> bool:
+        """Send a SIGHUP to this node, if it's running."""
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1283,8 +1288,8 @@ class LocalNodeController(NodeController):
                 print("{:12} is stopped: {}".format(nick, tor_version))
             return False
 
+    @override
     def hup(self) -> bool:
-        """Send a SIGHUP to this node, if it's running."""
         pid = self.getPid()
         nick = self._node.nick
         if pid is not None and self.isRunning(pid):
