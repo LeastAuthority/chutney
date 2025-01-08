@@ -682,6 +682,34 @@ class NodeController(ABC):
         """Send a SIGHUP to this node, if it's running."""
         ...
 
+    @abstractmethod
+    def getNodeCacheDirInfoPaths(
+        self, v2_dir_paths: bool
+    ) -> tuple[int, int, Optional[dict[str, Path]]]:
+        """Return a 3-tuple containing:
+          * a boolean indicating whether this node is a directory server,
+            (that is, an authority, relay, or bridge),
+          * a boolean indicating whether this node is a bridge client, and
+          * a dict with the expected paths to the consensus files for this
+            node.
+
+        If v2_dir_paths is True, returns the v3 directory paths.
+        Otherwise, returns the bridge status path.
+        If v2_dir_paths is True, but this node is not a bridge client or
+        bridge authority, returns None. (There are no paths.)
+
+        Directory servers usually have both consensus flavours.
+        Clients usually have the microdesc consensus, but they may have
+        either flavour. (Or both flavours.)
+        Only the bridge authority has the bridge networkstatus.
+
+        The dict keys are:
+          * "ns_cons", "desc", and "desc_new";
+          * "md_cons", "md", and "md_new"; and
+          * "br_status".
+        """
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1526,31 +1554,10 @@ class LocalNodeController(NodeController):
         else:
             return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
 
+    @override
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
-        """Return a 3-tuple containing:
-          * a boolean indicating whether this node is a directory server,
-            (that is, an authority, relay, or bridge),
-          * a boolean indicating whether this node is a bridge client, and
-          * a dict with the expected paths to the consensus files for this
-            node.
-
-        If v2_dir_paths is True, returns the v3 directory paths.
-        Otherwise, returns the bridge status path.
-        If v2_dir_paths is True, but this node is not a bridge client or
-        bridge authority, returns None. (There are no paths.)
-
-        Directory servers usually have both consensus flavours.
-        Clients usually have the microdesc consensus, but they may have
-        either flavour. (Or both flavours.)
-        Only the bridge authority has the bridge networkstatus.
-
-        The dict keys are:
-          * "ns_cons", "desc", and "desc_new";
-          * "md_cons", "md", and "md_new"; and
-          * "br_status".
-        """
         to_bridge_client = self.getBridgeClient()
         to_bridge_auth = self.getBridgeAuthority()
         datadir = self._node.dir
