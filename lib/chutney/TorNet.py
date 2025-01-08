@@ -720,6 +720,11 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def getNick(self) -> str:
+        """Return the nickname for this node."""
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1115,9 +1120,11 @@ class LocalNodeController(NodeController):
         else:
             raise ChutneyError("Unhandled pt_transport: " + ptt)
 
+    @override
     def getNick(self) -> str:
-        """Return the nickname for this node."""
-        return check_type(self._node.nick, str)
+        # TODO: Consider whether this method probably ought to get the "ground
+        # truth" by looking at the torrc or querying the control port etc.
+        return self._node.nick
 
     def getBridge(self) -> int:
         """Return the bridge (relay) flag for this node."""
