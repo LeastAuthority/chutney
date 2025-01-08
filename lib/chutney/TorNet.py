@@ -630,6 +630,13 @@ class NodeBuilder(ABC):
         false otherwise."""
         ...
 
+    @abstractmethod
+    def getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
+        """Return the information needed to use this node as an authority,
+        if it is configured as one.
+        """
+        ...
+
 
 class NodeController(ABC):
     """Abstract base class.  A NodeController is responsible for running a
@@ -883,10 +890,8 @@ class LocalNodeBuilder(NodeBuilder):
             s = open(ed_fn).read().strip().split()[1]
             self._node.fingerprint_ed25519.replace(s)
 
-    def _getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
-        """Return the information needed to use this node as an authority,
-        if it is configured as one.
-        """
+    @override
+    def getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
         if not self._node._config.authority:
             return None
 
@@ -2491,7 +2496,7 @@ class Network(object):
 
         for b in all_builders:
             b.preConfig(network)
-            auth_line = b._getAltAuthLines(self.hasbridgeauth)
+            auth_line = b.getAltAuthLines(self.hasbridgeauth)
             if auth_line is not None:
                 altauthlines.append(auth_line)
             bridgelines.extend(b._getBridgeLines())
