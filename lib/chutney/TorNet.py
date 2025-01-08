@@ -710,6 +710,16 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def getUncheckedDirInfoWaitTime(self) -> float:
+        """Returns the amount of time to wait before verifying, after the
+        network has bootstrapped, and the dir info has been distributed.
+
+        Based on whether this node has unchecked directory info, or other
+        known timing issues.
+        """
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1218,13 +1228,8 @@ class LocalNodeController(NodeController):
     # Let everything propagate for another consensus period before verifying.
     LEGACY_WAIT_FOR_UNCHECKED_DIR_INFO = V3_AUTH_VOTING_INTERVAL
 
+    @override
     def getUncheckedDirInfoWaitTime(self) -> float:
-        """Returns the amount of time to wait before verifying, after the
-        network has bootstrapped, and the dir info has been distributed.
-
-        Based on whether this node has unchecked directory info, or other
-        known timing issues.
-        """
         if self.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
         elif self.getBridge():
