@@ -753,6 +753,12 @@ class NodeController(ABC):
         """
         ...
 
+    @abstractmethod
+    def getConsensusAuthority(self) -> bool:
+        """Is this node a consensus (V2 directory) authority?"""
+        ...
+
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1196,8 +1202,8 @@ class LocalNodeController(NodeController):
         except KeyError:
             return False
 
+    @override
     def getConsensusAuthority(self) -> bool:
-        """Is this node a consensus (V2 directory) authority?"""
         return self.getAuthority() and not self.getBridgeAuthority()
 
     def getConsensusMember(self) -> bool:
