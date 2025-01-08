@@ -1156,23 +1156,6 @@ class LocalNodeController(NodeController):
         except KeyError:
             return False
 
-    # By default, there is no minimum start time.
-    MIN_START_TIME_DEFAULT = 0
-
-    def getMinStartTime(self) -> int:
-        """Returns the minimum start time before verifying, regardless of
-        whether the network has bootstrapped, or the dir info has been
-        distributed.
-
-        The default can be overridden by the $CHUTNEY_MIN_START_TIME env
-        var.
-        """
-        # User overrode the dynamic time
-        env_min_time = getenv_int("CHUTNEY_MIN_START_TIME", None)
-        if env_min_time is not None:
-            return env_min_time
-        return LocalNodeController.MIN_START_TIME_DEFAULT
-
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
     #
@@ -2731,6 +2714,23 @@ class Network(object):
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL / 2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
+    # By default, there is no minimum start time.
+    MIN_START_TIME_DEFAULT = 0
+
+    def getMinStartTime(self) -> int:
+        """Returns the minimum start time before verifying, regardless of
+        whether the network has bootstrapped, or the dir info has been
+        distributed.
+
+        The default can be overridden by the $CHUTNEY_MIN_START_TIME env
+        var.
+        """
+        # User overrode the dynamic time
+        env_min_time = getenv_int("CHUTNEY_MIN_START_TIME", None)
+        if env_min_time is not None:
+            return env_min_time
+        return Network.MIN_START_TIME_DEFAULT
+
     def wait_for_bootstrap(
         self, limit_secs: int = getenv_int("CHUTNEY_START_TIME", 300)
     ) -> None:
@@ -2748,8 +2748,7 @@ class Network(object):
             for n in self._nodes
             if n._config.launch_phase <= bootstrap_upto
         ]
-        min_time_list = [c.getMinStartTime() for c in controllers]
-        min_time = max(min_time_list)
+        min_time = self.getMinStartTime()
         wait_time_list = [c.getUncheckedDirInfoWaitTime() for c in controllers]
         wait_time = max(wait_time_list)
 
