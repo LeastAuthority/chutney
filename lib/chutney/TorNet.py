@@ -725,6 +725,13 @@ class NodeController(ABC):
         """Return the nickname for this node."""
         ...
 
+    @abstractmethod
+    def updateLastStatus(self) -> None:
+        """Update last messages this node has received, for use with
+        isBootstrapped and the getLast* functions.
+        """
+        ...
+
 class LocalNodeBuilder(NodeBuilder):
 
     # Environment members used:
@@ -1531,10 +1538,8 @@ class LocalNodeController(NodeController):
         assert rv is not None
         return rv
 
+    @override
     def updateLastStatus(self) -> None:
-        """Update last messages this node has received, for use with
-        isBootstrapped and the getLast* functions.
-        """
         self.updateLastOnionServiceDescStatus()
         self.updateLastBootstrapStatus()
 
