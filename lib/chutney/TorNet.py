@@ -687,6 +687,11 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
+    def cleanupRunFiles(self) -> None:
+        """Clean up any left-over run state, assuming the node has exited."""
+        ...
+
+    @abstractmethod
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
@@ -1424,6 +1429,13 @@ class LocalNodeController(NodeController):
             print("{:12} is not running".format(self._node.nick))
             return
         os.kill(pid, sig)
+
+    @override
+    def cleanupRunFiles(self) -> None:
+        # check for stale lock files when Tor crashes
+        self.cleanup_lockfile()
+        # move aside old pid files after Tor stops running
+        self.cleanup_pidfile()
 
     def cleanup_lockfile(self) -> None:
         """Remove lock file if this node is no longer running."""
@@ -2952,13 +2964,11 @@ class Network(object):
             print("Waiting for nodes to cleanup and exit.")
             time.sleep(Network.STOP_WAIT_TIME)
 
-        # check for stale lock files when Tor crashes
-        # move aside old pid files after Tor stops running
+        # clean up unwanted left-over file system state
         if cleanup_runfiles:
             controllers = [n.getController() for n in self._nodes]
             for c in controllers:
-                c.cleanup_lockfile()
-                c.cleanup_pidfile()
+                c.cleanupRunFiles()
 
     def stop(self) -> None:
         """Stop our network's running tor nodes."""
