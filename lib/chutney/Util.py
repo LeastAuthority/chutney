@@ -9,11 +9,16 @@ from __future__ import unicode_literals
 
 import os
 import stat
+import subprocess
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union
+from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union, List
 from typing_extensions import ParamSpec
+
+import chutney.TorNet as TorNet
+
+from chutney.Debug import debug_flag
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -298,3 +303,34 @@ def find_executable_on_path(
             continue
         return p
     return None
+
+
+def launch_process(
+    cmdline: List[str], tor_name: str = "tor", stdin: Optional[int] = None
+) -> subprocess.Popen[str]:
+    """Launch the command line cmdline, which must start with the path or
+    name of a binary. Use tor_name as the canonical name of the binary in
+    logs. Pass stdin to the Popen constructor.
+
+    Returns the Popen object for the launched process.
+    """
+    if tor_name == "tor":
+        if not debug_flag:
+            cmdline.append("--hush")
+    elif tor_name == "tor-gencert":
+        if debug_flag:
+            cmdline.append("-v")
+    else:
+        raise ValueError("Unknown tor_name: '{}'".format(tor_name))
+    try:
+        p = subprocess.Popen(
+            cmdline,
+            stdin=stdin,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=-1,
+        )
+    except FileNotFoundError as e:
+        raise TorNet.ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline) from e
+    return p
