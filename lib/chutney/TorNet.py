@@ -584,15 +584,17 @@ class Node(object):
             self._builder = LocalNodeBuilder(self)
         return self._builder
 
-    # TODO: return a `NodeController`. Right now a lot of code implicitly assumes
-    # this is a `LocalNodeController`, though.
-    def getController(self) -> LocalNodeController:
+    def getController(self) -> NodeController:
         """Return a NodeController instance to control this node (that is,
         to start it, stop it, see if it's running, etc.)
         """
         if self._controller is None:
             self._controller = LocalNodeController(self._network, self)
         return self._controller
+
+    def isOnionService(self) -> bool:
+        """Is this node an onion service?"""
+        return self.tag.startswith("h") or self._config.hs
 
 
 class NodeBuilder(ABC):
@@ -659,6 +661,11 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
+    def isRunning(self) -> bool:
+        """Return true iff this node is running."""
+        ...
+
+    @abstractmethod
     def start(self) -> None:
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
         ...
@@ -666,6 +673,119 @@ class NodeController(ABC):
     @abstractmethod
     def stop(self, sig: int = signal.SIGINT) -> None:
         """Try to stop this node by sending it the signal 'sig'."""
+        ...
+
+    @abstractmethod
+    def getPtExtra(self) -> Option[str]:
+        """Get extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        ...
+
+    @abstractmethod
+    def hup(self) -> bool:
+        """Send a SIGHUP to this node, if it's running."""
+        ...
+
+    @abstractmethod
+    def cleanupRunFiles(self) -> None:
+        """Clean up any left-over run state, assuming the node has exited."""
+        ...
+
+    @abstractmethod
+    def getNodeCacheDirInfoPaths(
+        self, v2_dir_paths: bool
+    ) -> tuple[int, int, Optional[dict[str, Path]]]:
+        """Return a 3-tuple containing:
+          * a boolean indicating whether this node is a directory server,
+            (that is, an authority, relay, or bridge),
+          * a boolean indicating whether this node is a bridge client, and
+          * a dict with the expected paths to the consensus files for this
+            node.
+
+        If v2_dir_paths is True, returns the v3 directory paths.
+        Otherwise, returns the bridge status path.
+        If v2_dir_paths is True, but this node is not a bridge client or
+        bridge authority, returns None. (There are no paths.)
+
+        Directory servers usually have both consensus flavours.
+        Clients usually have the microdesc consensus, but they may have
+        either flavour. (Or both flavours.)
+        Only the bridge authority has the bridge networkstatus.
+
+        The dict keys are:
+          * "ns_cons", "desc", and "desc_new";
+          * "md_cons", "md", and "md_new"; and
+          * "br_status".
+        """
+        ...
+
+    @abstractmethod
+    def getUncheckedDirInfoWaitTime(self) -> float:
+        """Returns the amount of time to wait before verifying, after the
+        network has bootstrapped, and the dir info has been distributed.
+
+        Based on whether this node has unchecked directory info, or other
+        known timing issues.
+        """
+        ...
+
+    @abstractmethod
+    def getNick(self) -> str:
+        """Return the nickname for this node."""
+        ...
+
+    @abstractmethod
+    def updateLastStatus(self) -> None:
+        """Update last messages this node has received, for use with
+        isBootstrapped and the getLast* functions.
+        """
+        ...
+
+    @abstractmethod
+    def updateLastBootstrapStatus(self) -> None:
+        """Look through the logs and cache the last bootstrap message
+        received.
+        """
+        ...
+
+    @abstractmethod
+    def getLastBootstrapStatus(self) -> tuple[int, str, str]:
+        """Return the last bootstrap message fetched by
+        updateLastBootstrapStatus as a 3-tuple of percentage
+        complete, keyword (optional), and message.
+
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
+        """
+        ...
+
+    @abstractmethod
+    def isBootstrapped(self) -> bool:
+        """Return true iff the logfile says that this instance is
+        bootstrapped.
+
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
+        """
+        ...
+
+    @abstractmethod
+    def getNodeDirInfoStatus(
+        self,
+    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+        """Return a 4-tuple describing the status of this node's descriptor,
+        in all the directory documents across the network.
+
+        If this node does not have a descriptor, returns None.
+        """
+        ...
+
+    @abstractmethod
+    def getConsensusAuthority(self) -> bool:
+        """Is this node a consensus (V2 directory) authority?"""
         ...
 
 
@@ -1064,9 +1184,11 @@ class LocalNodeController(NodeController):
         else:
             raise ChutneyError("Unhandled pt_transport: " + ptt)
 
+    @override
     def getNick(self) -> str:
-        """Return the nickname for this node."""
-        return check_type(self._node.nick, str)
+        # TODO: Consider whether this method probably ought to get the "ground
+        # truth" by looking at the torrc or querying the control port etc.
+        return self._node.nick
 
     def getBridge(self) -> int:
         """Return the bridge (relay) flag for this node."""
@@ -1075,12 +1197,8 @@ class LocalNodeController(NodeController):
         except KeyError:
             return 0
 
+    @override
     def getPtExtra(self) -> Option[str]:
-        """Get extra bridge info to use this node as a PT bridge.
-
-        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
-        Returns None if we *expect* there to be such info but couldn't locate it (yet).
-        """
         # TODO: cache result? I don't really think it's worth the extra complexity,
         # but not doing so is inconsistent with the other accessors.
         return self._loadPtExtra()
@@ -1114,8 +1232,8 @@ class LocalNodeController(NodeController):
         except KeyError:
             return False
 
+    @override
     def getConsensusAuthority(self) -> bool:
-        """Is this node a consensus (V2 directory) authority?"""
         return self.getAuthority() and not self.getBridgeAuthority()
 
     def getConsensusMember(self) -> bool:
@@ -1136,33 +1254,6 @@ class LocalNodeController(NodeController):
         True for authorities and relays; False for bridges and clients.
         """
         return self.getDirServer() and not self.getBridge()
-
-    def isOnionService(self) -> bool:
-        """Is this node an onion service?"""
-        if self._node.tag.startswith("h"):
-            return True
-
-        try:
-            return bool(check_type(self._node._config.hs, Union[int, bool]))
-        except KeyError:
-            return False
-
-    # By default, there is no minimum start time.
-    MIN_START_TIME_DEFAULT = 0
-
-    def getMinStartTime(self) -> int:
-        """Returns the minimum start time before verifying, regardless of
-        whether the network has bootstrapped, or the dir info has been
-        distributed.
-
-        The default can be overridden by the $CHUTNEY_MIN_START_TIME env
-        var.
-        """
-        # User overrode the dynamic time
-        env_min_time = getenv_int("CHUTNEY_MIN_START_TIME", None)
-        if env_min_time is not None:
-            return env_min_time
-        return LocalNodeController.MIN_START_TIME_DEFAULT
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
@@ -1198,14 +1289,9 @@ class LocalNodeController(NodeController):
     # Let everything propagate for another consensus period before verifying.
     LEGACY_WAIT_FOR_UNCHECKED_DIR_INFO = V3_AUTH_VOTING_INTERVAL
 
+    @override
     def getUncheckedDirInfoWaitTime(self) -> float:
-        """Returns the amount of time to wait before verifying, after the
-        network has bootstrapped, and the dir info has been distributed.
-
-        Based on whether this node has unchecked directory info, or other
-        known timing issues.
-        """
-        if self.isOnionService():
+        if self._node.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
         elif self.getBridge():
             return LocalNodeController.BRIDGE_WAIT_FOR_UNCHECKED_DIR_INFO
@@ -1228,16 +1314,16 @@ class LocalNodeController(NodeController):
             except ValueError:
                 return None
 
-    def isRunning(self, pid: Optional[int] = None) -> bool:
-        """Return true iff this node is running.  (If 'pid' is provided, we
-        assume that the pid provided is the one of this node.  Otherwise
-        we call getPid().
-        """
-        if pid is None:
-            pid = self.getPid()
+    @override
+    def isRunning(self) -> bool:
+        pid = self.getPid()
         if pid is None:
             return False
+        return self._is_running_with_pid(pid)
 
+    def _is_running_with_pid(self, pid: int) -> bool:
+        """As for isRunning, but takes the pid, which should be the process ID for this node"""
+        assert pid == self.getPid()
         try:
             os.kill(pid, 0)  # "kill 0" == "are you there?"
         except OSError as e:
@@ -1256,10 +1342,10 @@ class LocalNodeController(NodeController):
         nick = self._node.nick
         datadir = self._node.dir
         corefile = None
-        if pid:
+        if pid is not None:
             corefile = "core.%d" % pid
         tor_version = get_tor_version(self._node._config.tor)
-        if self.isRunning(pid):
+        if pid is not None and self._is_running_with_pid(pid):
             if listRunning:
                 # PIDs are typically 65535 or less
                 print(
@@ -1279,11 +1365,11 @@ class LocalNodeController(NodeController):
                 print("{:12} is stopped: {}".format(nick, tor_version))
             return False
 
+    @override
     def hup(self) -> bool:
-        """Send a SIGHUP to this node, if it's running."""
         pid = self.getPid()
         nick = self._node.nick
-        if pid is not None and self.isRunning(pid):
+        if pid is not None and self._is_running_with_pid(pid):
             print("Sending sighup to {}".format(nick))
             os.kill(pid, signal.SIGHUP)
             return True
@@ -1342,10 +1428,17 @@ class LocalNodeController(NodeController):
     @override
     def stop(self, sig: int = signal.SIGINT) -> None:
         pid = self.getPid()
-        if pid is None or not self.isRunning(pid):
+        if pid is None or not self._is_running_with_pid(pid):
             print("{:12} is not running".format(self._node.nick))
             return
         os.kill(pid, sig)
+
+    @override
+    def cleanupRunFiles(self) -> None:
+        # check for stale lock files when Tor crashes
+        self.cleanup_lockfile()
+        # move aside old pid files after Tor stops running
+        self.cleanup_pidfile()
 
     def cleanup_lockfile(self) -> None:
         """Remove lock file if this node is no longer running."""
@@ -1462,10 +1555,8 @@ class LocalNodeController(NodeController):
         assert rv is not None
         return rv
 
+    @override
     def updateLastBootstrapStatus(self) -> None:
-        """Look through the logs and cache the last bootstrap message
-        received.
-        """
         logfname = self.getLogfile()
         if not logfname.exists():
             self.most_recent_bootstrap_status = (
@@ -1485,80 +1576,34 @@ class LocalNodeController(NodeController):
                     percent = int(percent_s)
         self.most_recent_bootstrap_status = (percent, keyword, message)
 
+    @override
     def getLastBootstrapStatus(self) -> tuple[int, str, str]:
-        """Return the last bootstrap message fetched by
-        updateLastBootstrapStatus as a 3-tuple of percentage
-        complete, keyword (optional), and message.
-
-        The return status depends on the last time updateLastStatus()
-        was called; that function must be called before this one.
-        """
         rv = self.most_recent_bootstrap_status
         # Caller is required to have set this via `updateLastStatus` first.
         # TODO: just call it ourselves if None, or use a default value?
         assert rv is not None
         return rv
 
+    @override
     def updateLastStatus(self) -> None:
-        """Update last messages this node has received, for use with
-        isBootstrapped and the getLast* functions.
-        """
         self.updateLastOnionServiceDescStatus()
         self.updateLastBootstrapStatus()
 
+    @override
     def isBootstrapped(self) -> bool:
-        """Return true iff the logfile says that this instance is
-        bootstrapped.
-
-        The return status depends on the last time updateLastStatus()
-        was called; that function must be called before this one.
-        """
         pct, _, _ = self.getLastBootstrapStatus()
         if pct != LocalNodeController.SUCCESS_CODE:
             return False
-        if self.isOnionService():
+        if self._node.isOnionService():
             pct, _, _ = self.getLastOnionServiceDescStatus()
             if pct != LocalNodeController.ONIONDESC_PUBLISHED_CODE:
                 return False
         return True
 
-    # There are 7 v3 directory document types, but some networks only use 6,
-    # because they don't have a bridge authority
-    DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH = 7
-    DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH = 6
-
-    def getDocTypeDisplayLimit(self) -> int:
-        """Return the expected number of document types in this network."""
-        if self._network.hasbridgeauth:
-            return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
-        else:
-            return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
-
+    @override
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
-        """Return a 3-tuple containing:
-          * a boolean indicating whether this node is a directory server,
-            (that is, an authority, relay, or bridge),
-          * a boolean indicating whether this node is a bridge client, and
-          * a dict with the expected paths to the consensus files for this
-            node.
-
-        If v2_dir_paths is True, returns the v3 directory paths.
-        Otherwise, returns the bridge status path.
-        If v2_dir_paths is True, but this node is not a bridge client or
-        bridge authority, returns None. (There are no paths.)
-
-        Directory servers usually have both consensus flavours.
-        Clients usually have the microdesc consensus, but they may have
-        either flavour. (Or both flavours.)
-        Only the bridge authority has the bridge networkstatus.
-
-        The dict keys are:
-          * "ns_cons", "desc", and "desc_new";
-          * "md_cons", "md", and "md_new"; and
-          * "br_status".
-        """
         to_bridge_client = self.getBridgeClient()
         to_bridge_auth = self.getBridgeAuthority()
         datadir = self._node.dir
@@ -2086,14 +2131,10 @@ class LocalNodeController(NodeController):
             # client
             return None
 
+    @override
     def getNodeDirInfoStatus(
         self,
     ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
-        """Return a 4-tuple describing the status of this node's descriptor,
-        in all the directory documents across the network.
-
-        If this node does not have a descriptor, returns None.
-        """
         dir_status = self.getNodeDirInfoStatusList()
         if dir_status:
             summary = self.summariseNodeDirInfoStatus(dir_status)
@@ -2655,7 +2696,7 @@ class Network(object):
 
     def print_bootstrap_status(
         self,
-        controllers: Iterable[LocalNodeController],
+        controllers: Iterable[NodeController],
         most_recent_desc_status: dict[
             str, tuple[int, Collection[str], Collection[str], str]
         ],
@@ -2699,7 +2740,7 @@ class Network(object):
                 else:
                     nodes = [node.replace("test", "") for node in nodes]
                     nodes = " ".join(sorted(nodes))
-                if len(docs) >= c.getDocTypeDisplayLimit():
+                if len(docs) >= self.getDocTypeDisplayLimit():
                     docs_string = "all formats"
                 else:
                     # Fold desc_new into desc, and md_new into md
@@ -2722,6 +2763,35 @@ class Network(object):
     PRINT_NETWORK_STATUS_DELAY = V3_AUTH_VOTING_INTERVAL / 2.0
     CHECKS_PER_PRINT = PRINT_NETWORK_STATUS_DELAY / CHECK_NETWORK_STATUS_DELAY
 
+    # By default, there is no minimum start time.
+    MIN_START_TIME_DEFAULT = 0
+
+    # There are 7 v3 directory document types, but some networks only use 6,
+    # because they don't have a bridge authority
+    DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH = 7
+    DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH = 6
+
+    def getDocTypeDisplayLimit(self) -> int:
+        """Return the expected number of document types in this network."""
+        if self.hasbridgeauth:
+            return Network.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
+        else:
+            return Network.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
+
+    def getMinStartTime(self) -> int:
+        """Returns the minimum start time before verifying, regardless of
+        whether the network has bootstrapped, or the dir info has been
+        distributed.
+
+        The default can be overridden by the $CHUTNEY_MIN_START_TIME env
+        var.
+        """
+        # User overrode the dynamic time
+        env_min_time = getenv_int("CHUTNEY_MIN_START_TIME", None)
+        if env_min_time is not None:
+            return env_min_time
+        return Network.MIN_START_TIME_DEFAULT
+
     def wait_for_bootstrap(
         self, limit_secs: int = getenv_int("CHUTNEY_START_TIME", 300)
     ) -> None:
@@ -2739,8 +2809,7 @@ class Network(object):
             for n in self._nodes
             if n._config.launch_phase <= bootstrap_upto
         ]
-        min_time_list = [c.getMinStartTime() for c in controllers]
-        min_time = max(min_time_list)
+        min_time = self.getMinStartTime()
         wait_time_list = [c.getUncheckedDirInfoWaitTime() for c in controllers]
         wait_time = max(wait_time_list)
 
@@ -2898,13 +2967,11 @@ class Network(object):
             print("Waiting for nodes to cleanup and exit.")
             time.sleep(Network.STOP_WAIT_TIME)
 
-        # check for stale lock files when Tor crashes
-        # move aside old pid files after Tor stops running
+        # clean up unwanted left-over file system state
         if cleanup_runfiles:
             controllers = [n.getController() for n in self._nodes]
             for c in controllers:
-                c.cleanup_lockfile()
-                c.cleanup_pidfile()
+                c.cleanupRunFiles()
 
     def stop(self) -> None:
         """Stop our network's running tor nodes."""
