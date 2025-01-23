@@ -16,6 +16,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional, TypeVar, Any, Iterable, Union
 
@@ -40,6 +41,7 @@ from chutney.network_tests import NetworkTestFailure
 from collections.abc import Collection
 from importlib.abc import Traversable
 from typeguard import check_type
+from typing_extensions import override
 
 import chutney.torrc
 import chutney.Host
@@ -595,40 +597,46 @@ class Node(object):
         return self._controller
 
 
-class NodeBuilder:
+class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
     one-time prep needed to set up a node in a network.
     """
 
+    @abstractmethod
     def checkConfig(self, net: Network) -> None:
         """Try to format our torrc; raise an exception if we can't."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def preConfig(self, net: Network) -> None:
-        """Called on all nodes before any nodes configure: generates keys as
-        needed.
+        """Called on all nodes before any nodes configure: generates keys and
+        hidden service directories as needed.
         """
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def config(self, net: Network) -> None:
         """Called to configure a node: creates a torrc file for it."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def postConfig(self, net: Network) -> None:
         """Called on each nodes after all nodes configure."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def isSupported(self, net: Network) -> bool:
         """Return true if this node appears to have everything it needs;
         false otherwise."""
-        raise NotImplementedError()
+        ...
 
 
-class NodeController:
+class NodeController(ABC):
     """Abstract base class.  A NodeController is responsible for running a
     node on the network.
     """
 
+    @abstractmethod
     def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
         """See if this node is running, stopped, or crashed.  If it's running
         and listRunning is set, print a short statement.  If it's
@@ -636,15 +644,17 @@ class NodeController:
         If it's crashed, print a statement.  Return True if the
         node is running, false otherwise.
         """
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def start(self) -> None:
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
-        raise NotImplementedError()
+        ...
 
+    @abstractmethod
     def stop(self, sig: int = signal.SIGINT) -> None:
         """Try to stop this node by sending it the signal 'sig'."""
-        raise NotImplementedError()
+        ...
 
 
 class LocalNodeBuilder(NodeBuilder):
@@ -744,14 +754,12 @@ class LocalNodeBuilder(NodeBuilder):
         """Return the filled template used to write the torrc for this node."""
         return chutney.torrc.format(self._node)
 
+    @override
     def checkConfig(self, net: Network) -> None:
-        """Try to format our torrc; raise an exception if we can't."""
         self._createTorrcFile(checkOnly=True)
 
+    @override
     def preConfig(self, net: Network) -> None:
-        """Called on all nodes before any nodes configure: generates keys and
-        hidden service directories as needed.
-        """
         self._makeDataDir()
         if self._node._config.authority:
             self._genAuthorityKey()
@@ -760,20 +768,18 @@ class LocalNodeBuilder(NodeBuilder):
         if self._node._config.hs:
             self._makeHiddenServiceDir()
 
+    @override
     def config(self, net: Network) -> None:
-        """Called to configure a node: creates a torrc file for it."""
         self._createTorrcFile()
         # self._createScripts()
 
+    @override
     def postConfig(self, net: Network) -> None:
-        """Called on each nodes after all nodes configure."""
         # self.net.addNode(self)
         pass
 
+    @override
     def isSupported(self, net: Network) -> bool:
-        """Return true if this node appears to have everything it needs;
-        false otherwise."""
-
         if not tor_exists(self._node._config.tor):
             print("No binary found for %r" % self._node._config.tor)
             return False
@@ -1235,13 +1241,8 @@ class LocalNodeController(NodeController):
         # XXXX check if this is really tor!
         return True
 
+    @override
     def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
-        """See if this node is running, stopped, or crashed.  If it's running
-        and listRunning is set, print a short statement.  If it's
-        stopped and listNonRunning is set, then print a short statement.
-        If it's crashed, print a statement.  Return True if the
-        node is running, false otherwise.
-        """
         # XXX Split this into "check" and "print" parts.
         pid = self.getPid()
         nick = self._node.nick
@@ -1282,9 +1283,8 @@ class LocalNodeController(NodeController):
             print("{:12} is not running".format(nick))
             return False
 
+    @override
     def start(self) -> None:
-        """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
-
         if self.isRunning():
             print("{:12} is already running".format(self._node.nick))
             return
@@ -1331,8 +1331,8 @@ class LocalNodeController(NodeController):
                     + f" after waiting {self._node._config.poll_launch_time} seconds for launch"
                 )
 
+    @override
     def stop(self, sig: int = signal.SIGINT) -> None:
-        """Try to stop this node by sending it the signal 'sig'."""
         pid = self.getPid()
         if pid is None or not self.isRunning(pid):
             print("{:12} is not running".format(self._node.nick))
