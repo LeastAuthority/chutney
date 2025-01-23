@@ -737,6 +737,24 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
+    def updateLastBootstrapStatus(self) -> None:
+        """Look through the logs and cache the last bootstrap message
+        received.
+        """
+        ...
+
+    @abstractmethod
+    def getLastBootstrapStatus(self) -> tuple[int, str, str]:
+        """Return the last bootstrap message fetched by
+        updateLastBootstrapStatus as a 3-tuple of percentage
+        complete, keyword (optional), and message.
+
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
+        """
+        ...
+
+    @abstractmethod
     def isBootstrapped(self) -> bool:
         """Return true iff the logfile says that this instance is
         bootstrapped.
@@ -1522,10 +1540,8 @@ class LocalNodeController(NodeController):
         assert rv is not None
         return rv
 
+    @override
     def updateLastBootstrapStatus(self) -> None:
-        """Look through the logs and cache the last bootstrap message
-        received.
-        """
         logfname = self.getLogfile()
         if not logfname.exists():
             self.most_recent_bootstrap_status = (
@@ -1545,14 +1561,8 @@ class LocalNodeController(NodeController):
                     percent = int(percent_s)
         self.most_recent_bootstrap_status = (percent, keyword, message)
 
+    @override
     def getLastBootstrapStatus(self) -> tuple[int, str, str]:
-        """Return the last bootstrap message fetched by
-        updateLastBootstrapStatus as a 3-tuple of percentage
-        complete, keyword (optional), and message.
-
-        The return status depends on the last time updateLastStatus()
-        was called; that function must be called before this one.
-        """
         rv = self.most_recent_bootstrap_status
         # Caller is required to have set this via `updateLastStatus` first.
         # TODO: just call it ourselves if None, or use a default value?
