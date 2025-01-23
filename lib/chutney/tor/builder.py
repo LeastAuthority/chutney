@@ -1,0 +1,453 @@
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+
+from pathlib import Path
+from typeguard import check_type
+from typing import List, Optional, Union
+from typing_extensions import override
+
+import chutney
+import chutney.TorNet as TorNet
+
+from chutney.tor.util import get_tor_version, run_tor
+from chutney.Debug import debug
+from chutney.Util import (
+    launch_process,
+    mkdir_p,
+    Option,
+)
+
+TORRC_OPTION_WARN_LIMIT = 10
+torrc_option_warn_count = 0
+
+
+@chutney.Util.memoized
+def get_torrc_options(tor: str) -> list[str]:
+    """Return the torrc options supported by the tor binary.
+    Options are cached for each unique tor path.
+    """
+    cmdline = [
+        tor,
+        "--list-torrc-options",
+    ]
+    opts = run_tor(cmdline)
+    # check we received a list of options, and nothing else
+    assert re.match(r"(^\w+$)+", opts, flags=re.MULTILINE)
+    torrc_opts = opts.split()
+
+    return torrc_opts
+
+
+@chutney.Util.memoized
+def tor_exists(tor: str) -> bool:
+    """Return true iff this tor binary exists."""
+    try:
+        run_tor([tor, "--hush", "--version"])
+        return True
+    except TorNet.ChutneyMissingBinaryError:
+        return False
+
+
+@chutney.Util.memoized
+def tor_gencert_exists(gencert: str) -> bool:
+    """Return true iff this tor-gencert binary exists."""
+    try:
+        p = launch_process([gencert, "--help"])
+        p.wait()
+        return True
+    except TorNet.ChutneyMissingBinaryError:
+        return False
+
+
+@chutney.Util.memoized
+def get_tor_modules(tor: str) -> dict[str, bool]:
+    """Check the list of compile-time modules advertised by the given
+    'tor' binary, and return a map from module name to a boolean
+    describing whether it is supported.
+
+    Unlisted modules are ones that Tor did not treat as compile-time
+    optional modules.
+    """
+    cmdline = [tor, "--list-modules", "--hush"]
+    try:
+        mods = run_tor(cmdline)
+    except subprocess.CalledProcessError:
+        # Tor doesn't support --list-modules; act as if it said nothing.
+        mods = ""
+
+    supported = {}
+    for line in mods.split("\n"):
+        m = re.match(r"^(\S+): (yes|no)", line)
+        if not m:
+            continue
+        supported[m.group(1)] = m.group(2) == "yes"
+
+    return supported
+
+
+def tor_has_module(tor: str, modname: str, default: bool = True) -> bool:
+    """Return true iff the given tor binary supports a given compile-time
+    module.  If the module is not listed, return 'default'.
+    """
+    return get_tor_modules(tor).get(modname, default)
+
+
+def make_datadir_subdirectory(
+    datadir: Union[str, Path], subdir: Union[str, Path]
+) -> None:
+    """
+    Create a datadirectory (if necessary) and a subdirectory of
+    that datadirectory.  Ensure that both are mode 700.
+    """
+    mkdir_p(datadir)
+    mkdir_p(datadir, subdir)
+
+
+def run_tor_gencert(cmdline: List[str], passphrase: str) -> str:
+    """Run the tor-gencert command line cmdline, which must start with the
+    path or name of a tor-gencert binary.
+    Then send passphrase to the stdin of the process.
+
+    Returns the combined stdout and stderr of the process.
+    """
+    p = launch_process(cmdline, tor_name="tor-gencert", stdin=subprocess.PIPE)
+    (stdouterr, empty_stderr) = p.communicate(passphrase + "\n")
+    debug(stdouterr)
+    assert p.returncode == 0  # XXXX BAD!
+    assert empty_stderr is None
+    return stdouterr
+
+
+class LocalNodeBuilder(TorNet.NodeBuilder):
+
+    # Environment members used:
+    # torrc -- which torrc file to use
+    # authority -- bool -- are we an authority? (includes bridge authorities)
+    # bridgeauthority -- bool -- are we a bridge authority?
+    # relay -- bool -- are we a relay? (includes exits and bridges)
+    # bridge -- bool -- are we a bridge?
+    # hs -- bool -- are we a hidden service?
+    # nodenum -- int -- set by chutney -- which unique node index is this?
+    # dir -- path -- set by chutney -- data directory for this tor
+    # tor_gencert -- path to tor_gencert binary
+    # tor -- path to tor binary
+    # auth_cert_lifetime -- lifetime of authority certs, in months.
+    # ip -- primary IP address (usually IPv4) to listen on
+    # ipv6_addr -- secondary IP address (usually IPv6) to listen on
+    # orport, dirport -- used on authorities, relays, and bridges. The orport
+    #                    is used for both IPv4 and IPv6, if present
+    # fingerprint, fingerprint_ed -- used only if authority
+    # dirserver_flags -- used only if authority
+    # nick -- nickname of this router
+
+    # Environment members set
+    # fingerprint -- hex router key fingerprint
+    # fingerprint_ed -- base64 router key ed25519 fingerprint
+    # nodenum -- int -- set by chutney -- which unique node index is this?
+
+    def __init__(self, node: TorNet.Node):
+        TorNet.NodeBuilder.__init__(self)
+        self._node = node
+
+    def _createTorrcFile(self, checkOnly: bool = False) -> None:
+        """Write the torrc file for this node, disabling any options
+        that are not supported by config's tor binary using comments.
+        If checkOnly, just make sure that the formatting is indeed
+        possible.
+        """
+        global torrc_option_warn_count
+
+        fn_out = self._node.torrc_fname
+        output = self._getTorrcContents()
+        if checkOnly:
+            # XXXX Is it time-consuming to format? If so, cache here.
+            return
+        # now filter the options we're about to write, commenting out
+        # the options that the current tor binary doesn't support
+        tor = self._node._config.tor
+        tor_version = get_tor_version(tor)
+        torrc_opts = get_torrc_options(tor)
+        # check if each option is supported before writing it
+        # Unsupported option values may need special handling.
+        with open(fn_out, "w") as f:
+            # we need to do case-insensitive option comparison
+            lower_opts = [opt.lower() for opt in torrc_opts]
+            # keep ends when splitting lines, so we can write them out
+            # using writelines() without messing around with "\n"s
+            for line in output.splitlines(True):
+                # check if the first word on the line is a supported option,
+                # preserving empty lines and comment lines
+                sline = line.strip()
+                if (
+                    len(sline) == 0
+                    or sline[0] == "#"
+                    or sline.split()[0].lower() in lower_opts
+                ):
+                    pass
+                else:
+                    warn_msg = (
+                        "The tor binary at {} does not support "
+                        + "the option in the torrc line:\n{}"
+                    ).format(tor, line.strip())
+                    if torrc_option_warn_count < TORRC_OPTION_WARN_LIMIT:
+                        print(warn_msg)
+                        torrc_option_warn_count += 1
+                    else:
+                        debug(warn_msg)
+                    # always dump the full output to the torrc file
+                    line = "# {} version {} does not support: {}".format(
+                        tor, tor_version, line
+                    )
+                f.writelines([line])
+        # Verify that the resulting config parses.  If we move or remove this
+        # check, ensure that `tests/torrc-template-tests` and `tests/network-config-tests`
+        # still actually validate the generated config files.
+        run_tor(
+            [
+                str(self._node._config.tor),
+                "-f",
+                self._node.torrc_fname,
+                "--verify-config",
+            ]
+        )
+
+    def _getTorrcContents(self) -> str:
+        """Return the filled template used to write the torrc for this node."""
+        return chutney.tor.torrc.format(self._node)
+
+    @override
+    def checkConfig(self, net: TorNet.Network) -> None:
+        self._createTorrcFile(checkOnly=True)
+
+    @override
+    def preConfig(self, net: TorNet.Network) -> None:
+        self._makeDataDir()
+        if self._node._config.authority:
+            self._genAuthorityKey()
+        if self._node._config.relay:
+            self._genRouterKey()
+        if self._node._config.hs:
+            self._makeHiddenServiceDir()
+        if self._node._config.families:
+            lines: list[str] = []
+            for fid in self._node._config.families:
+                if net.family_id_lines:
+                    shutil.copy(
+                        TorNet.get_familykey_path(fid), Path(self._node.dir, "keys")
+                    )
+                    lines.append(net.family_id_lines[fid])
+            self._node.family_id_lines = Option(lines)
+        else:
+            self._node.family_id_lines = Option([])
+
+    @override
+    def config(self, net: TorNet.Network) -> None:
+        if self._node._config.families:
+            # We have to do this now that the keys are loaded.
+            myfamily = []
+            for other in net._nodes:
+                if not other._config.families:
+                    continue
+                if any(
+                    fid in other._config.families for fid in self._node._config.families
+                ):
+                    # "Other" is in this node's family.
+                    myfamily.append(other.fingerprint.unwrap())
+            self._node.myfamily_members = Option(myfamily)
+        else:
+            self._node.myfamily_members = Option([])
+        # self._createScripts()
+        self._createTorrcFile()
+
+    @override
+    def postConfig(self, net: TorNet.Network) -> None:
+        # self.net.addNode(self)
+        pass
+
+    @override
+    def isSupported(self, net: TorNet.Network) -> bool:
+        if not tor_exists(self._node._config.tor):
+            print("No binary found for %r" % self._node._config.tor)
+            return False
+
+        if self._node._config.authority:
+            if not tor_has_module(self._node._config.tor, "dirauth"):
+                print("No dirauth support in %r" % self._node._config.tor)
+                return False
+            if not tor_gencert_exists(self._node._config.tor_gencert):
+                print(
+                    "No binary found for tor-gencert %r"
+                    % self._node._config.tor_gencert
+                )
+                return False
+
+        return True
+
+    def _makeDataDir(self) -> None:
+        """Create the data directory (with keys subdirectory) for this node."""
+        datadir = check_type(self._node.dir, Path)
+        make_datadir_subdirectory(datadir, "keys")
+
+    def _makeHiddenServiceDir(self) -> None:
+        """Create the hidden service subdirectory for this node.
+
+        The directory name is stored under the 'hs_directory' environment
+        key. It is combined with the 'dir' data directory key to yield the
+        path to the hidden service directory.
+        """
+        datadir = self._node.dir
+        make_datadir_subdirectory(datadir, self._node._config.hs_directory)
+
+    def _genAuthorityKey(self) -> None:
+        """Generate an authority identity and signing key for this authority,
+        if they do not already exist."""
+        datadir = self._node.dir
+        tor_gencert = self._node._config.tor_gencert
+        lifetime = self._node._config.auth_cert_lifetime
+        idfile = Path(datadir, "keys", "authority_identity_key")
+        skfile = Path(datadir, "keys", "authority_signing_key")
+        certfile = Path(datadir, "keys", "authority_certificate")
+        addr = f"{self._node._config.ip.unwrap()}:{self._node.dirport.unwrap()}"
+        passphrase = self._node.auth_passphrase
+        if all(f.exists() for f in [idfile, skfile, certfile]):
+            return
+        cmdline = [
+            tor_gencert,
+            "--create-identity-key",
+            "--passphrase-fd",
+            "0",
+            "-i",
+            str(idfile),
+            "-s",
+            str(skfile),
+            "-c",
+            str(certfile),
+            "-m",
+            str(lifetime),
+            "-a",
+            addr,
+        ]
+        # nicknames are testNNNaa[OLD], but we want them to look tidy
+        print(
+            "Creating identity key for {:12} with {}".format(
+                self._node.nick, cmdline[0]
+            )
+        )
+        debug("Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline)))
+        run_tor_gencert(cmdline, passphrase)
+
+    def _genRouterKey(self) -> None:
+        """Generate an identity key for this router, unless we already have,
+        and set up the 'fingerprint' entry in the Environ.
+        """
+        datadir = self._node.dir
+        tor = self._node._config.tor
+        torrc = self._node.torrc_fname
+        cmdline: list[str] = [
+            tor,
+            "--ignore-missing-torrc",
+            "-f",
+            torrc,
+            "--orport",
+            "1",
+            "--datadirectory",
+            str(datadir),
+            "--list-fingerprint",
+        ]
+        stdouterr = run_tor(cmdline)
+        fingerprint = "".join((stdouterr.rstrip().split("\n")[-1]).split()[1:])
+        if not re.match(r"^[A-F0-9]{40}$", fingerprint):
+            raise TorNet.ChutneyError(
+                "Error when getting fingerprint using '{0}'. It output '{1}'.".format(
+                    repr(" ".join(cmdline)), repr(stdouterr)
+                )
+            )
+        self._node.fingerprint.replace(fingerprint)
+
+        ed_fn = os.path.join(datadir, "fingerprint-ed25519")
+        if os.path.exists(ed_fn):
+            s = open(ed_fn).read().strip().split()[1]
+            self._node.fingerprint_ed25519.replace(s)
+
+    @override
+    def getAltAuthLines(
+        self, hasbridgeauth: bool = False
+    ) -> Optional[TorNet.AuthorityLine]:
+        if not self._node._config.authority:
+            return None
+
+        datadir = self._node.dir
+        certfile = Path(datadir, "keys", "authority_certificate")
+        v3id = None
+        with certfile.open(mode="r") as f:
+            for line in f:
+                if line.startswith("fingerprint"):
+                    v3id = line.split()[1].strip()
+                    break
+
+        assert v3id is not None
+
+        return TorNet.AuthorityLine(
+            nick=self._node.nick,
+            ipv4=self._node._config.ip.unwrap(),
+            ipv6=self._node._config.ipv6_addr,
+            orport=self._node.orport,
+            dirport=self._node.dirport.unwrap(),
+            v3id=v3id,
+            fingerprint=self._node.fingerprint.unwrap(),
+            fingerprint_ed25519=self._node.fingerprint_ed25519.unwrap(),
+            alt_bridge_auth=self._node._config.bridgeauthority,
+            alt_dir_auth=not self._node._config.bridgeauthority,
+            extra_flags=self._node._config.dirserver_flags.split(),
+        )
+
+    @override
+    def getBridgeLines(self) -> list[TorNet.BridgeLine]:
+        if not self._node._config.bridge:
+            return []
+
+        if self._node._config.pt_bridge:
+            port = self._node.ptport
+            pt_transport = Option(self._node._config.pt_transport)
+            pt_extra = self._node.getController().getPtExtra()
+            if pt_extra.is_none():
+                # obfs4 pt bridges (and possibly others) don't generate their
+                # `pt_extra` until after they've *started*.  We should probably
+                # return `[]` here, or avoid calling this function at all for a
+                # pt bridge that hasn't started yet.  For now we preserve legacy
+                # behavior of just setting pt_extra to an empty string, which
+                # causes validation to pass, but a pt bridge client won't
+                # actually be able to connect.
+                # TODO(#40023): Once #40023 is fixed, revisit doing something else here.
+                debug(f"Couldn't load pt_extra from {self._node.dir}")
+                pt_extra = Option("")
+        else:
+            # the orport is the same on IPv4 and IPv6
+            port = self._node.orport
+            pt_transport = Option(None)
+            pt_extra = Option(None)
+
+        res = [
+            TorNet.BridgeLine(
+                ipaddr=self._node._config.ip.unwrap(),
+                port=port,
+                fingerprint=self._node.fingerprint.unwrap(),
+                pt_transport=pt_transport,
+                pt_extra=pt_extra,
+            ),
+        ]
+        if self._node._config.ipv6_addr.is_some():
+            res.append(
+                TorNet.BridgeLine(
+                    ipaddr=self._node._config.ipv6_addr.unwrap(),
+                    port=port,
+                    fingerprint=self._node.fingerprint.unwrap(),
+                    pt_transport=pt_transport,
+                    pt_extra=pt_extra,
+                )
+            )
+        return res
