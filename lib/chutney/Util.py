@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union, List
 from typing_extensions import ParamSpec
 
-import chutney.TorNet as TorNet
+import chutney.errors
 
 from chutney.Debug import debug_flag
 
@@ -332,7 +332,9 @@ def launch_process(
             bufsize=-1,
         )
     except FileNotFoundError as e:
-        raise TorNet.ChutneyMissingBinaryError.for_missing_tor(tor_name, cmdline) from e
+        raise chutney.errors.ChutneyMissingBinaryError.for_missing_tor(
+            tor_name, cmdline
+        ) from e
     return p
 
 

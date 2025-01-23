@@ -48,7 +48,7 @@ def tor_exists(tor: str) -> bool:
     try:
         run_tor([tor, "--hush", "--version"])
         return True
-    except TorNet.ChutneyMissingBinaryError:
+    except chutney.errors.ChutneyMissingBinaryError:
         return False
 
 
@@ -59,7 +59,7 @@ def tor_gencert_exists(gencert: str) -> bool:
         p = launch_process([gencert, "--help"])
         p.wait()
         return True
-    except TorNet.ChutneyMissingBinaryError:
+    except chutney.errors.ChutneyMissingBinaryError:
         return False
 
 
@@ -361,7 +361,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         stdouterr = run_tor(cmdline)
         fingerprint = "".join((stdouterr.rstrip().split("\n")[-1]).split()[1:])
         if not re.match(r"^[A-F0-9]{40}$", fingerprint):
-            raise TorNet.ChutneyError(
+            raise chutney.errors.ChutneyError(
                 "Error when getting fingerprint using '{0}'. It output '{1}'.".format(
                     repr(" ".join(cmdline)), repr(stdouterr)
                 )

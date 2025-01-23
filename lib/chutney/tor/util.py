@@ -5,7 +5,7 @@ import textwrap
 from typing import List
 
 import chutney
-import chutney.TorNet as TorNet
+import chutney.errors
 import chutney.Util
 
 from chutney.Debug import debug_flag, debug
@@ -31,10 +31,12 @@ def run_tor(cmdline: List[str], tolerate_error: bool = False) -> str:
             universal_newlines=True,
         )
     except FileNotFoundError as e:
-        raise TorNet.ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
+        raise chutney.errors.ChutneyMissingBinaryError.for_missing_tor(
+            "tor", cmdline
+        ) from e
     stdouterr = res.stdout
     if res.returncode != 0 and not tolerate_error:
-        raise TorNet.ChutneyError(
+        raise chutney.errors.ChutneyError(
             f"Failed to run cmdline: {cmdline}. Output: {stdouterr}"
         )
     debug("Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    "))

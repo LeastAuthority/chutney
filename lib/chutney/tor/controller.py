@@ -11,6 +11,7 @@ from typeguard import check_type
 from typing import Optional, Union
 from typing_extensions import override
 
+import chutney.errors
 import chutney.TorNet as TorNet
 
 from chutney.tor.util import get_tor_version
@@ -110,7 +111,7 @@ class LocalNodeController(TorNet.NodeController):
         elif ptt == "obfs4":
             return self._loadPtExtraObfs4()
         else:
-            raise TorNet.ChutneyError("Unhandled pt_transport: " + ptt)
+            raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
 
     @override
     def getNick(self) -> str:
@@ -325,7 +326,7 @@ class LocalNodeController(TorNet.NodeController):
             assert empty_stderr is None
             # We expect the parent process to have exited with code 0.
             if p.returncode != 0:
-                raise TorNet.ChutneyError(
+                raise chutney.errors.ChutneyError(
                     f"Couldn't launch {self._node.nick:12}"
                     + f" command '{' '.join(cmdline)}': "
                     + f" exit {p.returncode},"
@@ -347,7 +348,7 @@ class LocalNodeController(TorNet.NodeController):
             p.poll()
             if p.returncode is not None:
                 # Process unexpectedly exited
-                raise TorNet.ChutneyError(
+                raise chutney.errors.ChutneyError(
                     f"'{self._node.nick:12}' unexpectedly exited with code {p.returncode}."
                     + f" command '{' '.join(cmdline)}'"
                     + f" after waiting {self._node._config.poll_launch_time} seconds for launch"
@@ -624,7 +625,7 @@ class LocalNodeController(TorNet.NodeController):
                 lambda s: r"^id ed25519 " + re.escape(s)
             ).as_optional()
         else:
-            raise TorNet.ChutneyError(f"Invalid dir_format {dir_format}")
+            raise chutney.errors.ChutneyError(f"Invalid dir_format {dir_format}")
 
     def getFileDirInfoStatus(
         self, dir_format: str, dir_path: Path
@@ -821,7 +822,9 @@ class LocalNodeController(TorNet.NodeController):
             # microdescs, but some fetch ns consensuses and full descriptors
             s = dir_status["md_alts"]
             if s is None:
-                raise TorNet.ChutneyInternalError("Unexpectedly missing md_alts")
+                raise chutney.errors.ChutneyInternalError(
+                    "Unexpectedly missing md_alts"
+                )
             md_status_code = s[0]
             if md_status_code == TorNet.MISSING_FILE_CODE:
                 # If there are no md files, we're using descs for relays and
