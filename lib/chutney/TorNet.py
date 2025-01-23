@@ -506,7 +506,7 @@ class Node(object):
         self._network = network
         self._config = config
         self._builder: Optional[NodeBuilder] = None
-        self._controller: Optional[LocalNodeController] = None
+        self._controller: Optional[NodeController] = None
 
     @property
     def orport(self) -> int:
