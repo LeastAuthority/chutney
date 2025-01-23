@@ -481,7 +481,7 @@ class Node(object):
 
         self._network = network
         self._config = config
-        self._builder: Optional[LocalNodeBuilder] = None
+        self._builder: Optional[NodeBuilder] = None
         self._controller: Optional[LocalNodeController] = None
 
     @property
@@ -575,9 +575,7 @@ class Node(object):
     ######
     # Chutney uses these:
 
-    # TODO: return a `NodeBuilder`. Right now a lot of code implicitly assumes
-    # this is a `LocalNodeBuilder`, though.
-    def getBuilder(self) -> LocalNodeBuilder:
+    def getBuilder(self) -> NodeBuilder:
         """Return a NodeBuilder instance to set up this node (that is, to
         write all the files that need to be in place so that this
         node can be run by a NodeController).
@@ -628,6 +626,20 @@ class NodeBuilder(ABC):
     def isSupported(self, net: Network) -> bool:
         """Return true if this node appears to have everything it needs;
         false otherwise."""
+        ...
+
+    @abstractmethod
+    def getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
+        """Return the information needed to use this node as an authority,
+        if it is configured as one.
+        """
+        ...
+
+    @abstractmethod
+    def getBridgeLines(self) -> list[BridgeLine]:
+        """Return descriptors that a client can use to connect to this bridge.
+        Non-bridge relays return [].
+        """
         ...
 
 
@@ -883,10 +895,8 @@ class LocalNodeBuilder(NodeBuilder):
             s = open(ed_fn).read().strip().split()[1]
             self._node.fingerprint_ed25519.replace(s)
 
-    def _getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
-        """Return the information needed to use this node as an authority,
-        if it is configured as one.
-        """
+    @override
+    def getAltAuthLines(self, hasbridgeauth: bool = False) -> Optional[AuthorityLine]:
         if not self._node._config.authority:
             return None
 
@@ -915,10 +925,8 @@ class LocalNodeBuilder(NodeBuilder):
             extra_flags=self._node._config.dirserver_flags.split(),
         )
 
-    def _getBridgeLines(self) -> list[BridgeLine]:
-        """Return descriptors that a client can use to connect to this bridge.
-        Non-bridge relays return [].
-        """
+    @override
+    def getBridgeLines(self) -> list[BridgeLine]:
         if not self._node._config.bridge:
             return []
 
@@ -2482,17 +2490,19 @@ class Network(object):
         altauthlines = []
         bridgelines = []
         all_builders = [n.getBuilder() for n in self._nodes]
-        builders = [b for b in all_builders if b._node._config.config_phase == phase]
+        builders = [
+            n.getBuilder() for n in self._nodes if n._config.config_phase == phase
+        ]
 
         # XXX don't change node names or types or count if anything is
         # XXX running!
 
         for b in all_builders:
             b.preConfig(network)
-            auth_line = b._getAltAuthLines(self.hasbridgeauth)
+            auth_line = b.getAltAuthLines(self.hasbridgeauth)
             if auth_line is not None:
                 altauthlines.append(auth_line)
-            bridgelines.extend(b._getBridgeLines())
+            bridgelines.extend(b.getBridgeLines())
 
         self.authorities = altauthlines
         self.bridges = bridgelines
