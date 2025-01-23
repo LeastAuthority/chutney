@@ -596,13 +596,7 @@ class Node(object):
 
     def isOnionService(self) -> bool:
         """Is this node an onion service?"""
-        if self.tag.startswith("h"):
-            return True
-
-        try:
-            return bool(check_type(self._config.hs, Union[int, bool]))
-        except KeyError:
-            return False
+        return self.tag.startswith("h") or self._config.hs
 
 
 class NodeBuilder(ABC):
