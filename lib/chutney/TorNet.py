@@ -594,6 +594,16 @@ class Node(object):
             self._controller = LocalNodeController(self._network, self)
         return self._controller
 
+    def isOnionService(self) -> bool:
+        """Is this node an onion service?"""
+        if self.tag.startswith("h"):
+            return True
+
+        try:
+            return bool(check_type(self._config.hs, Union[int, bool]))
+        except KeyError:
+            return False
+
 
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
@@ -1225,16 +1235,6 @@ class LocalNodeController(NodeController):
         """
         return self.getDirServer() and not self.getBridge()
 
-    def isOnionService(self) -> bool:
-        """Is this node an onion service?"""
-        if self._node.tag.startswith("h"):
-            return True
-
-        try:
-            return bool(check_type(self._node._config.hs, Union[int, bool]))
-        except KeyError:
-            return False
-
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
     #
@@ -1271,7 +1271,7 @@ class LocalNodeController(NodeController):
 
     @override
     def getUncheckedDirInfoWaitTime(self) -> float:
-        if self.isOnionService():
+        if self._node.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
         elif self.getBridge():
             return LocalNodeController.BRIDGE_WAIT_FOR_UNCHECKED_DIR_INFO
@@ -1575,7 +1575,7 @@ class LocalNodeController(NodeController):
         pct, _, _ = self.getLastBootstrapStatus()
         if pct != LocalNodeController.SUCCESS_CODE:
             return False
-        if self.isOnionService():
+        if self._node.isOnionService():
             pct, _, _ = self.getLastOnionServiceDescStatus()
             if pct != LocalNodeController.ONIONDESC_PUBLISHED_CODE:
                 return False
