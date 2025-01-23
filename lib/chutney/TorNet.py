@@ -1585,18 +1585,6 @@ class LocalNodeController(NodeController):
                 return False
         return True
 
-    # There are 7 v3 directory document types, but some networks only use 6,
-    # because they don't have a bridge authority
-    DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH = 7
-    DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH = 6
-
-    def getDocTypeDisplayLimit(self) -> int:
-        """Return the expected number of document types in this network."""
-        if self._network.hasbridgeauth:
-            return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
-        else:
-            return LocalNodeController.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
-
     @override
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
@@ -2737,7 +2725,7 @@ class Network(object):
                 else:
                     nodes = [node.replace("test", "") for node in nodes]
                     nodes = " ".join(sorted(nodes))
-                if len(docs) >= c.getDocTypeDisplayLimit():
+                if len(docs) >= self.getDocTypeDisplayLimit():
                     docs_string = "all formats"
                 else:
                     # Fold desc_new into desc, and md_new into md
@@ -2762,6 +2750,18 @@ class Network(object):
 
     # By default, there is no minimum start time.
     MIN_START_TIME_DEFAULT = 0
+
+    # There are 7 v3 directory document types, but some networks only use 6,
+    # because they don't have a bridge authority
+    DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH = 7
+    DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH = 6
+
+    def getDocTypeDisplayLimit(self) -> int:
+        """Return the expected number of document types in this network."""
+        if self.hasbridgeauth:
+            return Network.DOC_TYPE_DISPLAY_LIMIT_BRIDGEAUTH
+        else:
+            return Network.DOC_TYPE_DISPLAY_LIMIT_NO_BRIDGEAUTH
 
     def getMinStartTime(self) -> int:
         """Returns the minimum start time before verifying, regardless of
