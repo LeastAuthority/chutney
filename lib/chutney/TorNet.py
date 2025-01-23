@@ -663,6 +663,11 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
+    def isRunning(self) -> bool:
+        """Return true iff this node is running."""
+        ...
+
+    @abstractmethod
     def start(self) -> None:
         """Try to start this node, if not already running. Raises `ChutneyError` on failure."""
         ...
@@ -1311,16 +1316,16 @@ class LocalNodeController(NodeController):
             except ValueError:
                 return None
 
-    def isRunning(self, pid: Optional[int] = None) -> bool:
-        """Return true iff this node is running.  (If 'pid' is provided, we
-        assume that the pid provided is the one of this node.  Otherwise
-        we call getPid().
-        """
-        if pid is None:
-            pid = self.getPid()
+    @override
+    def isRunning(self) -> bool:
+        pid = self.getPid()
         if pid is None:
             return False
+        return self._is_running_with_pid(pid)
 
+    def _is_running_with_pid(self, pid: int) -> bool:
+        """As for isRunning, but takes the pid, which should be the process ID for this node"""
+        assert pid == self.getPid()
         try:
             os.kill(pid, 0)  # "kill 0" == "are you there?"
         except OSError as e:
@@ -1339,10 +1344,10 @@ class LocalNodeController(NodeController):
         nick = self._node.nick
         datadir = self._node.dir
         corefile = None
-        if pid:
+        if pid is not None:
             corefile = "core.%d" % pid
         tor_version = get_tor_version(self._node._config.tor)
-        if self.isRunning(pid):
+        if pid is not None and self._is_running_with_pid(pid):
             if listRunning:
                 # PIDs are typically 65535 or less
                 print(
@@ -1366,7 +1371,7 @@ class LocalNodeController(NodeController):
     def hup(self) -> bool:
         pid = self.getPid()
         nick = self._node.nick
-        if pid is not None and self.isRunning(pid):
+        if pid is not None and self._is_running_with_pid(pid):
             print("Sending sighup to {}".format(nick))
             os.kill(pid, signal.SIGHUP)
             return True
@@ -1425,7 +1430,7 @@ class LocalNodeController(NodeController):
     @override
     def stop(self, sig: int = signal.SIGINT) -> None:
         pid = self.getPid()
-        if pid is None or not self.isRunning(pid):
+        if pid is None or not self._is_running_with_pid(pid):
             print("{:12} is not running".format(self._node.nick))
             return
         os.kill(pid, sig)
