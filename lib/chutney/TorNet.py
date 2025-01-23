@@ -45,7 +45,7 @@ from importlib.abc import Traversable
 from typeguard import check_type
 from typing_extensions import override
 
-import chutney.torrc
+import chutney.tor.torrc
 import chutney.Host
 import chutney.Util
 
@@ -908,7 +908,7 @@ class LocalNodeBuilder(NodeBuilder):
 
     def _getTorrcContents(self) -> str:
         """Return the filled template used to write the torrc for this node."""
-        return chutney.torrc.format(self._node)
+        return chutney.tor.torrc.format(self._node)
 
     @override
     def checkConfig(self, net: Network) -> None:
