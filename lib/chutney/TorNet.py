@@ -34,6 +34,8 @@ import sys
 import textwrap
 import time
 import base64
+import json
+import shutil
 
 from chutney.Debug import debug_flag, debug
 from chutney.Util import getenv_int, getenv_bool, Option, OptionalConversionDescriptor
@@ -267,6 +269,24 @@ def get_new_absolute_nodes_path(now: float = time.time()) -> Path:
     return newdir
 
 
+def get_familykey_path(ident: Optional[str], ext: bool = True) -> Path:
+    """
+    Return the absolute path for the secret family key identified with `ident`.
+
+    If no ident is given, return the directory in which we store family keys.
+
+    If `ext` is false, omit the "secret_family_key" exension.
+    """
+    family_key_dir = get_absolute_nodes_path().joinpath("family_keys")
+    if ident is None:
+        return family_key_dir
+    if ext:
+        fn = f"{ident}.secret_family_key"
+    else:
+        fn = ident
+    return family_key_dir.joinpath(fn)
+
+
 def run_tor(cmdline: List[str]) -> str:
     """Run the tor command line cmdline, which must start with the path or
     name of a tor binary.
@@ -478,6 +498,8 @@ class Node(object):
         self.fingerprint: Option[str] = Option(None)
         self.fingerprint_ed25519: Option[str] = Option(None)
         self.ed25519_id: Option[str] = Option(None)
+        self.family_id_lines: Option[list[str]] = Option(None)
+        self.myfamily_members: Option[list[str]] = Option(None)
 
         self._network = network
         self._config = config
@@ -899,9 +921,28 @@ class LocalNodeBuilder(NodeBuilder):
             self._genRouterKey()
         if self._node._config.hs:
             self._makeHiddenServiceDir()
+        if self._node._config.families:
+            lines: list[str] = []
+            for fid in self._node._config.families:
+                shutil.copy(get_familykey_path(fid), Path(self._node.dir, "keys"))
+                lines.extend(ln for ln in net.family_id_lines[fid])
+            self._node.family_id_lines = Option(lines)
 
     @override
     def config(self, net: Network) -> None:
+        if self._node._config.families:
+            # We have to do this now that the keys are loaded.
+            myfamily = []
+            for other in net._nodes:
+                if not other._config.families:
+                    continue
+                if any(
+                    fid in other._config.families for fid in self._node._config.families
+                ):
+                    # "Other" is in this node's family.
+                    myfamily.append(other.fingerprint.unwrap())
+            self._node.myfamily_members = Option(myfamily)
+
         self._createTorrcFile()
         # self._createScripts()
 
@@ -2265,6 +2306,11 @@ class NodeConfig:
     # Whether to use microdescriptors (via UseMicrodescriptors in torrc).
     use_microdescriptors: bool = True
 
+    # A list of identifiers for the families that this node belongs to.
+    # These identifiers are strings, and must be valid filename components.
+    # Two relays are in the same family if they have any identifier in common.
+    families: Optional[list[str]] = None
+
     # "Escape hatch" for injecting raw lines at the end of the generated torrc.
     # Generally this should only be used as a short-term workaround. For
     # long-term usage, prefer to add more-specific (and arti-compatible)
@@ -2407,6 +2453,8 @@ class Network(object):
         self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
+        # Map from family id to FamilyId torrc line
+        self.family_id_lines: dict[str, str] = dict()
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -2503,6 +2551,33 @@ class Network(object):
         nodeslink.symlink_to(newnodesdir)
         self.dir = newnodesdir
 
+    def create_family_keys(self) -> None:
+        """Initialize family keys as needed for all of our nodes."""
+
+        mkdir_p(get_familykey_path(None))
+        all_family_ids = set()
+        for n in self._nodes:
+            if n._config.families:
+                all_family_ids.update(n._config.families)
+        for fid in all_family_ids:
+            cmdline = [
+                os.environ.get("CHUTNEY_TOR", "tor"),
+                "--keygen-family",
+                str(get_familykey_path(fid, ext=False)),
+            ]
+            output = run_tor(cmdline)
+            m = re.search(r"^FamilyId .*$", output, re.M)
+            if not m:
+                raise ChutneyError("unexpected output from tor --keygen-family")
+            self.family_id_lines[fid] = m.group(0).strip() + "\n"
+        with get_familykey_path("map.json", ext=False).open("w") as f:
+            json.dump(self.family_id_lines, f)
+
+    def load_family_key_ids(self) -> None:
+        """Load our family key identifiers from disk."""
+        family_key_dir = get_familykey_path(None)
+        self.family_id_lines = json.load(family_key_dir.joinpath("map.json").open())
+
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
         and host information we have, and prints the result.
@@ -2527,6 +2602,10 @@ class Network(object):
         phase = CUR_CONFIG_PHASE
         if phase == 1:
             self.create_new_nodes_dir()
+            self.create_family_keys()
+        else:
+            self.load_family_key_ids()
+
         network = self
         altauthlines = []
         bridgelines = []
