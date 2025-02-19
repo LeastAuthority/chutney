@@ -927,6 +927,8 @@ class LocalNodeBuilder(NodeBuilder):
                 shutil.copy(get_familykey_path(fid), Path(self._node.dir, "keys"))
                 lines.extend(ln for ln in net.family_id_lines[fid])
             self._node.family_id_lines = Option(lines)
+        else:
+            self._node.family_id_lines = Option([])
 
     @override
     def config(self, net: Network) -> None:
@@ -942,6 +944,8 @@ class LocalNodeBuilder(NodeBuilder):
                     # "Other" is in this node's family.
                     myfamily.append(other.fingerprint.unwrap())
             self._node.myfamily_members = Option(myfamily)
+        else:
+            self._node.myfamily_members = Option([])
 
         self._createTorrcFile()
         # self._createScripts()
