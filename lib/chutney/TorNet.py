@@ -287,13 +287,15 @@ def get_familykey_path(ident: Optional[str], ext: bool = True) -> Path:
     return family_key_dir.joinpath(fn)
 
 
-def run_tor(cmdline: List[str]) -> str:
+def run_tor(cmdline: List[str], tolerate_error: bool = False) -> str:
     """Run the tor command line cmdline, which must start with the path or
     name of a tor binary.
 
     Returns the combined stdout and stderr of the process.
 
     raises `ChutneyMissingBinaryException` if the tor binary is missing.
+
+    If `tolerate_error` is set, ignore the return code from the binary.
     """
     if not debug_flag:
         cmdline.append("--hush")
@@ -307,7 +309,7 @@ def run_tor(cmdline: List[str]) -> str:
     except FileNotFoundError as e:
         raise ChutneyMissingBinaryError.for_missing_tor("tor", cmdline) from e
     stdouterr = res.stdout
-    if res.returncode != 0:
+    if res.returncode != 0 and not tolerate_error:
         raise ChutneyError(f"Failed to run cmdline: {cmdline}. Output: {stdouterr}")
     debug("Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    "))
     return stdouterr
@@ -924,8 +926,9 @@ class LocalNodeBuilder(NodeBuilder):
         if self._node._config.families:
             lines: list[str] = []
             for fid in self._node._config.families:
-                shutil.copy(get_familykey_path(fid), Path(self._node.dir, "keys"))
-                lines.extend(ln for ln in net.family_id_lines[fid])
+                if net.family_id_lines:
+                    shutil.copy(get_familykey_path(fid), Path(self._node.dir, "keys"))
+                    lines.append(net.family_id_lines[fid])
             self._node.family_id_lines = Option(lines)
         else:
             self._node.family_id_lines = Option([])
@@ -2569,7 +2572,10 @@ class Network(object):
                 "--keygen-family",
                 str(get_familykey_path(fid, ext=False)),
             ]
-            output = run_tor(cmdline)
+            output = run_tor(cmdline, tolerate_error=True)
+            if "Unknown option 'keygen-family'" in output:
+                print("No support for --keygen-family; using legacy families only.")
+                break
             m = re.search(r"^FamilyId .*$", output, re.M)
             if not m:
                 raise ChutneyError("unexpected output from tor --keygen-family")
