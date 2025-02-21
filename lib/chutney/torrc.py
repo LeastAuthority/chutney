@@ -180,6 +180,12 @@ def format(n: TorNet.Node) -> str:
             DirPort {n.dirport.unwrap_or(0)}
             """
         )
+    family_members = n.myfamily_members.unwrap()
+    if family_members:
+        res += "MyFamily {}\n".format(", ".join(n.myfamily_members.unwrap()))
+    family_id_lines = n.family_id_lines.unwrap()
+    for line in family_id_lines:
+        res += line
     if n._config.exit:
         if not n._config.relay:
             raise TorNet.ChutneyError("'exit' set without 'relay'")
