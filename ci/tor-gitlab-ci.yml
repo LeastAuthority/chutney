@@ -31,7 +31,6 @@ spec:
 .tor-x86-64-template: &tor-x86-64-template
   tags:
     - amd64
-    - physical
 
 # This template should be usable on any system that's based on apt.
 .tor-apt-template: &tor-apt-template |
@@ -93,19 +92,21 @@ spec:
     - if [ "$NSS" = yes ]; then apt-get install libnss3 libnss3-dev; fi
     # llvm-symbolizer for sanitizer backtrace
     - if [ "$HARDENING" = yes ]; then apt-get install llvm; fi
+    # libubsan1 for building with -fsanitize=address
+    - if [ "$HARDENING" = yes ]; then apt-get install libubsan1 libclang-rt-dev; fi
     # TODO: This next line should not be debian-only.
     - if [ "$STEM" = yes ]; then git clone --depth 1 https://gitlab.torproject.org/tpo/network-health/stem.git ; export STEM_PATH="$(pwd)/stem"; fi
     # TODO: This next line should not be debian-only.
     # Unlike tor's CI pipeline, we want to use chutney from *this branch*
     - export CHUTNEY_PATH="$CI_PROJECT_DIR"
     # Install chutney to get its dependencies.
-    - apt-get install python3-pip
-    - python3 -m pip install --user .
-
+    - apt install python3-venv
+    - python3 -m venv venv
+    - venv/bin/pip install .
     - if [ "$TRACING" = yes ]; then apt install liblttng-ust-dev; fi
 
 tor-debian-integration:
-  image: containers.torproject.org/tpo/tpa/base-images/debian:bullseye
+  image: containers.torproject.org/tpo/tpa/base-images/debian:bookworm
   <<: *tor-debian-template
   variables:
     CHECK: "no"
@@ -114,6 +115,7 @@ tor-debian-integration:
     STEM: "no"
     ALL_BUGS_ARE_FATAL: "yes"
   script:
+    - source venv/bin/activate
     - mkdir ~/src
     - git clone --shallow-since=2024-01-01 -b $[[ inputs.tor-branch ]] $[[ inputs.tor-repo ]] ~/src/tor
     - cd ~/src/tor
