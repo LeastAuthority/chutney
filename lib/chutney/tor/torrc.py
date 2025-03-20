@@ -3,6 +3,7 @@ from __future__ import annotations
 import chutney.TorNet as TorNet
 import textwrap
 
+from chutney.errors import ChutneyError
 from chutney.Util import find_executable_on_path
 
 
@@ -85,7 +86,7 @@ def format(n: TorNet.Node) -> str:
             res += "ClientUseIPv4 0\n"
     if n._config.relay:
         ip = n._config.ip.unwrap_or_raise(
-            lambda: TorNet.ChutneyError("'relay' set with no ipv4 address")
+            lambda: ChutneyError("'relay' set with no ipv4 address")
         )
         # Note that explicitly specifying the ipv4 address instead of just the
         # port means that this will only bind to this *ipv4* address.
@@ -188,7 +189,7 @@ def format(n: TorNet.Node) -> str:
         res += line
     if n._config.exit:
         if not n._config.relay:
-            raise TorNet.ChutneyError("'exit' set without 'relay'")
+            raise ChutneyError("'exit' set without 'relay'")
         res += textwrap.dedent(
             """
             # 1. Allow exiting to IPv4 localhost and private networks by default
@@ -225,7 +226,7 @@ def format(n: TorNet.Node) -> str:
         )
     if n._config.exit and n._config.ipv6_addr.is_some():
         if not n._config.relay:
-            raise TorNet.ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
+            raise ChutneyError(f"'exit' set without 'relay' in node {n.nick}")
         res += textwrap.dedent(
             """
             # 1. Allow exiting to IPv6 localhost and private networks by default
@@ -303,7 +304,7 @@ def format(n: TorNet.Node) -> str:
         )
     if n._config.bridgeauthority:
         if not n._config.authority:
-            raise TorNet.ChutneyError(
+            raise ChutneyError(
                 f"'bridgeauthority' set without 'authority' in node {n.nick}"
             )
         res += "BridgeAuthoritativeDir 1\n"
@@ -317,11 +318,11 @@ def format(n: TorNet.Node) -> str:
         )
     if n._config.pt_bridge:
         ipv4 = n._config.ip.unwrap_or_raise(
-            TorNet.ChutneyError("ipv4 is mandatory for bridges")
+            ChutneyError("ipv4 is mandatory for bridges")
         )
         pt_executable = find_executable_on_path(n._config.pt_executable)
         if pt_executable is None:
-            raise TorNet.ChutneyError(
+            raise ChutneyError(
                 "pt_bridge is set, but couldn't locate pt_executable "
                 + f"'{n._config.pt_executable}'"
             )
@@ -342,7 +343,7 @@ def format(n: TorNet.Node) -> str:
                     port=bd.port,
                     fp=bd.fingerprint,
                     pt_extra=bd.pt_extra.unwrap_or_raise(
-                        TorNet.ChutneyError("bridge descriptor is missing pt_extra")
+                        ChutneyError("bridge descriptor is missing pt_extra")
                     ),
                 )
             else:
@@ -354,7 +355,7 @@ def format(n: TorNet.Node) -> str:
         if n._config.pt_transport:
             pt_executable = find_executable_on_path(n._config.pt_executable)
             if pt_executable is None:
-                raise TorNet.ChutneyError(
+                raise ChutneyError(
                     "'pt_transport' is set, but couldn't locate pt_executable "
                     + f"'{n._config.pt_executable}'"
                 )

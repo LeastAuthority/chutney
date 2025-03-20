@@ -9,11 +9,16 @@ from __future__ import unicode_literals
 
 import os
 import stat
+import subprocess
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union
+from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union, List
 from typing_extensions import ParamSpec
+
+import chutney.errors
+
+from chutney.Debug import debug_flag
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -298,3 +303,51 @@ def find_executable_on_path(
             continue
         return p
     return None
+
+
+def launch_process(
+    cmdline: List[str], tor_name: str = "tor", stdin: Optional[int] = None
+) -> subprocess.Popen[str]:
+    """Launch the command line cmdline, which must start with the path or
+    name of a binary. Use tor_name as the canonical name of the binary in
+    logs. Pass stdin to the Popen constructor.
+
+    Returns the Popen object for the launched process.
+    """
+    if tor_name == "tor":
+        if not debug_flag:
+            cmdline.append("--hush")
+    elif tor_name == "tor-gencert":
+        if debug_flag:
+            cmdline.append("-v")
+    else:
+        raise ValueError("Unknown tor_name: '{}'".format(tor_name))
+    try:
+        p = subprocess.Popen(
+            cmdline,
+            stdin=stdin,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=-1,
+        )
+    except FileNotFoundError as e:
+        raise chutney.errors.ChutneyMissingBinaryError.for_missing_tor(
+            tor_name, cmdline
+        ) from e
+    return p
+
+
+def mkdir_p(*d: Union[str, Path], mode: int = 448) -> None:
+    """Create directory 'd' and all of its parents as needed.  Unlike
+    os.makedirs, does not give an error if d already exists.
+
+    448 is the decimal representation of the octal number 0700. Since
+    python2 only supports 0700 and python3 only supports 0o700, we can use
+    neither.
+
+    Note that python2 and python3 differ in how they create the
+    permissions for the intermediate directories.  In python3, 'mode'
+    only sets the mode for the last directory created.
+    """
+    Path(*d).mkdir(mode=mode, parents=True, exist_ok=True)
