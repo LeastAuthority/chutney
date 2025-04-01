@@ -13,6 +13,12 @@ class ChutneyError(Exception):
     pass
 
 
+class ChutneyUnimplementedError(ChutneyError):
+    """Requested functionality is unimplemented."""
+
+    pass
+
+
 class ChutneyMissingBinaryError(ChutneyError):
     def __init__(self, name: str, cmdline: List[str], help: str):
         self._name = name
@@ -32,6 +38,8 @@ class ChutneyMissingBinaryError(ChutneyError):
             help_msg = help_msg_fmt.format("CHUTNEY_TOR", tor_name)
         elif tor_name == "tor-gencert":
             help_msg = help_msg_fmt.format("CHUTNEY_TOR_GENCERT", tor_name)
+        elif tor_name == "arti":
+            help_msg = help_msg_fmt.format("CHUTNEY_ARTI", tor_name)
         else:
             raise ValueError("Unknown tor_name: '{}'".format(tor_name))
         return ChutneyMissingBinaryError(tor_name, cmdline, help_msg)
