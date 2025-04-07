@@ -18,7 +18,7 @@ from __future__ import unicode_literals
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, TypeVar, Any, Iterable
+from typing import List, Optional, Any, Iterable
 
 import copy
 import dataclasses
@@ -73,9 +73,6 @@ SUCCESS_CODE = 100
 ONIONDESC_PUBLISHED_CODE = 200
 HSV2_KEYWORD = "hidden service v2"
 HSV3_KEYWORD = "hidden service v3"
-
-
-T = TypeVar("T")
 
 
 def get_absolute_chutney_path() -> Path:
