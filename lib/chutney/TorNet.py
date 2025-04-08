@@ -724,6 +724,13 @@ class NodeConfig:
         """Is this node listed in the consensus?"""
         return self.relay and not self.bridge
 
+    @property
+    def consensus_relay(self) -> bool:
+        """Is this node published in the consensus?
+        True for authorities and relays; False for bridges and clients.
+        """
+        return self.relay and not self.bridge
+
     def getN(self, N: int) -> list[NodeConfig]:
         """Generate 'N' duplicates of self"""
         return [copy.copy(self) for _ in range(N)]

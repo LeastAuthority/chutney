@@ -125,12 +125,6 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    def getConsensusRelay(self) -> bool:
-        """Is this node published in the consensus?
-        True for authorities and relays; False for bridges and clients.
-        """
-        return self._node._config.relay and not self._node._config.bridge
-
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
     #
@@ -723,7 +717,7 @@ class LocalNodeController(TorNet.NodeController):
         # Is this node a bridge, publishing to a bridge client?
         bridge_to_bridge_client = from_bridge and to_bridge_client
         # Is this node a consensus relay, publishing to a bridge client?
-        relay_to_bridge_client = self.getConsensusRelay() and to_bridge_client
+        relay_to_bridge_client = self._node._config.consensus_relay and to_bridge_client
 
         # We only need to be in one of these files to be successful
         desc_alts = self.combineDirInfoStatuses(
