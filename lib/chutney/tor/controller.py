@@ -127,22 +127,13 @@ class LocalNodeController(TorNet.NodeController):
 
     def getConsensusMember(self) -> bool:
         """Is this node listed in the consensus?"""
-        return self.getDirServer() and not self._node._config.bridge
-
-    def getDirServer(self) -> bool:
-        """Return the relay flag for this node.
-        The relay flag is set on authorities, relays, and bridges.
-        """
-        try:
-            return bool(check_type(self._node._config.relay, Union[int, bool]))
-        except KeyError:
-            return False
+        return self._node._config.relay and not self._node._config.bridge
 
     def getConsensusRelay(self) -> bool:
         """Is this node published in the consensus?
         True for authorities and relays; False for bridges and clients.
         """
-        return self.getDirServer() and not self._node._config.bridge
+        return self._node._config.relay and not self._node._config.bridge
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
@@ -485,7 +476,7 @@ class LocalNodeController(TorNet.NodeController):
         to_bridge_client = self._node._config.bridgeclient
         to_bridge_auth = self._node._config.bridgeauthority
         datadir = self._node.dir
-        to_dir_server = self.getDirServer()
+        to_dir_server = self._node._config.relay
 
         desc = Path(datadir, "cached-descriptors")
         desc_new = Path(datadir, "cached-descriptors.new")

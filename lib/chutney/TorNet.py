@@ -716,7 +716,7 @@ class NodeConfig:
 
     @property
     def consensus_authority(self) -> bool:
-        """Return whether this is configured to be a consensus (only) authority"""
+        """Is this node a consensus (V2 directory) authority?"""
         return self.authority and not self.bridgeauthority
 
     def getN(self, N: int) -> list[NodeConfig]:
