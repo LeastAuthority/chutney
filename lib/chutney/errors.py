@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import textwrap
-
 from typing import List
 
 
@@ -49,22 +47,6 @@ class ChutneyMissingBinaryError(ChutneyError):
 
 class ChutneyTimeoutError(ChutneyError):
     pass
-
-
-class ChutneyInconsistentTemplateError(ChutneyError):
-    def __init__(self, template_name: str, pattern: str, contents: str):
-        self._template_name = template_name
-        self._pattern = pattern
-        self._contents = contents
-
-    def __str__(self) -> str:
-        return (
-            f"Couldn't find expected pattern '{self._pattern}'."
-            + " Check that other config options have been set consistently"
-            + f" with specified template name '{self._template_name}'."
-            + "\nFull generated torrc:\n"
-            + textwrap.indent(self._contents, "  ")
-        )
 
 
 class ChutneyErrorGroup(ChutneyError):
