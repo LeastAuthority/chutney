@@ -125,13 +125,6 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    def getBridgeClient(self) -> bool:
-        """Return the bridge client flag for this node."""
-        try:
-            return bool(check_type(self._node._config.bridgeclient, Union[int, bool]))
-        except KeyError:
-            return False
-
     def getBridgeAuthority(self) -> bool:
         """Return the bridge authority flag for this node."""
         try:
@@ -509,7 +502,7 @@ class LocalNodeController(TorNet.NodeController):
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
-        to_bridge_client = self.getBridgeClient()
+        to_bridge_client = self._node._config.bridgeclient
         to_bridge_auth = self.getBridgeAuthority()
         datadir = self._node.dir
         to_dir_server = self.getDirServer()
