@@ -1117,7 +1117,7 @@ class Network(object):
 
     def print_bootstrap_status(
         self,
-        controllers: Iterable[NodeController],
+        nodes: Iterable[Node],
         most_recent_desc_status: dict[
             str, tuple[int, Collection[str], Collection[str], str]
         ],
@@ -1133,7 +1133,8 @@ class Network(object):
             header = "{}{}".format(msg, elapsed_msg)
         print(header)
         print("Node status:")
-        for c in controllers:
+        for n in nodes:
+            c = n.getController()
             c.check(listRunning=False, listNonRunning=True)
             nick = c.getNick()
             nick_set.add(nick)
@@ -1146,21 +1147,21 @@ class Network(object):
             print("{:13}: {:4}, {:25}, {}".format(nick, pct, kwd, bmsg))
         cache_client_nick_set = nick_set.difference(cons_auth_nick_set)
         print("Published dir info:")
-        for c in controllers:
-            nick = c.getNick()
+        for n in nodes:
+            nick = n.nick
             if nick in most_recent_desc_status:
                 desc_status = most_recent_desc_status[nick]
-                code, nodes, docs, dmsg = desc_status
-                node_set = set(nodes)
+                code, desc_nodes, docs, dmsg = desc_status
+                node_set = set(desc_nodes)
                 if node_set == nick_set:
-                    nodes = "all nodes"
+                    desc_nodes = "all nodes"
                 elif node_set == cons_auth_nick_set:
-                    nodes = "dir auths"
+                    desc_nodes = "dir auths"
                 elif node_set == cache_client_nick_set:
-                    nodes = "caches and clients"
+                    desc_nodes = "caches and clients"
                 else:
-                    nodes = [node.replace("test", "") for node in nodes]
-                    nodes = " ".join(sorted(nodes))
+                    desc_nodes = [node.nick.replace("test", "") for node in nodes]
+                    desc_nodes = " ".join(sorted(desc_nodes))
                 if len(docs) >= self.getDocTypeDisplayLimit():
                     docs_string = "all formats"
                 else:
@@ -1175,7 +1176,7 @@ class Network(object):
                     docs_string = " ".join(sorted(docs_set))
                 print(
                     "{:13}: {:4}, {:25}, {:30}, {}".format(
-                        nick, code, nodes, docs_string, dmsg
+                        nick, code, desc_nodes, docs_string, dmsg
                     )
                 )
         print()
@@ -1225,13 +1226,11 @@ class Network(object):
         next_print_status = start + Network.PRINT_NETWORK_STATUS_DELAY
         bootstrap_upto = CUR_LAUNCH_PHASE
 
-        controllers = [
-            n.getController()
-            for n in self._nodes
-            if n._config.launch_phase <= bootstrap_upto
-        ]
+        nodes = [n for n in self._nodes if n._config.launch_phase <= bootstrap_upto]
         min_time = self.getMinStartTime()
-        wait_time_list = [c.getUncheckedDirInfoWaitTime() for c in controllers]
+        wait_time_list = [
+            n.getController().getUncheckedDirInfoWaitTime() for n in nodes
+        ]
         wait_time = max(wait_time_list)
 
         checks_since_last_print = 0
@@ -1239,7 +1238,8 @@ class Network(object):
         while True:
             all_bootstrapped = True
             most_recent_desc_status = dict()
-            for c in controllers:
+            for n in nodes:
+                c = n.getController()
                 nick = c.getNick()
                 c.updateLastStatus()
 
@@ -1248,8 +1248,8 @@ class Network(object):
 
                 desc_status = c.getNodeDirInfoStatus()
                 if desc_status:
-                    code, nodes, docs, dmsg = desc_status
-                    most_recent_desc_status[nick] = (code, nodes, docs, dmsg)
+                    code, desc_nodes, docs, dmsg = desc_status
+                    most_recent_desc_status[nick] = (code, desc_nodes, docs, dmsg)
                     if code != SUCCESS_CODE:
                         all_bootstrapped = False
 
@@ -1258,7 +1258,7 @@ class Network(object):
             if all_bootstrapped:
                 print("Everything bootstrapped after {} sec".format(int(elapsed)))
                 self.print_bootstrap_status(
-                    controllers,
+                    nodes,
                     most_recent_desc_status,
                     elapsed=elapsed,
                     msg="Bootstrap finished",
@@ -1305,7 +1305,7 @@ class Network(object):
             if now >= next_print_status:
                 if checks_since_last_print <= Network.CHECKS_PER_PRINT / 2:
                     self.print_bootstrap_status(
-                        controllers,
+                        nodes,
                         most_recent_desc_status,
                         elapsed=elapsed,
                         msg="Internal timing error",
@@ -1324,7 +1324,7 @@ class Network(object):
                     raise ChutneyTimeoutError()
                 else:
                     self.print_bootstrap_status(
-                        controllers, most_recent_desc_status, elapsed=elapsed
+                        nodes, most_recent_desc_status, elapsed=elapsed
                     )
                     next_print_status = now + Network.PRINT_NETWORK_STATUS_DELAY
                     checks_since_last_print = 0
@@ -1336,7 +1336,7 @@ class Network(object):
             checks_since_last_print += 1
             if checks_since_last_print >= Network.CHECKS_PER_PRINT * 2:
                 self.print_bootstrap_status(
-                    controllers,
+                    nodes,
                     most_recent_desc_status,
                     elapsed=elapsed,
                     msg="Internal timing error",
@@ -1355,7 +1355,7 @@ class Network(object):
                 raise ChutneyTimeoutError()
 
         self.print_bootstrap_status(
-            controllers,
+            nodes,
             most_recent_desc_status,
             elapsed=elapsed,
             msg="Bootstrap failed",
