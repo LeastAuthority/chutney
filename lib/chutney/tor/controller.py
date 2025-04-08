@@ -125,15 +125,6 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    def getBridgeAuthority(self) -> bool:
-        """Return the bridge authority flag for this node."""
-        try:
-            return bool(
-                check_type(self._node._config.bridgeauthority, Union[int, bool])
-            )
-        except KeyError:
-            return False
-
     def getAuthority(self) -> bool:
         """Return the authority flag for this node."""
         try:
@@ -143,7 +134,7 @@ class LocalNodeController(TorNet.NodeController):
 
     @override
     def getConsensusAuthority(self) -> bool:
-        return self.getAuthority() and not self.getBridgeAuthority()
+        return self.getAuthority() and not self._node._config.bridgeauthority
 
     def getConsensusMember(self) -> bool:
         """Is this node listed in the consensus?"""
@@ -503,7 +494,7 @@ class LocalNodeController(TorNet.NodeController):
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
         to_bridge_client = self._node._config.bridgeclient
-        to_bridge_auth = self.getBridgeAuthority()
+        to_bridge_auth = self._node._config.bridgeauthority
         datadir = self._node.dir
         to_dir_server = self.getDirServer()
 
