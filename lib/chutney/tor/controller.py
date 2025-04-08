@@ -125,16 +125,9 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    def getAuthority(self) -> bool:
-        """Return the authority flag for this node."""
-        try:
-            return bool(check_type(self._node._config.authority, Union[int, bool]))
-        except KeyError:
-            return False
-
     @override
     def getConsensusAuthority(self) -> bool:
-        return self.getAuthority() and not self._node._config.bridgeauthority
+        return self._node._config.authority and not self._node._config.bridgeauthority
 
     def getConsensusMember(self) -> bool:
         """Is this node listed in the consensus?"""
