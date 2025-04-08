@@ -125,10 +125,6 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    def getConsensusMember(self) -> bool:
-        """Is this node listed in the consensus?"""
-        return self._node._config.relay and not self._node._config.bridge
-
     def getConsensusRelay(self) -> bool:
         """Is this node published in the consensus?
         True for authorities and relays; False for bridges and clients.
@@ -521,7 +517,7 @@ class LocalNodeController(TorNet.NodeController):
         See getNodeCacheDirInfoPaths() for the path data structure, and which
         nodes appear in each type of directory.
         """
-        consensus_member = self.getConsensusMember()
+        consensus_member = self._node._config.consensus_member
         bridge_member = self._node._config.bridge
         # Nodes can be a member of only one kind of directory
         assert not (consensus_member and bridge_member)
@@ -844,7 +840,7 @@ class LocalNodeController(TorNet.NodeController):
         else:
             # this node must be a client, or a bridge
             # (and the other node is not a bridge authority or bridge client)
-            consensus_member = self.getConsensusMember()
+            consensus_member = self._node._config.consensus_member
             assert not consensus_member
             return None
 
@@ -897,7 +893,7 @@ class LocalNodeController(TorNet.NodeController):
             # (or a bridge in a network with no bridge authority,
             # and no bridge clients, but chutney doesn't have networks like
             # that)
-            consensus_member = self.getConsensusMember()
+            consensus_member = self._node._config.consensus_member
             bridge_member = self._node._config.bridge
             assert not consensus_member
             assert not bridge_member
@@ -972,7 +968,7 @@ class LocalNodeController(TorNet.NodeController):
             # (or a bridge in a network with no bridge authority,
             # and no bridge clients, but chutney doesn't have networks like
             # that)
-            consensus_member = self.getConsensusMember()
+            consensus_member = self._node._config.consensus_member
             bridge_member = self._node._config.bridge
             if consensus_member or bridge_member:
                 node_all = (
@@ -1010,7 +1006,7 @@ class LocalNodeController(TorNet.NodeController):
         # (or a bridge in a network with no bridge authority,
         # and no bridge clients, but chutney doesn't have networks like
         # that)
-        consensus_member = self.getConsensusMember()
+        consensus_member = self._node._config.consensus_member
         bridge_member = self._node._config.bridge
         assert not consensus_member
         assert not bridge_member

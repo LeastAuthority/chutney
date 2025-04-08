@@ -719,6 +719,11 @@ class NodeConfig:
         """Is this node a consensus (V2 directory) authority?"""
         return self.authority and not self.bridgeauthority
 
+    @property
+    def consensus_member(self) -> bool:
+        """Is this node listed in the consensus?"""
+        return self.relay and not self.bridge
+
     def getN(self, N: int) -> list[NodeConfig]:
         """Generate 'N' duplicates of self"""
         return [copy.copy(self) for _ in range(N)]
