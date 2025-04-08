@@ -113,13 +113,6 @@ class LocalNodeController(TorNet.NodeController):
         else:
             raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
 
-    def getBridge(self) -> int:
-        """Return the bridge (relay) flag for this node."""
-        try:
-            return check_type(self._node._config.bridge, int)
-        except KeyError:
-            return 0
-
     @override
     def getPtExtra(self) -> Option[str]:
         # TODO: cache result? I don't really think it's worth the extra complexity,
@@ -161,7 +154,7 @@ class LocalNodeController(TorNet.NodeController):
 
     def getConsensusMember(self) -> bool:
         """Is this node listed in the consensus?"""
-        return self.getDirServer() and not self.getBridge()
+        return self.getDirServer() and not self._node._config.bridge
 
     def getDirServer(self) -> bool:
         """Return the relay flag for this node.
@@ -176,7 +169,7 @@ class LocalNodeController(TorNet.NodeController):
         """Is this node published in the consensus?
         True for authorities and relays; False for bridges and clients.
         """
-        return self.getDirServer() and not self.getBridge()
+        return self.getDirServer() and not self._node._config.bridge
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
@@ -216,7 +209,7 @@ class LocalNodeController(TorNet.NodeController):
     def getUncheckedDirInfoWaitTime(self) -> float:
         if self._node.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
-        elif self.getBridge():
+        elif self._node._config.bridge:
             return LocalNodeController.BRIDGE_WAIT_FOR_UNCHECKED_DIR_INFO
         elif self.isLegacyTorVersion():
             return LocalNodeController.LEGACY_WAIT_FOR_UNCHECKED_DIR_INFO
@@ -565,7 +558,7 @@ class LocalNodeController(TorNet.NodeController):
         nodes appear in each type of directory.
         """
         consensus_member = self.getConsensusMember()
-        bridge_member = self.getBridge()
+        bridge_member = self._node._config.bridge
         # Nodes can be a member of only one kind of directory
         assert not (consensus_member and bridge_member)
 
@@ -766,9 +759,9 @@ class LocalNodeController(TorNet.NodeController):
 
         Returns None if no status is expected.
         """
-        from_bridge = self.getBridge()
+        from_bridge = self._node._config.bridge
         # Is this node a bridge, publishing to a bridge client?
-        bridge_to_bridge_client = self.getBridge() and to_bridge_client
+        bridge_to_bridge_client = from_bridge and to_bridge_client
         # Is this node a consensus relay, publishing to a bridge client?
         relay_to_bridge_client = self.getConsensusRelay() and to_bridge_client
 
@@ -941,7 +934,7 @@ class LocalNodeController(TorNet.NodeController):
             # and no bridge clients, but chutney doesn't have networks like
             # that)
             consensus_member = self.getConsensusMember()
-            bridge_member = self.getBridge()
+            bridge_member = self._node._config.bridge
             assert not consensus_member
             assert not bridge_member
             return None
@@ -1016,7 +1009,7 @@ class LocalNodeController(TorNet.NodeController):
             # and no bridge clients, but chutney doesn't have networks like
             # that)
             consensus_member = self.getConsensusMember()
-            bridge_member = self.getBridge()
+            bridge_member = self._node._config.bridge
             if consensus_member or bridge_member:
                 node_all = (
                     TorNet.INTERNAL_ERROR_CODE,
@@ -1054,7 +1047,7 @@ class LocalNodeController(TorNet.NodeController):
         # and no bridge clients, but chutney doesn't have networks like
         # that)
         consensus_member = self.getConsensusMember()
-        bridge_member = self.getBridge()
+        bridge_member = self._node._config.bridge
         assert not consensus_member
         assert not bridge_member
         return None
