@@ -113,12 +113,6 @@ class LocalNodeController(TorNet.NodeController):
         else:
             raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
 
-    @override
-    def getNick(self) -> str:
-        # TODO: Consider whether this method probably ought to get the "ground
-        # truth" by looking at the torrc or querying the control port etc.
-        return self._node.nick
-
     def getBridge(self) -> int:
         """Return the bridge (relay) flag for this node."""
         try:
@@ -601,7 +595,7 @@ class LocalNodeController(TorNet.NodeController):
         in a dir_format file. Returns None if the requested pattern is not
         available.
         """
-        nickname = self.getNick()
+        nickname = self._node.nick
         ed25519_key = self.getEd25519Id()
 
         cons = dir_format in ["ns_cons", "md_cons", "br_status"]

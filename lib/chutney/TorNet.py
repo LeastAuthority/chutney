@@ -491,11 +491,6 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
-    def getNick(self) -> str:
-        """Return the nickname for this node."""
-        ...
-
-    @abstractmethod
     def updateLastStatus(self) -> None:
         """Update last messages this node has received, for use with
         isBootstrapped and the getLast* functions.
@@ -1136,7 +1131,7 @@ class Network(object):
         for n in nodes:
             c = n.getController()
             c.check(listRunning=False, listNonRunning=True)
-            nick = c.getNick()
+            nick = n.nick
             nick_set.add(nick)
             if c.getConsensusAuthority():
                 cons_auth_nick_set.add(nick)
@@ -1240,7 +1235,7 @@ class Network(object):
             most_recent_desc_status = dict()
             for n in nodes:
                 c = n.getController()
-                nick = c.getNick()
+                nick = n.nick
                 c.updateLastStatus()
 
                 if not c.isBootstrapped():
