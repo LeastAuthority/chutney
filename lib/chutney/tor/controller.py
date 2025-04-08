@@ -125,10 +125,6 @@ class LocalNodeController(TorNet.NodeController):
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
 
-    @override
-    def getConsensusAuthority(self) -> bool:
-        return self._node._config.authority and not self._node._config.bridgeauthority
-
     def getConsensusMember(self) -> bool:
         """Is this node listed in the consensus?"""
         return self.getDirServer() and not self._node._config.bridge

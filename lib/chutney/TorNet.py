@@ -536,11 +536,6 @@ class NodeController(ABC):
         """
         ...
 
-    @abstractmethod
-    def getConsensusAuthority(self) -> bool:
-        """Is this node a consensus (V2 directory) authority?"""
-        ...
-
 
 CUR_CONFIG_PHASE: int = getenv_int("CHUTNEY_CONFIG_PHASE", 1)
 CUR_LAUNCH_PHASE: int = getenv_int("CHUTNEY_LAUNCH_PHASE", 1)
@@ -718,6 +713,11 @@ class NodeConfig:
             )
             dns_conf = NodeConfig.OFFLINE_DNS_RESOLV_CONF
         return "ServerDNSResolvConfFile %s" % (dns_conf)
+
+    @property
+    def consensus_authority(self) -> bool:
+        """Return whether this is configured to be a consensus (only) authority"""
+        return self.authority and not self.bridgeauthority
 
     def getN(self, N: int) -> list[NodeConfig]:
         """Generate 'N' duplicates of self"""
@@ -1133,7 +1133,7 @@ class Network(object):
             c.check(listRunning=False, listNonRunning=True)
             nick = n.nick
             nick_set.add(nick)
-            if c.getConsensusAuthority():
+            if n._config.consensus_authority:
                 cons_auth_nick_set.add(nick)
             pct, kwd, bmsg = c.getLastBootstrapStatus()
             # Support older tor versions without bootstrap keywords
