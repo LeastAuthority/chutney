@@ -114,19 +114,6 @@ class LocalNodeController(TorNet.NodeController):
             raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
 
     @override
-    def getNick(self) -> str:
-        # TODO: Consider whether this method probably ought to get the "ground
-        # truth" by looking at the torrc or querying the control port etc.
-        return self._node.nick
-
-    def getBridge(self) -> int:
-        """Return the bridge (relay) flag for this node."""
-        try:
-            return check_type(self._node._config.bridge, int)
-        except KeyError:
-            return 0
-
-    @override
     def getPtExtra(self) -> Option[str]:
         # TODO: cache result? I don't really think it's worth the extra complexity,
         # but not doing so is inconsistent with the other accessors.
@@ -137,52 +124,6 @@ class LocalNodeController(TorNet.NodeController):
         if self._node.ed25519_id.is_none():
             self._node.ed25519_id = self._loadEd25519Id()
         return self._node.ed25519_id
-
-    def getBridgeClient(self) -> bool:
-        """Return the bridge client flag for this node."""
-        try:
-            return bool(check_type(self._node._config.bridgeclient, Union[int, bool]))
-        except KeyError:
-            return False
-
-    def getBridgeAuthority(self) -> bool:
-        """Return the bridge authority flag for this node."""
-        try:
-            return bool(
-                check_type(self._node._config.bridgeauthority, Union[int, bool])
-            )
-        except KeyError:
-            return False
-
-    def getAuthority(self) -> bool:
-        """Return the authority flag for this node."""
-        try:
-            return bool(check_type(self._node._config.authority, Union[int, bool]))
-        except KeyError:
-            return False
-
-    @override
-    def getConsensusAuthority(self) -> bool:
-        return self.getAuthority() and not self.getBridgeAuthority()
-
-    def getConsensusMember(self) -> bool:
-        """Is this node listed in the consensus?"""
-        return self.getDirServer() and not self.getBridge()
-
-    def getDirServer(self) -> bool:
-        """Return the relay flag for this node.
-        The relay flag is set on authorities, relays, and bridges.
-        """
-        try:
-            return bool(check_type(self._node._config.relay, Union[int, bool]))
-        except KeyError:
-            return False
-
-    def getConsensusRelay(self) -> bool:
-        """Is this node published in the consensus?
-        True for authorities and relays; False for bridges and clients.
-        """
-        return self.getDirServer() and not self.getBridge()
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
@@ -222,7 +163,7 @@ class LocalNodeController(TorNet.NodeController):
     def getUncheckedDirInfoWaitTime(self) -> float:
         if self._node.isOnionService():
             return LocalNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
-        elif self.getBridge():
+        elif self._node._config.bridge:
             return LocalNodeController.BRIDGE_WAIT_FOR_UNCHECKED_DIR_INFO
         elif self.isLegacyTorVersion():
             return LocalNodeController.LEGACY_WAIT_FOR_UNCHECKED_DIR_INFO
@@ -522,10 +463,10 @@ class LocalNodeController(TorNet.NodeController):
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
     ) -> tuple[int, int, Optional[dict[str, Path]]]:
-        to_bridge_client = self.getBridgeClient()
-        to_bridge_auth = self.getBridgeAuthority()
+        to_bridge_client = self._node._config.bridgeclient
+        to_bridge_auth = self._node._config.bridgeauthority
         datadir = self._node.dir
-        to_dir_server = self.getDirServer()
+        to_dir_server = self._node._config.relay
 
         desc = Path(datadir, "cached-descriptors")
         desc_new = Path(datadir, "cached-descriptors.new")
@@ -570,8 +511,8 @@ class LocalNodeController(TorNet.NodeController):
         See getNodeCacheDirInfoPaths() for the path data structure, and which
         nodes appear in each type of directory.
         """
-        consensus_member = self.getConsensusMember()
-        bridge_member = self.getBridge()
+        consensus_member = self._node._config.consensus_member
+        bridge_member = self._node._config.bridge
         # Nodes can be a member of only one kind of directory
         assert not (consensus_member and bridge_member)
 
@@ -601,7 +542,7 @@ class LocalNodeController(TorNet.NodeController):
         in a dir_format file. Returns None if the requested pattern is not
         available.
         """
-        nickname = self.getNick()
+        nickname = self._node.nick
         ed25519_key = self.getEd25519Id()
 
         cons = dir_format in ["ns_cons", "md_cons", "br_status"]
@@ -772,11 +713,11 @@ class LocalNodeController(TorNet.NodeController):
 
         Returns None if no status is expected.
         """
-        from_bridge = self.getBridge()
+        from_bridge = self._node._config.bridge
         # Is this node a bridge, publishing to a bridge client?
-        bridge_to_bridge_client = self.getBridge() and to_bridge_client
+        bridge_to_bridge_client = from_bridge and to_bridge_client
         # Is this node a consensus relay, publishing to a bridge client?
-        relay_to_bridge_client = self.getConsensusRelay() and to_bridge_client
+        relay_to_bridge_client = self._node._config.consensus_relay and to_bridge_client
 
         # We only need to be in one of these files to be successful
         desc_alts = self.combineDirInfoStatuses(
@@ -893,7 +834,7 @@ class LocalNodeController(TorNet.NodeController):
         else:
             # this node must be a client, or a bridge
             # (and the other node is not a bridge authority or bridge client)
-            consensus_member = self.getConsensusMember()
+            consensus_member = self._node._config.consensus_member
             assert not consensus_member
             return None
 
@@ -946,8 +887,8 @@ class LocalNodeController(TorNet.NodeController):
             # (or a bridge in a network with no bridge authority,
             # and no bridge clients, but chutney doesn't have networks like
             # that)
-            consensus_member = self.getConsensusMember()
-            bridge_member = self.getBridge()
+            consensus_member = self._node._config.consensus_member
+            bridge_member = self._node._config.bridge
             assert not consensus_member
             assert not bridge_member
             return None
@@ -1021,8 +962,8 @@ class LocalNodeController(TorNet.NodeController):
             # (or a bridge in a network with no bridge authority,
             # and no bridge clients, but chutney doesn't have networks like
             # that)
-            consensus_member = self.getConsensusMember()
-            bridge_member = self.getBridge()
+            consensus_member = self._node._config.consensus_member
+            bridge_member = self._node._config.bridge
             if consensus_member or bridge_member:
                 node_all = (
                     TorNet.INTERNAL_ERROR_CODE,
@@ -1059,8 +1000,8 @@ class LocalNodeController(TorNet.NodeController):
         # (or a bridge in a network with no bridge authority,
         # and no bridge clients, but chutney doesn't have networks like
         # that)
-        consensus_member = self.getConsensusMember()
-        bridge_member = self.getBridge()
+        consensus_member = self._node._config.consensus_member
+        bridge_member = self._node._config.bridge
         assert not consensus_member
         assert not bridge_member
         return None
