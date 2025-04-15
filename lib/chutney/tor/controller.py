@@ -528,8 +528,7 @@ class LocalNodeController(TorNet.NodeController):
             if node._config.launch_phase > launch_phase:
                 continue
             nick = check_type(node.nick, str)
-            controller = node.getController()
-            node_files = controller.getNodeCacheDirInfoPaths(consensus_member)
+            node_files = node._controller.getNodeCacheDirInfoPaths(consensus_member)
             # skip empty file lists
             if node_files:
                 directory_files[nick] = node_files
