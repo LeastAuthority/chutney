@@ -392,16 +392,6 @@ class NodeController(ABC):
     """
 
     @abstractmethod
-    def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
-        """See if this node is running, stopped, or crashed.  If it's running
-        and listRunning is set, print a short statement.  If it's
-        stopped and listNonRunning is set, then print a short statement.
-        If it's crashed, print a statement.  Return True if the
-        node is running, false otherwise.
-        """
-        ...
-
-    @abstractmethod
     def isRunning(self) -> bool:
         """Return true iff this node is running."""
         ...
@@ -1060,15 +1050,18 @@ class Network(object):
         """Print how many nodes are running and how many are expected, and
         return True if all nodes are running.
         """
-        cur_launch = CUR_LAUNCH_PHASE
-        statuses = [
-            n._controller.check(listNonRunning=True)
-            for n in self._nodes
-            if n._config.launch_phase == cur_launch
-        ]
-        n_ok = len([x for x in statuses if x])
-        print("%d/%d nodes are running" % (n_ok, len(self._nodes)))
-        return n_ok == len(statuses)
+        total = 0
+        running = 0
+        for n in self._nodes:
+            if n._config.launch_phase != CUR_LAUNCH_PHASE:
+                continue
+            total += 1
+            if not n._controller.isRunning():
+                print(f"{n.nick} is not running")
+                continue
+            running += 1
+        print(f"{running}/{total} nodes are running")
+        return running == total
 
     def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
@@ -1122,7 +1115,8 @@ class Network(object):
         print(header)
         print("Node status:")
         for n in nodes:
-            n._controller.check(listRunning=False, listNonRunning=True)
+            if not n._controller.isRunning():
+                print(f"{n.nick} is not running")
             nick_set.add(n.nick)
             if n._config.consensus_authority:
                 cons_auth_nick_set.add(n.nick)
@@ -1398,7 +1392,8 @@ class Network(object):
                 wrote_dot = True
                 sys.stdout.flush()
             for n in self._nodes:
-                n._controller.check(listNonRunning=False)
+                if n._controller.isRunning():
+                    print(f"{n.nick} is running")
             # cleanup chutney's logging, but don't wait or cleanup files
             self.final_cleanup(wrote_dot, False, False)
         # wait for tor to exit, but don't cleanup logging
