@@ -195,7 +195,6 @@ class LocalNodeController(TorNet.NodeController):
 
     def _is_running_with_pid(self, pid: int) -> bool:
         """As for isRunning, but takes the pid, which should be the process ID for this node"""
-        assert pid == self.getPid()
         try:
             os.kill(pid, 0)  # "kill 0" == "are you there?"
         except OSError as e:
