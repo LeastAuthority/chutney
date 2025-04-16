@@ -488,27 +488,21 @@ class LocalNodeController(TorNet.NodeController):
         See getNodeCacheDirInfoPaths() for the path data structure, and which
         nodes appear in each type of directory.
         """
-        consensus_member = self._node._config.consensus_member
-        bridge_member = self._node._config.bridge
-        # Nodes can be a member of only one kind of directory
-        assert not (consensus_member and bridge_member)
-
-        # Clients don't appear in any consensus
-        if not consensus_member and not bridge_member:
+        if not self._node._config.consensus_member and not self._node._config.bridge:
+            # Clients don't appear in any consensus
             return None
-
-        launch_phase = TorNet.CUR_LAUNCH_PHASE
 
         # at this point, consensus_member == not bridge_member
         directory_files = dict()
         for node in self._network._nodes:
-            if node._config.launch_phase > launch_phase:
+            if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
                 continue
-            nick = check_type(node.nick, str)
-            node_files = node._controller.getNodeCacheDirInfoPaths(consensus_member)
+            node_files = node._controller.getNodeCacheDirInfoPaths(
+                self._node._config.consensus_member
+            )
             # skip empty file lists
             if node_files:
-                directory_files[nick] = (
+                directory_files[node.nick] = (
                     node._config.relay,
                     node._config.bridgeclient,
                     node_files,
