@@ -413,7 +413,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         if self._node._config.pt_bridge:
             port = self._node.ptport
             pt_transport = Option(self._node._config.pt_transport)
-            pt_extra = self._node.getController().getPtExtra()
+            pt_extra = self._node._controller.getPtExtra()
             if pt_extra.is_none():
                 # obfs4 pt bridges (and possibly others) don't generate their
                 # `pt_extra` until after they've *started*.  We should probably

@@ -206,36 +206,6 @@ class LocalNodeController(TorNet.NodeController):
         return True
 
     @override
-    def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
-        # XXX Split this into "check" and "print" parts.
-        pid = self.getPid()
-        nick = self._node.nick
-        datadir = self._node.dir
-        corefile = None
-        if pid is not None:
-            corefile = "core.%d" % pid
-        tor_version = get_tor_version(self._node._config.tor)
-        if pid is not None and self._is_running_with_pid(pid):
-            if listRunning:
-                # PIDs are typically 65535 or less
-                print(
-                    "{:12} is running with PID {:5}: {}".format(nick, pid, tor_version)
-                )
-            return True
-        elif corefile and Path(datadir, corefile).exists():
-            if listNonRunning:
-                print(
-                    "{:12} seems to have crashed, and left core file {}: {}".format(
-                        nick, corefile, tor_version
-                    )
-                )
-            return False
-        else:
-            if listNonRunning:
-                print("{:12} is stopped: {}".format(nick, tor_version))
-            return False
-
-    @override
     def hup(self) -> bool:
         pid = self.getPid()
         nick = self._node.nick
@@ -528,8 +498,7 @@ class LocalNodeController(TorNet.NodeController):
             if node._config.launch_phase > launch_phase:
                 continue
             nick = check_type(node.nick, str)
-            controller = node.getController()
-            node_files = controller.getNodeCacheDirInfoPaths(consensus_member)
+            node_files = node._controller.getNodeCacheDirInfoPaths(consensus_member)
             # skip empty file lists
             if node_files:
                 directory_files[nick] = node_files

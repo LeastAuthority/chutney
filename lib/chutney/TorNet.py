@@ -234,8 +234,13 @@ class Node(object):
 
         self._network = network
         self._config = config
-        self._builder: Optional[NodeBuilder] = None
-        self._controller: Optional[NodeController] = None
+
+        # We import these here instead of globally to avoid a circular reference.
+        from chutney.tor.builder import LocalNodeBuilder
+        from chutney.tor.controller import LocalNodeController
+
+        self._builder: NodeBuilder = LocalNodeBuilder(self)
+        self._controller: NodeController = LocalNodeController(self._network, self)
 
     @property
     def orport(self) -> int:
@@ -328,28 +333,6 @@ class Node(object):
     ######
     # Chutney uses these:
 
-    def getBuilder(self) -> NodeBuilder:
-        """Return a NodeBuilder instance to set up this node (that is, to
-        write all the files that need to be in place so that this
-        node can be run by a NodeController).
-        """
-        # We import here instead of globally to avoid a circular reference.
-        from chutney.tor.builder import LocalNodeBuilder
-
-        if self._builder is None:
-            self._builder = LocalNodeBuilder(self)
-        return self._builder
-
-    def getController(self) -> NodeController:
-        """Return a NodeController instance to control this node (that is,
-        to start it, stop it, see if it's running, etc.)
-        """
-        from chutney.tor.controller import LocalNodeController
-
-        if self._controller is None:
-            self._controller = LocalNodeController(self._network, self)
-        return self._controller
-
     def isOnionService(self) -> bool:
         """Is this node an onion service?"""
         return self.tag.startswith("h") or self._config.hs
@@ -407,16 +390,6 @@ class NodeController(ABC):
     """Abstract base class.  A NodeController is responsible for running a
     node on the network.
     """
-
-    @abstractmethod
-    def check(self, listRunning: bool = True, listNonRunning: bool = False) -> bool:
-        """See if this node is running, stopped, or crashed.  If it's running
-        and listRunning is set, print a short statement.  If it's
-        stopped and listNonRunning is set, then print a short statement.
-        If it's crashed, print a statement.  Return True if the
-        node is running, false otherwise.
-        """
-        ...
 
     @abstractmethod
     def isRunning(self) -> bool:
@@ -938,7 +911,7 @@ class Network(object):
                 print(f"Can't run this network: {r} is missing.")
                 missing_any = True
         for n in self._nodes:
-            if not n.getBuilder().isSupported(self):
+            if not n._builder.isSupported(self):
                 missing_any = True
 
         if missing_any:
@@ -948,8 +921,7 @@ class Network(object):
         """Invoked from command line: Configure and prepare the network to be
         started.
         """
-        phase = CUR_CONFIG_PHASE
-        if phase == 1:
+        if CUR_CONFIG_PHASE == 1:
             self.create_new_nodes_dir()
             self.create_family_keys()
         else:
@@ -958,26 +930,25 @@ class Network(object):
         network = self
         altauthlines = []
         bridgelines = []
-        all_builders = [n.getBuilder() for n in self._nodes]
-        builders = [
-            n.getBuilder() for n in self._nodes if n._config.config_phase == phase
+        cur_phase_nodes = [
+            n for n in self._nodes if n._config.config_phase == CUR_CONFIG_PHASE
         ]
 
         # XXX don't change node names or types or count if anything is
         # XXX running!
 
-        for b in all_builders:
-            b.preConfig(network)
-            auth_line = b.getAltAuthLines(self.hasbridgeauth)
+        for n in self._nodes:
+            n._builder.preConfig(network)
+            auth_line = n._builder.getAltAuthLines(self.hasbridgeauth)
             if auth_line is not None:
                 altauthlines.append(auth_line)
-            bridgelines.extend(b.getBridgeLines())
+            bridgelines.extend(n._builder.getBridgeLines())
 
         self.authorities = altauthlines
         self.bridges = bridgelines
 
-        for b in builders:
-            b.config(network)
+        for n in cur_phase_nodes:
+            n._builder.config(network)
 
         arti_fallback_lines = []
         arti_auth_lines = []
@@ -1072,22 +1043,25 @@ class Network(object):
                 f.write(bridgeline)
             f.write("'''\n")
 
-        for b in builders:
-            b.postConfig(network)
+        for n in cur_phase_nodes:
+            n._builder.postConfig(network)
 
     def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
         return True if all nodes are running.
         """
-        cur_launch = CUR_LAUNCH_PHASE
-        statuses = [
-            n.getController().check(listNonRunning=True)
-            for n in self._nodes
-            if n._config.launch_phase == cur_launch
-        ]
-        n_ok = len([x for x in statuses if x])
-        print("%d/%d nodes are running" % (n_ok, len(self._nodes)))
-        return n_ok == len(statuses)
+        total = 0
+        running = 0
+        for n in self._nodes:
+            if n._config.launch_phase != CUR_LAUNCH_PHASE:
+                continue
+            total += 1
+            if not n._controller.isRunning():
+                print(f"{n.nick} is not running")
+                continue
+            running += 1
+        print(f"{running}/{total} nodes are running")
+        return running == total
 
     def restart(self) -> None:
         """Invoked from command line: Stop and subsequently start our
@@ -1105,7 +1079,7 @@ class Network(object):
             if n._config.launch_phase != CUR_LAUNCH_PHASE:
                 continue
             try:
-                n.getController().start()
+                n._controller.start()
             except ChutneyError as e:
                 errs.append(e)
         if len(errs) > 0:
@@ -1120,7 +1094,7 @@ class Network(object):
         errors.
         """
         print("Sending SIGHUP to nodes")
-        return all([n.getController().hup() for n in self._nodes])
+        return all([n._controller.hup() for n in self._nodes])
 
     def print_bootstrap_status(
         self,
@@ -1141,23 +1115,21 @@ class Network(object):
         print(header)
         print("Node status:")
         for n in nodes:
-            c = n.getController()
-            c.check(listRunning=False, listNonRunning=True)
-            nick = n.nick
-            nick_set.add(nick)
+            if not n._controller.isRunning():
+                print(f"{n.nick} is not running")
+            nick_set.add(n.nick)
             if n._config.consensus_authority:
-                cons_auth_nick_set.add(nick)
-            pct, kwd, bmsg = c.getLastBootstrapStatus()
+                cons_auth_nick_set.add(n.nick)
+            pct, kwd, bmsg = n._controller.getLastBootstrapStatus()
             # Support older tor versions without bootstrap keywords
             if not kwd:
                 kwd = "None"
-            print("{:13}: {:4}, {:25}, {}".format(nick, pct, kwd, bmsg))
+            print("{:13}: {:4}, {:25}, {}".format(n.nick, pct, kwd, bmsg))
         cache_client_nick_set = nick_set.difference(cons_auth_nick_set)
         print("Published dir info:")
         for n in nodes:
-            nick = n.nick
-            if nick in most_recent_desc_status:
-                desc_status = most_recent_desc_status[nick]
+            if n.nick in most_recent_desc_status:
+                desc_status = most_recent_desc_status[n.nick]
                 code, desc_nodes, docs, dmsg = desc_status
                 node_set = set(desc_nodes)
                 if node_set == nick_set:
@@ -1183,7 +1155,7 @@ class Network(object):
                     docs_string = " ".join(sorted(docs_set))
                 print(
                     "{:13}: {:4}, {:25}, {:30}, {}".format(
-                        nick, code, desc_nodes, docs_string, dmsg
+                        n.nick, code, desc_nodes, docs_string, dmsg
                     )
                 )
         print()
@@ -1235,9 +1207,7 @@ class Network(object):
 
         nodes = [n for n in self._nodes if n._config.launch_phase <= bootstrap_upto]
         min_time = self.getMinStartTime()
-        wait_time_list = [
-            n.getController().getUncheckedDirInfoWaitTime() for n in nodes
-        ]
+        wait_time_list = [n._controller.getUncheckedDirInfoWaitTime() for n in nodes]
         wait_time = max(wait_time_list)
 
         checks_since_last_print = 0
@@ -1246,17 +1216,15 @@ class Network(object):
             all_bootstrapped = True
             most_recent_desc_status = dict()
             for n in nodes:
-                c = n.getController()
-                nick = n.nick
-                c.updateLastStatus()
+                n._controller.updateLastStatus()
 
-                if not c.isBootstrapped():
+                if not n._controller.isBootstrapped():
                     all_bootstrapped = False
 
-                desc_status = c.getNodeDirInfoStatus()
+                desc_status = n._controller.getNodeDirInfoStatus()
                 if desc_status:
                     code, desc_nodes, docs, dmsg = desc_status
-                    most_recent_desc_status[nick] = (code, desc_nodes, docs, dmsg)
+                    most_recent_desc_status[n.nick] = (code, desc_nodes, docs, dmsg)
                     if code != SUCCESS_CODE:
                         all_bootstrapped = False
 
@@ -1397,36 +1365,35 @@ class Network(object):
 
         # clean up unwanted left-over file system state
         if cleanup_runfiles:
-            controllers = [n.getController() for n in self._nodes]
-            for c in controllers:
-                c.cleanupRunFiles()
+            for n in self._nodes:
+                n._controller.cleanupRunFiles()
 
     def stop(self) -> None:
         """Stop our network's running tor nodes."""
         any_tor_was_running = False
-        controllers = [n.getController() for n in self._nodes]
         for sig, desc in [
             (signal.SIGINT, "SIGINT"),
             (signal.SIGINT, "another SIGINT"),
             (signal.SIGKILL, "SIGKILL"),
         ]:
             print("Sending %s to nodes" % desc)
-            for c in controllers:
-                if c.isRunning():
+            for n in self._nodes:
+                if n._controller.isRunning():
                     any_tor_was_running = True
-                    c.stop(sig=sig)
+                    n._controller.stop(sig=sig)
             print("Waiting for nodes to finish.")
             wrote_dot = False
             for _ in range(15):
                 time.sleep(1)
-                if all(not c.isRunning() for c in controllers):
+                if all(not n._controller.isRunning() for n in self._nodes):
                     self.final_cleanup(wrote_dot, any_tor_was_running, True)
                     return
                 sys.stdout.write(".")
                 wrote_dot = True
                 sys.stdout.flush()
-            for c in controllers:
-                c.check(listNonRunning=False)
+            for n in self._nodes:
+                if n._controller.isRunning():
+                    print(f"{n.nick} is running")
             # cleanup chutney's logging, but don't wait or cleanup files
             self.final_cleanup(wrote_dot, False, False)
         # wait for tor to exit, but don't cleanup logging
