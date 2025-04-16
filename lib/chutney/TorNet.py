@@ -18,7 +18,7 @@ from __future__ import unicode_literals
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Any, Iterable, Union
+from typing import List, Optional, Any, Iterable
 
 import copy
 import dataclasses
@@ -34,7 +34,7 @@ import textwrap
 import time
 import json
 
-from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode
+from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode, DirFormat
 from chutney.errors import (
     ChutneyError,
     ChutneyErrorGroup,
@@ -421,7 +421,7 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
-    ) -> tuple[int, int, Optional[dict[str, Path]]]:
+    ) -> tuple[int, int, Optional[dict[DirFormat, Path]]]:
         """Return a 3-tuple containing:
           * a boolean indicating whether this node is a directory server,
             (that is, an authority, relay, or bridge),
@@ -440,9 +440,9 @@ class NodeController(ABC):
         Only the bridge authority has the bridge networkstatus.
 
         The dict keys are:
-          * "ns_cons", "desc", and "desc_new";
-          * "md_cons", "md", and "md_new"; and
-          * "br_status".
+          * NS_CONS, DESC, and DESC_NEW;
+          * MD_CONS, MD, and MD_NEW; and
+          * BR_STATUS.
         """
         ...
 
@@ -494,7 +494,9 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[str], str]]:
+    ) -> Optional[
+        tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
+    ]:
         """Return a 4-tuple describing the status of this node's descriptor,
         in all the directory documents across the network.
 
@@ -1093,7 +1095,7 @@ class Network(object):
         self,
         nodes: Iterable[Node],
         most_recent_desc_status: dict[
-            str, tuple[DirInfoStatusCode, Collection[str], Collection[str], str]
+            str, tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
         ],
         elapsed: Optional[float] = None,
         msg: str = "Bootstrap in progress",
@@ -1142,13 +1144,13 @@ class Network(object):
                 else:
                     # Fold desc_new into desc, and md_new into md
                     docs_set = set(d for d in docs)
-                    if "desc_new" in docs_set:
-                        docs_set.discard("desc_new")
-                        docs_set.add("desc")
-                    if "md_new" in docs:
-                        docs_set.discard("md_new")
-                        docs_set.add("md")
-                    docs_string = " ".join(sorted(docs_set))
+                    if DirFormat.DESC_NEW in docs_set:
+                        docs_set.discard(DirFormat.DESC_NEW)
+                        docs_set.add(DirFormat.DESC)
+                    if DirFormat.MD_NEW in docs:
+                        docs_set.discard(DirFormat.MD_NEW)
+                        docs_set.add(DirFormat.MD)
+                    docs_string = " ".join(sorted([str(d) for d in docs_set]))
                 print(
                     "{:13}: {:19}, {:25}, {:30}, {}".format(
                         n.nick, code, desc_nodes, docs_string, dmsg

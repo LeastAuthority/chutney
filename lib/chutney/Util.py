@@ -11,7 +11,7 @@ import os
 import stat
 import subprocess
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Collection
 from pathlib import Path
 from typing import Callable, TypeVar, Any, Optional, overload, Generic, Union, List
 from typing_extensions import ParamSpec
@@ -22,6 +22,7 @@ from chutney.Debug import debug_flag
 
 P = ParamSpec("P")
 T = TypeVar("T")
+K = TypeVar("K")
 V = TypeVar("V")
 
 
@@ -351,3 +352,7 @@ def mkdir_p(*d: Union[str, Path], mode: int = 448) -> None:
     only sets the mode for the last directory created.
     """
     Path(*d).mkdir(mode=mode, parents=True, exist_ok=True)
+
+
+def values_for_keys(d: dict[K, V], keys: Collection[K]) -> list[V]:
+    return [kv[1] for kv in d.items() if kv[0] in keys]
