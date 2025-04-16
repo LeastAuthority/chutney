@@ -462,58 +462,6 @@ class LocalNodeController(TorNet.NodeController):
 
         return paths
 
-    def getNodePublishedDirInfoPaths(
-        self,
-    ) -> Optional[dict[str, tuple[bool, bool, dict[DirFormat, Path]]]]:
-        """Return a dict of paths to consensus files, where we expect this
-        node to be published.
-
-        The dict keys are the nicks for each node.
-
-        See getNodeCacheDirInfoPaths() for the path data structure, and which
-        nodes appear in each type of directory.
-        """
-        if not self._node._config.consensus_member and not self._node._config.bridge:
-            # Clients don't appear in any consensus
-            return None
-
-        directory_files = dict()
-        for node in self._network._nodes:
-            if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
-                continue
-            if self._node._config.consensus_member:
-                # We should appear everywhere in all of the consensus files
-                formats = {
-                    DirFormat.DESC,
-                    DirFormat.DESC_NEW,
-                    DirFormat.NS_CONS,
-                    DirFormat.MD_CONS,
-                    DirFormat.MD,
-                    DirFormat.MD_NEW,
-                }
-            else:
-                assert self._node._config.bridge
-                if node._config.bridgeclient or node._config.bridgeauthority:
-                    # We should appear everywhere in the regular consensus docs
-                    formats = {DirFormat.DESC, DirFormat.DESC_NEW}
-                    if node._config.bridgeauthority:
-                        formats.add(DirFormat.BR_STATUS)
-                else:
-                    # We're a bridge, and `node` doesn't know about bridges.
-                    continue
-            node_files = node._controller.getNodeCacheDirInfoPaths()
-            node_files = {kv[0]: kv[1] for kv in node_files.items() if kv[0] in formats}
-            # should be non-empty
-            assert node_files
-            directory_files[node.nick] = (
-                node._config.relay,
-                node._config.bridgeclient,
-                node_files,
-            )
-
-        assert len(directory_files) > 0
-        return directory_files
-
     def getNodeDirInfoStatusPattern(self, dir_format: DirFormat) -> Optional[str]:
         """Returns a regular expression pattern for finding this node's entry
         in a dir_format file. Returns None if the requested pattern is not
@@ -852,37 +800,42 @@ class LocalNodeController(TorNet.NodeController):
 
         If this node is a client (including onion services), returns None.
         """
-        dir_files = self.getNodePublishedDirInfoPaths()
-
-        if not dir_files:
+        if not self._node._config.consensus_member and not self._node._config.bridge:
+            # Clients don't appear in any consensus
             return None
-
         dir_statuses = dict()
-        # For all the nodes we expect will have us in their directory
-        for other_node_nick in dir_files:
-            (to_dir_server, to_bridge_client, other_node_files) = dir_files[
-                other_node_nick
-            ]
-            if not other_node_files or not len(other_node_files):
-                # we don't expect this node to have us in its files
-                pass
-            status = self.getNodeCacheDirInfoStatus(
-                other_node_files, to_dir_server, to_bridge_client
+        for node in self._network._nodes:
+            if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
+                continue
+            if self._node._config.consensus_member:
+                # We should appear everywhere in all of the consensus files
+                formats = {
+                    DirFormat.DESC,
+                    DirFormat.DESC_NEW,
+                    DirFormat.NS_CONS,
+                    DirFormat.MD_CONS,
+                    DirFormat.MD,
+                    DirFormat.MD_NEW,
+                }
+            else:
+                assert self._node._config.bridge
+                if node._config.bridgeclient or node._config.bridgeauthority:
+                    # We should appear everywhere in the regular consensus docs
+                    formats = {DirFormat.DESC, DirFormat.DESC_NEW}
+                    if node._config.bridgeauthority:
+                        formats.add(DirFormat.BR_STATUS)
+                else:
+                    # We're a bridge, and `node` doesn't know about bridges.
+                    continue
+            node_files = node._controller.getNodeCacheDirInfoPaths()
+            node_files = {kv[0]: kv[1] for kv in node_files.items() if kv[0] in formats}
+            # should be non-empty
+            assert node_files
+            dir_statuses[node.nick] = self.getNodeCacheDirInfoStatus(
+                node_files, node._config.relay, node._config.bridgeclient
             )
-            dir_statuses[other_node_nick] = status
-
-        if len(dir_statuses):
-            return dir_statuses
-        else:
-            # this node must be a client
-            # (or a bridge in a network with no bridge authority,
-            # and no bridge clients, but chutney doesn't have networks like
-            # that)
-            consensus_member = self._node._config.consensus_member
-            bridge_member = self._node._config.bridge
-            assert not consensus_member
-            assert not bridge_member
-            return None
+        assert len(dir_statuses)
+        return dir_statuses
 
     def summariseNodeDirInfoStatus(
         self,
