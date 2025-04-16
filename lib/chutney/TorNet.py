@@ -421,12 +421,8 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
-    ) -> tuple[int, int, Optional[dict[DirFormat, Path]]]:
-        """Return a 3-tuple containing:
-          * a boolean indicating whether this node is a directory server,
-            (that is, an authority, relay, or bridge),
-          * a boolean indicating whether this node is a bridge client, and
-          * a dict with the expected paths to the consensus files for this
+    ) -> Optional[dict[DirFormat, Path]]:
+        """Return a dict with the expected paths to the consensus files for this
             node.
 
         If v2_dir_paths is True, returns the v3 directory paths.

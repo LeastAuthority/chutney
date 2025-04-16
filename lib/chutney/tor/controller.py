@@ -449,12 +449,8 @@ class LocalNodeController(TorNet.NodeController):
     @override
     def getNodeCacheDirInfoPaths(
         self, v2_dir_paths: bool
-    ) -> tuple[int, int, Optional[dict[DirFormat, Path]]]:
-        to_bridge_client = self._node._config.bridgeclient
-        to_bridge_auth = self._node._config.bridgeauthority
+    ) -> Optional[dict[DirFormat, Path]]:
         datadir = self._node.dir
-        to_dir_server = self._node._config.relay
-
         desc = Path(datadir, "cached-descriptors")
         desc_new = Path(datadir, "cached-descriptors.new")
 
@@ -470,20 +466,20 @@ class LocalNodeController(TorNet.NodeController):
             }
         # the published node is a bridge
         # bridges are only used by bridge clients and bridge authorities
-        elif to_bridge_client or to_bridge_auth:
+        elif self._node._config.bridgeclient or self._node._config.bridgeauthority:
             # bridge descs are stored with relay descs
             paths = {DirFormat.DESC: desc, DirFormat.DESC_NEW: desc_new}
-            if to_bridge_auth:
+            if self._node._config.bridgeauthority:
                 paths[DirFormat.BR_STATUS] = Path(datadir, "networkstatus-bridges")
         else:
             # We're looking for bridges, but other nodes don't use bridges
             paths = None
 
-        return (to_dir_server, to_bridge_client, paths)
+        return paths
 
     def getNodePublishedDirInfoPaths(
         self,
-    ) -> Optional[dict[str, tuple[int, int, Optional[dict[DirFormat, Path]]]]]:
+    ) -> Optional[dict[str, tuple[bool, bool, dict[DirFormat, Path]]]]:
         """Return a dict of paths to consensus files, where we expect this
         node to be published.
 
@@ -512,7 +508,11 @@ class LocalNodeController(TorNet.NodeController):
             node_files = node._controller.getNodeCacheDirInfoPaths(consensus_member)
             # skip empty file lists
             if node_files:
-                directory_files[nick] = node_files
+                directory_files[nick] = (
+                    node._config.relay,
+                    node._config.bridgeclient,
+                    node_files,
+                )
 
         assert len(directory_files) > 0
         return directory_files
