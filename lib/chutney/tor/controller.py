@@ -447,33 +447,18 @@ class LocalNodeController(TorNet.NodeController):
         return True
 
     @override
-    def getNodeCacheDirInfoPaths(
-        self, v2_dir_paths: bool
-    ) -> Optional[dict[DirFormat, Path]]:
+    def getNodeCacheDirInfoPaths(self) -> dict[DirFormat, Path]:
         datadir = self._node.dir
-        desc = Path(datadir, "cached-descriptors")
-        desc_new = Path(datadir, "cached-descriptors.new")
-
-        paths = None
-        if v2_dir_paths:
-            paths = {
-                DirFormat.DESC: desc,
-                DirFormat.DESC_NEW: desc_new,
-                DirFormat.NS_CONS: Path(datadir, "cached-consensus"),
-                DirFormat.MD_CONS: Path(datadir, "cached-microdesc-consensus"),
-                DirFormat.MD: Path(datadir, "cached-microdescs"),
-                DirFormat.MD_NEW: Path(datadir, "cached-microdescs.new"),
-            }
-        # the published node is a bridge
-        # bridges are only used by bridge clients and bridge authorities
-        elif self._node._config.bridgeclient or self._node._config.bridgeauthority:
-            # bridge descs are stored with relay descs
-            paths = {DirFormat.DESC: desc, DirFormat.DESC_NEW: desc_new}
-            if self._node._config.bridgeauthority:
-                paths[DirFormat.BR_STATUS] = Path(datadir, "networkstatus-bridges")
-        else:
-            # We're looking for bridges, but other nodes don't use bridges
-            paths = None
+        paths = {
+            DirFormat.DESC: Path(datadir, "cached-descriptors"),
+            DirFormat.DESC_NEW: Path(datadir, "cached-descriptors.new"),
+            DirFormat.NS_CONS: Path(datadir, "cached-consensus"),
+            DirFormat.MD_CONS: Path(datadir, "cached-microdesc-consensus"),
+            DirFormat.MD: Path(datadir, "cached-microdescs"),
+            DirFormat.MD_NEW: Path(datadir, "cached-microdescs.new"),
+        }
+        if self._node._config.bridgeauthority:
+            paths[DirFormat.BR_STATUS] = Path(datadir, "networkstatus-bridges")
 
         return paths
 
@@ -492,21 +477,39 @@ class LocalNodeController(TorNet.NodeController):
             # Clients don't appear in any consensus
             return None
 
-        # at this point, consensus_member == not bridge_member
         directory_files = dict()
         for node in self._network._nodes:
             if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
                 continue
-            node_files = node._controller.getNodeCacheDirInfoPaths(
-                self._node._config.consensus_member
+            if self._node._config.consensus_member:
+                # We should appear everywhere in all of the consensus files
+                formats = {
+                    DirFormat.DESC,
+                    DirFormat.DESC_NEW,
+                    DirFormat.NS_CONS,
+                    DirFormat.MD_CONS,
+                    DirFormat.MD,
+                    DirFormat.MD_NEW,
+                }
+            else:
+                assert self._node._config.bridge
+                if node._config.bridgeclient or node._config.bridgeauthority:
+                    # We should appear everywhere in the regular consensus docs
+                    formats = {DirFormat.DESC, DirFormat.DESC_NEW}
+                    if node._config.bridgeauthority:
+                        formats.add(DirFormat.BR_STATUS)
+                else:
+                    # We're a bridge, and `node` doesn't know about bridges.
+                    continue
+            node_files = node._controller.getNodeCacheDirInfoPaths()
+            node_files = {kv[0]: kv[1] for kv in node_files.items() if kv[0] in formats}
+            # should be non-empty
+            assert node_files
+            directory_files[node.nick] = (
+                node._config.relay,
+                node._config.bridgeclient,
+                node_files,
             )
-            # skip empty file lists
-            if node_files:
-                directory_files[node.nick] = (
-                    node._config.relay,
-                    node._config.bridgeclient,
-                    node_files,
-                )
 
         assert len(directory_files) > 0
         return directory_files

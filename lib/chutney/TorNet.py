@@ -419,16 +419,8 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
-    def getNodeCacheDirInfoPaths(
-        self, v2_dir_paths: bool
-    ) -> Optional[dict[DirFormat, Path]]:
-        """Return a dict with the expected paths to the consensus files for this
-            node.
-
-        If v2_dir_paths is True, returns the v3 directory paths.
-        Otherwise, returns the bridge status path.
-        If v2_dir_paths is True, but this node is not a bridge client or
-        bridge authority, returns None. (There are no paths.)
+    def getNodeCacheDirInfoPaths(self) -> dict[DirFormat, Path]:
+        """Return a dict with the expected paths to this node's consensus files.
 
         Directory servers usually have both consensus flavours.
         Clients usually have the microdesc consensus, but they may have
