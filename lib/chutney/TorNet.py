@@ -18,7 +18,7 @@ from __future__ import unicode_literals
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Any, Iterable
+from typing import List, Optional, Any, Iterable, Union
 
 import copy
 import dataclasses
@@ -34,6 +34,7 @@ import textwrap
 import time
 import json
 
+from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode
 from chutney.errors import (
     ChutneyError,
     ChutneyErrorGroup,
@@ -62,15 +63,7 @@ V3_AUTH_VOTING_INTERVAL = 20.0
 _TOR_VERSIONS = None
 _TORRC_OPTIONS = None
 
-# descriptor constants
-INTERNAL_ERROR_CODE = -500
-MISSING_FILE_CODE = -400
-NO_RECORDS_CODE = -300
-NOT_YET_IMPLEMENTED_CODE = -200
-SHORT_FILE_CODE = -100
-NO_PROGRESS_CODE = 0
-SUCCESS_CODE = 100
-ONIONDESC_PUBLISHED_CODE = 200
+
 HSV2_KEYWORD = "hidden service v2"
 HSV3_KEYWORD = "hidden service v3"
 
@@ -478,7 +471,7 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
-    def getLastBootstrapStatus(self) -> tuple[int, str, str]:
+    def getLastBootstrapStatus(self) -> DirInfoStatus:
         """Return the last bootstrap message fetched by
         updateLastBootstrapStatus as a 3-tuple of percentage
         complete, keyword (optional), and message.
@@ -501,7 +494,7 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[str], str]]:
         """Return a 4-tuple describing the status of this node's descriptor,
         in all the directory documents across the network.
 
@@ -1100,7 +1093,7 @@ class Network(object):
         self,
         nodes: Iterable[Node],
         most_recent_desc_status: dict[
-            str, tuple[int, Collection[str], Collection[str], str]
+            str, tuple[DirInfoStatusCode, Collection[str], Collection[str], str]
         ],
         elapsed: Optional[float] = None,
         msg: str = "Bootstrap in progress",
@@ -1120,11 +1113,14 @@ class Network(object):
             nick_set.add(n.nick)
             if n._config.consensus_authority:
                 cons_auth_nick_set.add(n.nick)
-            pct, kwd, bmsg = n._controller.getLastBootstrapStatus()
+            status = n._controller.getLastBootstrapStatus()
             # Support older tor versions without bootstrap keywords
-            if not kwd:
-                kwd = "None"
-            print("{:13}: {:4}, {:25}, {}".format(n.nick, pct, kwd, bmsg))
+            kwd = status.keyword or "None"
+            print(
+                "{:13}: {:19}, {:25}, {}".format(
+                    n.nick, status.percent_or_code, kwd, status.message
+                )
+            )
         cache_client_nick_set = nick_set.difference(cons_auth_nick_set)
         print("Published dir info:")
         for n in nodes:
@@ -1154,7 +1150,7 @@ class Network(object):
                         docs_set.add("md")
                     docs_string = " ".join(sorted(docs_set))
                 print(
-                    "{:13}: {:4}, {:25}, {:30}, {}".format(
+                    "{:13}: {:19}, {:25}, {:30}, {}".format(
                         n.nick, code, desc_nodes, docs_string, dmsg
                     )
                 )
@@ -1225,7 +1221,7 @@ class Network(object):
                 if desc_status:
                     code, desc_nodes, docs, dmsg = desc_status
                     most_recent_desc_status[n.nick] = (code, desc_nodes, docs, dmsg)
-                    if code != SUCCESS_CODE:
+                    if code != DirInfoStatusCode.SUCCESS:
                         all_bootstrapped = False
 
             now = time.time()

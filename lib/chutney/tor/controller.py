@@ -14,6 +14,7 @@ from typing_extensions import override
 import chutney.errors
 import chutney.TorNet as TorNet
 
+from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode
 from chutney.tor.util import get_tor_version
 from chutney.Debug import debug
 from chutney.Util import (
@@ -28,8 +29,8 @@ class LocalNodeController(TorNet.NodeController):
         TorNet.NodeController.__init__(self)
         self._network = network
         self._node = node
-        self.most_recent_oniondesc_status: Optional[tuple[int, str, str]] = None
-        self.most_recent_bootstrap_status: Optional[tuple[int, str, str]] = None
+        self.most_recent_oniondesc_status: Optional[DirInfoStatus] = None
+        self.most_recent_bootstrap_status: Optional[DirInfoStatus] = None
 
     def _loadEd25519Id(self) -> Option[str]:
         """
@@ -343,34 +344,40 @@ class LocalNodeController(TorNet.NodeController):
         """
         logfname = self.getLogfile(info=True)
         if not os.path.exists(logfname):
-            self.most_recent_oniondesc_status = (
-                TorNet.MISSING_FILE_CODE,
+            self.most_recent_oniondesc_status = DirInfoStatus(
+                DirInfoStatusCode.MISSING_FILE,
                 "no_logfile",
                 "There is no logfile yet.",
             )
-        percent = TorNet.NO_RECORDS_CODE
-        keyword = "no_message"
-        message = "No onion service descriptor messages yet."
+        status = DirInfoStatus(
+            percent_or_code=DirInfoStatusCode.NO_RECORDS,
+            keyword="no_message",
+            message="No onion service descriptor messages yet.",
+        )
         with open(logfname, "r") as f:
             for line in f:
                 m_v2 = re.search(r"Launching upload for hidden service (.*)", line)
                 if m_v2:
-                    percent = TorNet.ONIONDESC_PUBLISHED_CODE
-                    keyword = TorNet.HSV2_KEYWORD
-                    message = m_v2.groups()[0]
+                    status = DirInfoStatus(
+                        percent_or_code=DirInfoStatusCode.ONIONDESC_PUBLISHED,
+                        keyword=TorNet.HSV2_KEYWORD,
+                        message=m_v2.groups()[0],
+                    )
                     break
                 # else check for HSv3
                 m_v3 = re.search(
                     r"Service ([^\s]+ [^\s]+ descriptor of revision .*)", line
                 )
                 if m_v3:
-                    percent = TorNet.ONIONDESC_PUBLISHED_CODE
-                    keyword = TorNet.HSV3_KEYWORD
-                    message = m_v3.groups()[0]
+                    status = DirInfoStatus(
+                        percent_or_code=DirInfoStatusCode.ONIONDESC_PUBLISHED,
+                        keyword=TorNet.HSV3_KEYWORD,
+                        message=m_v3.groups()[0],
+                    )
                     break
-        self.most_recent_oniondesc_status = (percent, keyword, message)
+        self.most_recent_oniondesc_status = status
 
-    def getLastOnionServiceDescStatus(self) -> tuple[int, str, str]:
+    def getLastOnionServiceDescStatus(self) -> DirInfoStatus:
         """Return the last onion descriptor message fetched by
         updateLastOnionServiceDescStatus as a 3-tuple of percentage
         complete, the hidden service version, and message.
@@ -388,25 +395,35 @@ class LocalNodeController(TorNet.NodeController):
     def updateLastBootstrapStatus(self) -> None:
         logfname = self.getLogfile()
         if not logfname.exists():
-            self.most_recent_bootstrap_status = (
-                TorNet.MISSING_FILE_CODE,
-                "no_logfile",
-                "There is no logfile yet.",
+            self.most_recent_bootstrap_status = DirInfoStatus(
+                percent_or_code=DirInfoStatusCode.MISSING_FILE,
+                keyword="no_logfile",
+                message="There is no logfile yet.",
             )
             return
-        percent = TorNet.NO_RECORDS_CODE
-        keyword = "no_message"
-        message = "No bootstrap messages yet."
+        status = DirInfoStatus(
+            percent_or_code=DirInfoStatusCode.NO_RECORDS,
+            keyword="no_message",
+            message="No bootstrap messages yet.",
+        )
         with logfname.open(mode="r") as f:
             for line in f:
                 m = re.search(r"Bootstrapped (\d+)%(?: \(([^\)]*)\))?: (.*)", line)
                 if m:
                     percent_s, keyword, message = m.groups()
-                    percent = int(percent_s)
-        self.most_recent_bootstrap_status = (percent, keyword, message)
+                    status = DirInfoStatus(
+                        percent_or_code=(
+                            DirInfoStatusCode.SUCCESS
+                            if percent_s == "100"
+                            else int(percent_s)
+                        ),
+                        keyword=keyword,
+                        message=message,
+                    )
+        self.most_recent_bootstrap_status = status
 
     @override
-    def getLastBootstrapStatus(self) -> tuple[int, str, str]:
+    def getLastBootstrapStatus(self) -> DirInfoStatus:
         rv = self.most_recent_bootstrap_status
         # Caller is required to have set this via `updateLastStatus` first.
         # TODO: just call it ourselves if None, or use a default value?
@@ -420,12 +437,12 @@ class LocalNodeController(TorNet.NodeController):
 
     @override
     def isBootstrapped(self) -> bool:
-        pct, _, _ = self.getLastBootstrapStatus()
-        if pct != TorNet.SUCCESS_CODE:
+        status = self.getLastBootstrapStatus()
+        if status.percent_or_code != DirInfoStatusCode.SUCCESS:
             return False
         if self._node.isOnionService():
-            pct, _, _ = self.getLastOnionServiceDescStatus()
-            if pct != TorNet.ONIONDESC_PUBLISHED_CODE:
+            status = self.getLastOnionServiceDescStatus()
+            if status.percent_or_code != DirInfoStatusCode.ONIONDESC_PUBLISHED:
                 return False
         return True
 
@@ -539,7 +556,7 @@ class LocalNodeController(TorNet.NodeController):
 
     def getFileDirInfoStatus(
         self, dir_format: str, dir_path: Path
-    ) -> tuple[int, Collection[str], str]:
+    ) -> tuple[DirInfoStatusCode, Collection[str], str]:
         """Check dir_path, a directory path used by another node, to see if
         this node is present. The directory path is a dir_format file.
 
@@ -552,7 +569,7 @@ class LocalNodeController(TorNet.NodeController):
           * a status message string.
         """
         if not dir_path.exists():
-            return (TorNet.MISSING_FILE_CODE, {dir_format}, "No dir file")
+            return (DirInfoStatusCode.MISSING_FILE, {dir_format}, "No dir file")
 
         dir_pattern = self.getNodeDirInfoStatusPattern(dir_format)
 
@@ -564,16 +581,16 @@ class LocalNodeController(TorNet.NodeController):
                     m = re.search(dir_pattern, line)
                     if m:
                         return (
-                            TorNet.SUCCESS_CODE,
+                            DirInfoStatusCode.SUCCESS,
                             {dir_format},
                             "Dir info cached",
                         )
 
         if line_count == 0:
-            return (TorNet.NO_RECORDS_CODE, {dir_format}, "Empty dir file")
+            return (DirInfoStatusCode.NO_RECORDS, {dir_format}, "Empty dir file")
         elif dir_pattern is None:
             return (
-                TorNet.NOT_YET_IMPLEMENTED_CODE,
+                DirInfoStatusCode.NOT_YET_IMPLEMENTED,
                 {dir_format},
                 "Not yet implemented",
             )
@@ -582,24 +599,26 @@ class LocalNodeController(TorNet.NodeController):
             # and the minimum size of one bridge is 5 lines
             # Let the user know the dir file is unexpectedly small
             return (
-                TorNet.SHORT_FILE_CODE,
+                DirInfoStatusCode.SHORT_FILE,
                 {dir_format},
                 "Very short dir file",
             )
         else:
             return (
-                TorNet.NO_PROGRESS_CODE,
+                DirInfoStatusCode.NO_PROGRESS,
                 {dir_format},
                 "Not in dir file",
             )
 
     def combineDirInfoStatuses(
         self,
-        dir_statuses: dict[str, Optional[tuple[int, Collection[str], str]]],
+        dir_statuses: dict[
+            str, Optional[tuple[DirInfoStatusCode, Collection[str], str]]
+        ],
         status_key_list: list[str],
         best: bool = True,
         ignore_missing: bool = False,
-    ) -> Optional[tuple[int, Collection[str], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], str]]:
         """Combine the directory statuses in dir_status, if their keys
         appear in status_key_list. Keys may be directory formats, or
         node nicks.
@@ -636,30 +655,30 @@ class LocalNodeController(TorNet.NodeController):
                 # equal status, not just the latest one
                 combined_flav = old_flav.union(new_flav)
                 dir_status = (old_status_code, combined_flav, old_msg)
-            elif old_status_code == TorNet.MISSING_FILE_CODE and ignore_missing:
+            elif old_status_code == DirInfoStatusCode.MISSING_FILE and ignore_missing:
                 # use the new status, which can't be MISSING_FILE_CODE,
                 # because they're not equal
                 dir_status = new_status
-            elif new_status_code == TorNet.MISSING_FILE_CODE and ignore_missing:
+            elif new_status_code == DirInfoStatusCode.MISSING_FILE and ignore_missing:
                 # ignore the new status
                 pass
-            elif old_status_code == TorNet.NOT_YET_IMPLEMENTED_CODE:
+            elif old_status_code == DirInfoStatusCode.NOT_YET_IMPLEMENTED:
                 # always ignore not yet implemented
                 dir_status = new_status
-            elif new_status_code == TorNet.NOT_YET_IMPLEMENTED_CODE:
+            elif new_status_code == DirInfoStatusCode.NOT_YET_IMPLEMENTED:
                 pass
-            elif best and new_status_code > old_status_code:
+            elif best and new_status_code.value > old_status_code.value:
                 dir_status = new_status
-            elif not best and new_status_code < old_status_code:
+            elif not best and new_status_code.value < old_status_code.value:
                 dir_status = new_status
         return dir_status
 
     def summariseCacheDirInfoStatus(
         self,
-        dir_status: dict[str, Optional[tuple[int, Collection[str], str]]],
+        dir_status: dict[str, Optional[tuple[DirInfoStatusCode, Collection[str], str]]],
         to_dir_server: int,
         to_bridge_client: int,
-    ) -> Optional[tuple[int, Collection[str], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], str]]:
         """Summarise the statuses for this node, among all the files used by
         the other node.
 
@@ -724,9 +743,9 @@ class LocalNodeController(TorNet.NodeController):
         if bridge_to_bridge_client:
             # Bridge clients fetch bridge descriptors directly from bridges
             # Bridge clients fetch relay descriptors after fetching the consensus
-            desc_all: Optional[tuple[int, Collection[str], str]] = dir_status[
-                "desc_alts"
-            ]
+            desc_all: Optional[tuple[DirInfoStatusCode, Collection[str], str]] = (
+                dir_status["desc_alts"]
+            )
         elif relay_to_bridge_client:
             # Bridge clients usually fetch microdesc consensuses and
             # microdescs, but some fetch ns consensuses and full descriptors
@@ -736,7 +755,7 @@ class LocalNodeController(TorNet.NodeController):
                     "Unexpectedly missing md_alts"
                 )
             md_status_code = s[0]
-            if md_status_code == TorNet.MISSING_FILE_CODE:
+            if md_status_code == DirInfoStatusCode.MISSING_FILE:
                 # If there are no md files, we're using descs for relays and
                 # bridges
                 desc_all = dir_status["desc_alts"]
@@ -773,7 +792,7 @@ class LocalNodeController(TorNet.NodeController):
         other_node_files: Optional[dict[str, Path]],
         to_dir_server: int,
         to_bridge_client: int,
-    ) -> Optional[tuple[int, Collection[str], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], str]]:
         """Check all the directory paths used by another node, to see if this
         node is present.
 
@@ -786,7 +805,9 @@ class LocalNodeController(TorNet.NodeController):
         Returns None if the node doesn't have any directory files
         containing published information from this node.
         """
-        dir_status: dict[str, Optional[tuple[int, Collection[str], str]]] = dict()
+        dir_status: dict[
+            str, Optional[tuple[DirInfoStatusCode, Collection[str], str]]
+        ] = dict()
         # we don't expect the other node to have us in its files
         if other_node_files:
             for dir_format in other_node_files:
@@ -809,7 +830,7 @@ class LocalNodeController(TorNet.NodeController):
 
     def getNodeDirInfoStatusList(
         self,
-    ) -> Optional[dict[str, Optional[tuple[int, Collection[str], str]]]]:
+    ) -> Optional[dict[str, Optional[tuple[DirInfoStatusCode, Collection[str], str]]]]:
         """Look through the directories on each node, and work out if
         this node is in that directory.
 
@@ -864,9 +885,14 @@ class LocalNodeController(TorNet.NodeController):
 
     def summariseNodeDirInfoStatus(
         self,
-        dir_status: Optional[dict[str, Optional[tuple[int, Collection[str], str]]]],
+        dir_status: Optional[
+            dict[str, Optional[tuple[DirInfoStatusCode, Collection[str], str]]]
+        ],
     ) -> Optional[
-        dict[Union[int, str], tuple[int, Collection[str], Collection[str], str]]
+        dict[
+            Union[DirInfoStatusCode, str],
+            tuple[DirInfoStatusCode, Collection[str], Collection[str], str],
+        ]
     ]:
         """Summarise the statuses for this node's descriptor, among all the
         directory files used by all other nodes.
@@ -888,7 +914,8 @@ class LocalNodeController(TorNet.NodeController):
         Returns None if no status is expected.
         """
         node_status: dict[
-            Union[int, str], tuple[int, Collection[str], Collection[str], str]
+            Union[DirInfoStatusCode, str],
+            tuple[DirInfoStatusCode, Collection[str], Collection[str], str],
         ] = dict()
 
         # check if we expect this node to be published to other nodes
@@ -921,10 +948,12 @@ class LocalNodeController(TorNet.NodeController):
                         comb_msg,
                     )
 
-        node_all: Optional[tuple[int, Collection[str], Collection[str], str]] = None
+        node_all: Optional[
+            tuple[DirInfoStatusCode, Collection[str], Collection[str], str]
+        ] = None
         if len(node_status):
             # Finally, get the worst status from all the other nodes
-            worst_status_code = min(status_code_set)
+            worst_status_code = min(status_code_set, key=lambda s: s.value)
             node_all = node_status[worst_status_code]
         else:
             # this node should be a client
@@ -935,7 +964,7 @@ class LocalNodeController(TorNet.NodeController):
             bridge_member = self._node._config.bridge
             if consensus_member or bridge_member:
                 node_all = (
-                    TorNet.INTERNAL_ERROR_CODE,
+                    DirInfoStatusCode.INTERNAL_ERROR,
                     set(),
                     set(),
                     "Expected {}{}{} dir info, but status is empty.".format(
@@ -958,7 +987,7 @@ class LocalNodeController(TorNet.NodeController):
     @override
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[str], str]]:
         dir_status = self.getNodeDirInfoStatusList()
         if dir_status:
             summary = self.summariseNodeDirInfoStatus(dir_status)
@@ -984,7 +1013,7 @@ class LocalNodeController(TorNet.NodeController):
         node_status = self.getNodeDirInfoStatus()
         if node_status:
             status_code, _, _, _ = node_status
-            return status_code == TorNet.SUCCESS_CODE
+            return status_code == DirInfoStatusCode.SUCCESS
         else:
             # Clients don't publish descriptors, so they are always ok.
             # (But we shouldn't print a descriptor status for them.)
