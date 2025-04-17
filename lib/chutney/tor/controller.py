@@ -821,8 +821,8 @@ class LocalNodeController(TorNet.NodeController):
 
     def summariseNodeDirInfoStatus(
         self,
-        dir_status: Optional[
-            dict[str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]]
+        dir_status: dict[
+            str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
         ],
     ) -> Optional[
         dict[
@@ -855,34 +855,33 @@ class LocalNodeController(TorNet.NodeController):
         ] = dict()
 
         # check if we expect this node to be published to other nodes
-        if dir_status:
-            status_code_set = {
-                status[0]
+        status_code_set = {
+            status[0]
+            for (other_node_nick, status) in dir_status.items()
+            if status is not None
+        }
+
+        for status_code in status_code_set:
+            other_node_nick_list = [
+                other_node_nick
                 for (other_node_nick, status) in dir_status.items()
-                if status is not None
-            }
+                if status is not None and status[0] == status_code
+            ]
 
-            for status_code in status_code_set:
-                other_node_nick_list = [
-                    other_node_nick
-                    for (other_node_nick, status) in dir_status.items()
-                    if status is not None and status[0] == status_code
-                ]
+            comb_status = self.combineDirInfoStatuses(
+                values_for_keys(dir_status, other_node_nick_list), best=False
+            )
 
-                comb_status = self.combineDirInfoStatuses(
-                    values_for_keys(dir_status, other_node_nick_list), best=False
+            if comb_status is not None:
+                (comb_code, comb_format_set, comb_msg) = comb_status
+                assert comb_code == status_code
+
+                node_status[status_code] = (
+                    status_code,
+                    other_node_nick_list,
+                    comb_format_set,
+                    comb_msg,
                 )
-
-                if comb_status is not None:
-                    (comb_code, comb_format_set, comb_msg) = comb_status
-                    assert comb_code == status_code
-
-                    node_status[status_code] = (
-                        status_code,
-                        other_node_nick_list,
-                        comb_format_set,
-                        comb_msg,
-                    )
 
         node_all: Optional[
             tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]

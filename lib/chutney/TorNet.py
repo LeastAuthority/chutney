@@ -350,6 +350,7 @@ class Node(object):
                 return formats
         return {}
 
+
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
     one-time prep needed to set up a node in a network.
