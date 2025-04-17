@@ -735,44 +735,6 @@ class LocalNodeController(TorNet.NodeController):
 
         return node_dir
 
-    def getNodeCacheDirInfoStatus(
-        self,
-        other_node_files: dict[DirFormat, Path],
-        to_dir_server: int,
-        to_bridge_client: int,
-    ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]:
-        """Check all the directory paths used by another node, to see if this
-        node is present.
-
-        to_dir_server is True if the other node is a directory server.
-        to_bridge_client is True if the other node is a bridge client.
-
-        Returns a dict containing a status 3-tuple for every relevant
-        directory format. See getFileDirInfoStatus() for more details.
-
-        Returns None if the node doesn't have any directory files
-        containing published information from this node.
-        """
-        dir_status: dict[
-            DirFormat, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
-        ] = dict()
-        for dir_format, dir_path in other_node_files.items():
-            new_status = self.getFileDirInfoStatus(dir_format, dir_path)
-            if new_status is None:
-                continue
-            dir_status[dir_format] = new_status
-
-        if len(dir_status):
-            return self.summariseCacheDirInfoStatus(
-                dir_status, to_dir_server, to_bridge_client
-            )
-        else:
-            # this node must be a client, or a bridge
-            # (and the other node is not a bridge authority or bridge client)
-            consensus_member = self._node._config.consensus_member
-            assert not consensus_member
-            return None
-
     def getNodeDirInfoStatusList(
         self,
     ) -> Optional[
@@ -786,8 +748,7 @@ class LocalNodeController(TorNet.NodeController):
           * a status code,
           * a list of formats with that status, and
           * a status message string.
-        See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
-        more details.
+        See getFileDirInfoStatus() for more details.
 
         If this node is a directory authority, bridge authority, or relay
         (including exits), checks v3 directory consensuses, descriptors,
@@ -801,23 +762,32 @@ class LocalNodeController(TorNet.NodeController):
         if not self._node._config.consensus_member and not self._node._config.bridge:
             # Clients don't appear in any consensus
             return None
-        dir_statuses = dict()
+        dir_status_summaries = dict()
         for node in self._network._nodes:
             if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
                 continue
-            formats = self._node.expected_in_dir_formats(node)
-            node_files_to_check = {
-                fmt: path
-                for (fmt, path) in node._controller.getNodeCacheDirInfoPaths().items()
-                if fmt in formats
-            }
-            if not node_files_to_check:
-                continue
-            dir_statuses[node.nick] = self.getNodeCacheDirInfoStatus(
-                node_files_to_check, node._config.relay, node._config.bridgeclient
+            paths = node._controller.getNodeCacheDirInfoPaths()
+            dir_statuses: dict[
+                DirFormat,
+                Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]],
+            ] = dict()
+            for dir_format in self._node.expected_in_dir_formats(node):
+                dir_path = paths.get(dir_format)
+                if not dir_path:
+                    # This node doesn't support this format
+                    continue
+                dir_statuses[dir_format] = self.getFileDirInfoStatus(
+                    dir_format, dir_path
+                )
+            dir_status_summaries[node.nick] = (
+                self.summariseCacheDirInfoStatus(
+                    dir_statuses, node._config.relay, node._config.bridgeclient
+                )
+                if len(dir_statuses)
+                else None
             )
-        assert len(dir_statuses)
-        return dir_statuses
+        assert len(dir_status_summaries)
+        return dir_status_summaries
 
     def summariseNodeDirInfoStatus(
         self,
@@ -840,8 +810,7 @@ class LocalNodeController(TorNet.NodeController):
             status,
           * a list of directory file formats which have that status, and
           * a status message string.
-        See getNodeCacheDirInfoStatus() and getFileDirInfoStatus() for
-        more details.
+        See and getFileDirInfoStatus() for more details.
 
         Also add an "node_all" status that describes the overall status,
         which is the worst status among all the other nodes' directory
