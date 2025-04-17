@@ -330,6 +330,25 @@ class Node(object):
         """Is this node an onion service?"""
         return self.tag.startswith("h") or self._config.hs
 
+    def expected_in_dir_formats(self, other_node: Node) -> Collection[DirFormat]:
+        """Returns the set of `other_node`'s dir formats in which *this* node is
+        expected to appear"""
+        if self._config.consensus_member:
+            return {
+                DirFormat.DESC,
+                DirFormat.DESC_NEW,
+                DirFormat.NS_CONS,
+                DirFormat.MD_CONS,
+                DirFormat.MD,
+                DirFormat.MD_NEW,
+            }
+        if self._config.bridge:
+            if other_node._config.bridgeclient or other_node._config.bridgeauthority:
+                formats = {DirFormat.DESC, DirFormat.DESC_NEW}
+                if other_node._config.bridgeauthority:
+                    formats.add(DirFormat.BR_STATUS)
+                return formats
+        return {}
 
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the

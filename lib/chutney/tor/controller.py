@@ -807,32 +807,16 @@ class LocalNodeController(TorNet.NodeController):
         for node in self._network._nodes:
             if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
                 continue
-            if self._node._config.consensus_member:
-                # We should appear everywhere in all of the consensus files
-                formats = {
-                    DirFormat.DESC,
-                    DirFormat.DESC_NEW,
-                    DirFormat.NS_CONS,
-                    DirFormat.MD_CONS,
-                    DirFormat.MD,
-                    DirFormat.MD_NEW,
-                }
-            else:
-                assert self._node._config.bridge
-                if node._config.bridgeclient or node._config.bridgeauthority:
-                    # We should appear everywhere in the regular consensus docs
-                    formats = {DirFormat.DESC, DirFormat.DESC_NEW}
-                    if node._config.bridgeauthority:
-                        formats.add(DirFormat.BR_STATUS)
-                else:
-                    # We're a bridge, and `node` doesn't know about bridges.
-                    continue
-            node_files = node._controller.getNodeCacheDirInfoPaths()
-            node_files = {kv[0]: kv[1] for kv in node_files.items() if kv[0] in formats}
-            # should be non-empty
-            assert node_files
+            formats = self._node.expected_in_dir_formats(node)
+            node_files_to_check = {
+                fmt: path
+                for (fmt, path) in node._controller.getNodeCacheDirInfoPaths().items()
+                if fmt in formats
+            }
+            if not node_files_to_check:
+                continue
             dir_statuses[node.nick] = self.getNodeCacheDirInfoStatus(
-                node_files, node._config.relay, node._config.bridgeclient
+                node_files_to_check, node._config.relay, node._config.bridgeclient
             )
         assert len(dir_statuses)
         return dir_statuses
