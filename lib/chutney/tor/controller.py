@@ -737,7 +737,7 @@ class LocalNodeController(TorNet.NodeController):
 
     def getNodeCacheDirInfoStatus(
         self,
-        other_node_files: Optional[dict[DirFormat, Path]],
+        other_node_files: dict[DirFormat, Path],
         to_dir_server: int,
         to_bridge_client: int,
     ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]:
@@ -756,13 +756,11 @@ class LocalNodeController(TorNet.NodeController):
         dir_status: dict[
             DirFormat, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
         ] = dict()
-        # we don't expect the other node to have us in its files
-        if other_node_files:
-            for dir_format, dir_path in other_node_files.items():
-                new_status = self.getFileDirInfoStatus(dir_format, dir_path)
-                if new_status is None:
-                    continue
-                dir_status[dir_format] = new_status
+        for dir_format, dir_path in other_node_files.items():
+            new_status = self.getFileDirInfoStatus(dir_format, dir_path)
+            if new_status is None:
+                continue
+            dir_status[dir_format] = new_status
 
         if len(dir_status):
             return self.summariseCacheDirInfoStatus(
