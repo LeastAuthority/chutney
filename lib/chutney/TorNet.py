@@ -34,6 +34,7 @@ import textwrap
 import time
 import json
 
+from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode, DirFormat
 from chutney.errors import (
     ChutneyError,
     ChutneyErrorGroup,
@@ -62,15 +63,7 @@ V3_AUTH_VOTING_INTERVAL = 20.0
 _TOR_VERSIONS = None
 _TORRC_OPTIONS = None
 
-# descriptor constants
-INTERNAL_ERROR_CODE = -500
-MISSING_FILE_CODE = -400
-NO_RECORDS_CODE = -300
-NOT_YET_IMPLEMENTED_CODE = -200
-SHORT_FILE_CODE = -100
-NO_PROGRESS_CODE = 0
-SUCCESS_CODE = 100
-ONIONDESC_PUBLISHED_CODE = 200
+
 HSV2_KEYWORD = "hidden service v2"
 HSV3_KEYWORD = "hidden service v3"
 
@@ -337,6 +330,26 @@ class Node(object):
         """Is this node an onion service?"""
         return self.tag.startswith("h") or self._config.hs
 
+    def expected_in_dir_formats(self, other_node: Node) -> Collection[DirFormat]:
+        """Returns the set of `other_node`'s dir formats in which *this* node is
+        expected to appear"""
+        if self._config.consensus_member:
+            return {
+                DirFormat.DESC,
+                DirFormat.DESC_NEW,
+                DirFormat.NS_CONS,
+                DirFormat.MD_CONS,
+                DirFormat.MD,
+                DirFormat.MD_NEW,
+            }
+        if self._config.bridge:
+            if other_node._config.bridgeclient or other_node._config.bridgeauthority:
+                formats = {DirFormat.DESC, DirFormat.DESC_NEW}
+                if other_node._config.bridgeauthority:
+                    formats.add(DirFormat.BR_STATUS)
+                return formats
+        return {}
+
 
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
@@ -426,20 +439,8 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
-    def getNodeCacheDirInfoPaths(
-        self, v2_dir_paths: bool
-    ) -> tuple[int, int, Optional[dict[str, Path]]]:
-        """Return a 3-tuple containing:
-          * a boolean indicating whether this node is a directory server,
-            (that is, an authority, relay, or bridge),
-          * a boolean indicating whether this node is a bridge client, and
-          * a dict with the expected paths to the consensus files for this
-            node.
-
-        If v2_dir_paths is True, returns the v3 directory paths.
-        Otherwise, returns the bridge status path.
-        If v2_dir_paths is True, but this node is not a bridge client or
-        bridge authority, returns None. (There are no paths.)
+    def getNodeCacheDirInfoPaths(self) -> dict[DirFormat, Path]:
+        """Return a dict with the expected paths to this node's consensus files.
 
         Directory servers usually have both consensus flavours.
         Clients usually have the microdesc consensus, but they may have
@@ -447,9 +448,9 @@ class NodeController(ABC):
         Only the bridge authority has the bridge networkstatus.
 
         The dict keys are:
-          * "ns_cons", "desc", and "desc_new";
-          * "md_cons", "md", and "md_new"; and
-          * "br_status".
+          * NS_CONS, DESC, and DESC_NEW;
+          * MD_CONS, MD, and MD_NEW; and
+          * BR_STATUS.
         """
         ...
 
@@ -478,7 +479,7 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
-    def getLastBootstrapStatus(self) -> tuple[int, str, str]:
+    def getLastBootstrapStatus(self) -> DirInfoStatus:
         """Return the last bootstrap message fetched by
         updateLastBootstrapStatus as a 3-tuple of percentage
         complete, keyword (optional), and message.
@@ -501,7 +502,9 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[tuple[int, Collection[str], Collection[str], str]]:
+    ) -> Optional[
+        tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
+    ]:
         """Return a 4-tuple describing the status of this node's descriptor,
         in all the directory documents across the network.
 
@@ -1100,7 +1103,7 @@ class Network(object):
         self,
         nodes: Iterable[Node],
         most_recent_desc_status: dict[
-            str, tuple[int, Collection[str], Collection[str], str]
+            str, tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
         ],
         elapsed: Optional[float] = None,
         msg: str = "Bootstrap in progress",
@@ -1120,11 +1123,14 @@ class Network(object):
             nick_set.add(n.nick)
             if n._config.consensus_authority:
                 cons_auth_nick_set.add(n.nick)
-            pct, kwd, bmsg = n._controller.getLastBootstrapStatus()
+            status = n._controller.getLastBootstrapStatus()
             # Support older tor versions without bootstrap keywords
-            if not kwd:
-                kwd = "None"
-            print("{:13}: {:4}, {:25}, {}".format(n.nick, pct, kwd, bmsg))
+            kwd = status.keyword or "None"
+            print(
+                "{:13}: {:19}, {:25}, {}".format(
+                    n.nick, status.percent_or_code, kwd, status.message
+                )
+            )
         cache_client_nick_set = nick_set.difference(cons_auth_nick_set)
         print("Published dir info:")
         for n in nodes:
@@ -1146,15 +1152,15 @@ class Network(object):
                 else:
                     # Fold desc_new into desc, and md_new into md
                     docs_set = set(d for d in docs)
-                    if "desc_new" in docs_set:
-                        docs_set.discard("desc_new")
-                        docs_set.add("desc")
-                    if "md_new" in docs:
-                        docs_set.discard("md_new")
-                        docs_set.add("md")
-                    docs_string = " ".join(sorted(docs_set))
+                    if DirFormat.DESC_NEW in docs_set:
+                        docs_set.discard(DirFormat.DESC_NEW)
+                        docs_set.add(DirFormat.DESC)
+                    if DirFormat.MD_NEW in docs:
+                        docs_set.discard(DirFormat.MD_NEW)
+                        docs_set.add(DirFormat.MD)
+                    docs_string = " ".join(sorted([str(d) for d in docs_set]))
                 print(
-                    "{:13}: {:4}, {:25}, {:30}, {}".format(
+                    "{:13}: {:19}, {:25}, {:30}, {}".format(
                         n.nick, code, desc_nodes, docs_string, dmsg
                     )
                 )
@@ -1225,7 +1231,7 @@ class Network(object):
                 if desc_status:
                     code, desc_nodes, docs, dmsg = desc_status
                     most_recent_desc_status[n.nick] = (code, desc_nodes, docs, dmsg)
-                    if code != SUCCESS_CODE:
+                    if code != DirInfoStatusCode.SUCCESS:
                         all_bootstrapped = False
 
             now = time.time()
