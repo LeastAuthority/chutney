@@ -121,6 +121,7 @@ class LocalNodeController(TorNet.NodeController):
         # but not doing so is inconsistent with the other accessors.
         return self._loadPtExtra()
 
+    @override
     def getEd25519Id(self) -> Option[str]:
         """Return the base64-encoded ed25519 public key of this node."""
         if self._node.ed25519_id.is_none():
@@ -446,8 +447,19 @@ class LocalNodeController(TorNet.NodeController):
                 return False
         return True
 
-    @override
     def getNodeCacheDirInfoPaths(self) -> dict[DirFormat, Path]:
+        """Return a dict with the expected paths to this node's consensus files.
+
+        Directory servers usually have both consensus flavours.
+        Clients usually have the microdesc consensus, but they may have
+        either flavour. (Or both flavours.)
+        Only the bridge authority has the bridge networkstatus.
+
+        The dict keys are:
+          * NS_CONS, DESC, and DESC_NEW;
+          * MD_CONS, MD, and MD_NEW; and
+          * BR_STATUS.
+        """
         datadir = self._node.dir
         paths = {
             DirFormat.DESC: Path(datadir, "cached-descriptors"),
@@ -462,56 +474,19 @@ class LocalNodeController(TorNet.NodeController):
 
         return paths
 
-    def getNodeDirInfoStatusPattern(self, dir_format: DirFormat) -> Optional[str]:
-        """Returns a regular expression pattern for finding this node's entry
-        in a dir_format file. Returns None if the requested pattern is not
-        available.
-        """
-        nickname = self._node.nick
-        ed25519_key = self.getEd25519Id()
-
-        cons = dir_format in [DirFormat.NS_CONS, DirFormat.MD_CONS, DirFormat.BR_STATUS]
-        desc = dir_format in [DirFormat.DESC, DirFormat.DESC_NEW]
-        md = dir_format in [DirFormat.MD, DirFormat.MD_NEW]
-
-        assert cons or desc or md
-
-        if cons:
-            # Disabled due to bug #33407: chutney bridge authorities don't
-            # publish bridge descriptors in the bridge networkstatus file
-            if dir_format == DirFormat.BR_STATUS:
-                return None
-            else:
-                # ns_cons and md_cons work
-                return r"^r " + nickname + " "
-        elif desc:
-            return r"^router " + nickname + " "
-        elif md:
-            return ed25519_key.map(
-                lambda s: r"^id ed25519 " + re.escape(s)
-            ).as_optional()
-        else:
-            raise chutney.errors.ChutneyError(f"Invalid dir_format {dir_format}")
-
-    def getFileDirInfoStatus(
-        self, dir_format: DirFormat, dir_path: Path
-    ) -> tuple[DirInfoStatusCode, Collection[DirFormat], str]:
-        """Check dir_path, a directory path used by another node, to see if
-        this node is present. The directory path is a dir_format file.
-
-        Returns a status 3-tuple containing:
-          * an integer status code:
-            * negative numbers correspond to errors,
-            * NO_PROGRESS_CODE means "not in the directory", and
-            * SUCCESS_CODE means "in the directory";
-          * a set containing dir_format; and
-          * a status message string.
-        """
+    @override
+    def check_node_in_dirinfo(
+        self, dir_fmt: DirFormat, other_node: TorNet.Node
+    ) -> DirInfoStatusCode:
+        paths = self.getNodeCacheDirInfoPaths()
+        dir_path = paths.get(dir_fmt)
+        if dir_path is None:
+            return DirInfoStatusCode.NOT_YET_IMPLEMENTED
         if not dir_path.exists():
-            return (DirInfoStatusCode.MISSING_FILE, {dir_format}, "No dir file")
-
-        dir_pattern = self.getNodeDirInfoStatusPattern(dir_format)
-
+            return DirInfoStatusCode.MISSING_FILE
+        dir_pattern = dir_fmt.status_pattern(
+            other_node.nick, other_node._controller.getEd25519Id()
+        )
         line_count = 0
         with dir_path.open(mode="r") as f:
             for line in f:
@@ -519,44 +494,26 @@ class LocalNodeController(TorNet.NodeController):
                 if dir_pattern:
                     m = re.search(dir_pattern, line)
                     if m:
-                        return (
-                            DirInfoStatusCode.SUCCESS,
-                            {dir_format},
-                            "Dir info cached",
-                        )
-
+                        return DirInfoStatusCode.SUCCESS
         if line_count == 0:
-            return (DirInfoStatusCode.NO_RECORDS, {dir_format}, "Empty dir file")
-        elif dir_pattern is None:
-            return (
-                DirInfoStatusCode.NOT_YET_IMPLEMENTED,
-                {dir_format},
-                "Not yet implemented",
-            )
-        elif line_count < 8:
+            return DirInfoStatusCode.NO_RECORDS
+        if dir_pattern is None:
+            return DirInfoStatusCode.NOT_YET_IMPLEMENTED
+        if line_count < 8:
             # The minimum size of the bridge networkstatus is 3 lines,
             # and the minimum size of one bridge is 5 lines
             # Let the user know the dir file is unexpectedly small
-            return (
-                DirInfoStatusCode.SHORT_FILE,
-                {dir_format},
-                "Very short dir file",
-            )
-        else:
-            return (
-                DirInfoStatusCode.NO_PROGRESS,
-                {dir_format},
-                "Not in dir file",
-            )
+            return DirInfoStatusCode.SHORT_FILE
+        return DirInfoStatusCode.NO_PROGRESS
 
     def combineDirInfoStatuses(
         self,
         dir_status_list: list[
-            Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
+            Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]
         ],
         best: bool = True,
         ignore_missing: bool = False,
-    ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]:
         """Combine the directory statuses in dir_status, if their keys
         appear in status_key_list. Keys may be directory formats, or
         node nicks.
@@ -580,13 +537,13 @@ class LocalNodeController(TorNet.NodeController):
                 dir_status = new_status
                 continue
 
-            (old_status_code, old_flav, old_msg) = dir_status
-            (new_status_code, new_flav, new_msg) = new_status
+            (old_status_code, old_flav) = dir_status
+            (new_status_code, new_flav) = new_status
             if new_status_code == old_status_code:
                 # We want to know all the flavours that have an
                 # equal status, not just the latest one
                 combined_flav = old_flav.union(new_flav)
-                dir_status = (old_status_code, combined_flav, old_msg)
+                dir_status = (old_status_code, combined_flav)
             elif old_status_code == DirInfoStatusCode.MISSING_FILE and ignore_missing:
                 # use the new status, which can't be MISSING_FILE_CODE,
                 # because they're not equal
@@ -608,11 +565,11 @@ class LocalNodeController(TorNet.NodeController):
     def summariseCacheDirInfoStatus(
         self,
         dir_status: dict[
-            DirFormat, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
+            DirFormat, Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]
         ],
         to_dir_server: int,
         to_bridge_client: int,
-    ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]:
         """Summarise the statuses for this node, among all the files used by
         the other node.
 
@@ -685,7 +642,7 @@ class LocalNodeController(TorNet.NodeController):
         if bridge_to_bridge_client:
             # Bridge clients fetch bridge descriptors directly from bridges
             # Bridge clients fetch relay descriptors after fetching the consensus
-            desc_all: Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]] = (
+            desc_all: Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]] = (
                 dir_status[DirFormat.DESC_ALTS]
             )
         elif relay_to_bridge_client:
@@ -737,18 +694,15 @@ class LocalNodeController(TorNet.NodeController):
 
     def getNodeDirInfoStatusList(
         self,
-    ) -> Optional[
-        dict[str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]]
-    ]:
+    ) -> Optional[dict[str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]]]:
         """Look through the directories on each node, and work out if
         this node is in that directory.
 
-        Returns a dict containing a status 3-tuple for each relevant node.
-        The 3-tuple contains:
+        Returns a dict containing a status 2-tuple for each relevant node.
+        The 2-tuple contains:
           * a status code,
-          * a list of formats with that status, and
-          * a status message string.
-        See getFileDirInfoStatus() for more details.
+          * a list of formats with that status
+        See check_node_in_dirinfo() for more details.
 
         If this node is a directory authority, bridge authority, or relay
         (including exits), checks v3 directory consensuses, descriptors,
@@ -762,23 +716,21 @@ class LocalNodeController(TorNet.NodeController):
         if not self._node._config.consensus_member and not self._node._config.bridge:
             # Clients don't appear in any consensus
             return None
-        dir_status_summaries = dict()
+        dir_status_summaries: dict[
+            str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]
+        ] = dict()
         for node in self._network._nodes:
             if node._config.launch_phase > TorNet.CUR_LAUNCH_PHASE:
                 continue
-            paths = node._controller.getNodeCacheDirInfoPaths()
             dir_statuses: dict[
                 DirFormat,
-                Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]],
+                Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]],
             ] = dict()
             for dir_format in self._node.expected_in_dir_formats(node):
-                dir_path = paths.get(dir_format)
-                if not dir_path:
-                    # This node doesn't support this format
+                status = node._controller.check_node_in_dirinfo(dir_format, self._node)
+                if status == DirInfoStatusCode.NOT_YET_IMPLEMENTED:
                     continue
-                dir_statuses[dir_format] = self.getFileDirInfoStatus(
-                    dir_format, dir_path
-                )
+                dir_statuses[dir_format] = (status, {dir_format})
             dir_status_summaries[node.nick] = (
                 self.summariseCacheDirInfoStatus(
                     dir_statuses, node._config.relay, node._config.bridgeclient
@@ -792,12 +744,12 @@ class LocalNodeController(TorNet.NodeController):
     def summariseNodeDirInfoStatus(
         self,
         dir_status: dict[
-            str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat], str]]
+            str, Optional[tuple[DirInfoStatusCode, Collection[DirFormat]]]
         ],
     ) -> Optional[
         dict[
             Union[DirInfoStatusCode, str],
-            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str],
+            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]],
         ]
     ]:
         """Summarise the statuses for this node's descriptor, among all the
@@ -820,7 +772,7 @@ class LocalNodeController(TorNet.NodeController):
         """
         node_status: dict[
             Union[DirInfoStatusCode, str],
-            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str],
+            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]],
         ] = dict()
 
         # check if we expect this node to be published to other nodes
@@ -842,18 +794,17 @@ class LocalNodeController(TorNet.NodeController):
             )
 
             if comb_status is not None:
-                (comb_code, comb_format_set, comb_msg) = comb_status
+                (comb_code, comb_format_set) = comb_status
                 assert comb_code == status_code
 
                 node_status[status_code] = (
                     status_code,
                     other_node_nick_list,
                     comb_format_set,
-                    comb_msg,
                 )
 
         node_all: Optional[
-            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
+            tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]]
         ] = None
         if len(node_status):
             # Finally, get the worst status from all the other nodes
@@ -867,10 +818,7 @@ class LocalNodeController(TorNet.NodeController):
             consensus_member = self._node._config.consensus_member
             bridge_member = self._node._config.bridge
             if consensus_member or bridge_member:
-                node_all = (
-                    DirInfoStatusCode.INTERNAL_ERROR,
-                    set(),
-                    set(),
+                raise chutney.errors.ChutneyInternalError(
                     "Expected {}{}{} dir info, but status is empty.".format(
                         "consensus" if consensus_member else "",
                         " and " if consensus_member and bridge_member else "",
@@ -891,9 +839,7 @@ class LocalNodeController(TorNet.NodeController):
     @override
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[
-        tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
-    ]:
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]]]:
         dir_status = self.getNodeDirInfoStatusList()
         if dir_status:
             summary = self.summariseNodeDirInfoStatus(dir_status)
@@ -918,7 +864,7 @@ class LocalNodeController(TorNet.NodeController):
         """
         node_status = self.getNodeDirInfoStatus()
         if node_status:
-            status_code, _, _, _ = node_status
+            status_code, _, _ = node_status
             return status_code == DirInfoStatusCode.SUCCESS
         else:
             # Clients don't publish descriptors, so they are always ok.

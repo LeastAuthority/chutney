@@ -1,15 +1,25 @@
 import dataclasses
 import enum
+import re
 
-from typing import Union
+from typing import Optional, Union
+
+import chutney.errors
+
+from chutney.Util import Option
 
 
 class DirInfoStatusCode(enum.Enum):
     INTERNAL_ERROR = -500
+    # No dir file
     MISSING_FILE = -400
+    # Empty dir file
     NO_RECORDS = -300
     NOT_YET_IMPLEMENTED = -200
+    # File appears to be truncated/incomplete
     SHORT_FILE = -100
+    # Specified entry isn't in dir file
+    # TODO: rename
     NO_PROGRESS = 0
     SUCCESS = 100
     ONIONDESC_PUBLISHED = 200
@@ -58,3 +68,33 @@ class DirFormat(enum.Enum):
 
     def __str__(self) -> str:
         return self.name
+
+    def status_pattern(self, nick: str, ed25519_key: Option[str]) -> Optional[str]:
+        """Returns a regular expression pattern for finding a node with the given nick and key
+        in this format's file. Returns None if the requested pattern is not
+        available.
+        """
+        cons = self in [DirFormat.NS_CONS, DirFormat.MD_CONS, DirFormat.BR_STATUS]
+        desc = self in [DirFormat.DESC, DirFormat.DESC_NEW]
+        md = self in [DirFormat.MD, DirFormat.MD_NEW]
+
+        assert cons or desc or md
+
+        if cons:
+            # Disabled due to bug #33407: chutney bridge authorities don't
+            # publish bridge descriptors in the bridge networkstatus file
+            if self == DirFormat.BR_STATUS:
+                return None
+            else:
+                # ns_cons and md_cons work
+                return r"^r " + nick + " "
+        elif desc:
+            return r"^router " + nick + " "
+        elif md:
+            return ed25519_key.map(
+                lambda s: r"^id ed25519 " + re.escape(s)
+            ).as_optional()
+        else:
+            raise chutney.errors.ChutneyError(
+                f"status_pattern unimplemented for {self}"
+            )
