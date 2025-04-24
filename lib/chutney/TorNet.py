@@ -429,6 +429,11 @@ class NodeController(ABC):
         ...
 
     @abstractmethod
+    def getEd25519Id(self) -> Option[str]:
+        """Return the base64-encoded ed25519 public key of this node."""
+        ...
+
+    @abstractmethod
     def hup(self) -> bool:
         """Send a SIGHUP to this node, if it's running."""
         ...
@@ -436,22 +441,6 @@ class NodeController(ABC):
     @abstractmethod
     def cleanupRunFiles(self) -> None:
         """Clean up any left-over run state, assuming the node has exited."""
-        ...
-
-    @abstractmethod
-    def getNodeCacheDirInfoPaths(self) -> dict[DirFormat, Path]:
-        """Return a dict with the expected paths to this node's consensus files.
-
-        Directory servers usually have both consensus flavours.
-        Clients usually have the microdesc consensus, but they may have
-        either flavour. (Or both flavours.)
-        Only the bridge authority has the bridge networkstatus.
-
-        The dict keys are:
-          * NS_CONS, DESC, and DESC_NEW;
-          * MD_CONS, MD, and MD_NEW; and
-          * BR_STATUS.
-        """
         ...
 
     @abstractmethod
@@ -502,14 +491,19 @@ class NodeController(ABC):
     @abstractmethod
     def getNodeDirInfoStatus(
         self,
-    ) -> Optional[
-        tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
-    ]:
-        """Return a 4-tuple describing the status of this node's descriptor,
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]]]:
+        """Return a 3-tuple describing the status of this node's descriptor,
         in all the directory documents across the network.
 
         If this node does not have a descriptor, returns None.
         """
+        ...
+
+    @abstractmethod
+    def check_node_in_dirinfo(
+        self, dir_fmt: DirFormat, other_node: Node
+    ) -> DirInfoStatusCode:
+        """Check whether `other_node` is present in the specified directory type"""
         ...
 
 
@@ -1103,7 +1097,7 @@ class Network(object):
         self,
         nodes: Iterable[Node],
         most_recent_desc_status: dict[
-            str, tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat], str]
+            str, tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]]
         ],
         elapsed: Optional[float] = None,
         msg: str = "Bootstrap in progress",
@@ -1136,7 +1130,7 @@ class Network(object):
         for n in nodes:
             if n.nick in most_recent_desc_status:
                 desc_status = most_recent_desc_status[n.nick]
-                code, desc_nodes, docs, dmsg = desc_status
+                code, desc_nodes, docs = desc_status
                 node_set = set(desc_nodes)
                 if node_set == nick_set:
                     desc_nodes = "all nodes"
@@ -1160,8 +1154,8 @@ class Network(object):
                         docs_set.add(DirFormat.MD)
                     docs_string = " ".join(sorted([str(d) for d in docs_set]))
                 print(
-                    "{:13}: {:19}, {:25}, {:30}, {}".format(
-                        n.nick, code, desc_nodes, docs_string, dmsg
+                    "{:13}: {:19}, {:25}, {:30}".format(
+                        n.nick, code, desc_nodes, docs_string
                     )
                 )
         print()
@@ -1229,8 +1223,8 @@ class Network(object):
 
                 desc_status = n._controller.getNodeDirInfoStatus()
                 if desc_status:
-                    code, desc_nodes, docs, dmsg = desc_status
-                    most_recent_desc_status[n.nick] = (code, desc_nodes, docs, dmsg)
+                    code, desc_nodes, docs = desc_status
+                    most_recent_desc_status[n.nick] = (code, desc_nodes, docs)
                     if code != DirInfoStatusCode.SUCCESS:
                         all_bootstrapped = False
 
