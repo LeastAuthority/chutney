@@ -51,7 +51,7 @@ def format(n: TorNet.Node) -> str:
         # Use ControlSocket rather than ControlPort unix: to support older tors
         ControlSocket {n.controlsocket or 0}
         CookieAuthentication 1
-        PidFile {n.dir}/pid
+        PidFile {n.pidfile}
 
         Log notice file {n.dir}/notice.log
         Log info file {n.dir}/info.log
