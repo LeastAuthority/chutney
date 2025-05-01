@@ -36,6 +36,9 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
         if self._node._config.pt_bridge:
             raise ChutneyInternalError("Arti pt_bridge unimplemented")
         config = {
+            "application": {
+                "allow_running_as_root": True,
+            },
             "storage": {
                 "cache_dir": str(self._node.dir.joinpath("cache")),
                 "state_dir": str(self._node.dir.joinpath("state")),
