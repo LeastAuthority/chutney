@@ -54,6 +54,21 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
                 # Allow the client to accept requests to connect to e.g. 127.0.0.1
                 "allow_local_addrs": True
             },
+            "proxy": {
+                "socks_listen": self._node.socksport.unwrap(),
+            },
+            "logging": {
+                "files": [
+                    {
+                        "path": str(self._node.dir.joinpath("debug.log")),
+                        "filter": "debug",
+                    },
+                    {
+                        "path": str(self._node.dir.joinpath("info.log")),
+                        "filter": "info",
+                    },
+                ],
+            },
             "tor_network": {
                 "fallback_caches": [
                     {

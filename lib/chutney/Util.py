@@ -360,7 +360,7 @@ def values_for_keys(d: dict[K, V], keys: Collection[K]) -> list[V]:
     return [kv[1] for kv in d.items() if kv[0] in keys]
 
 
-def closerange(start: int, end: int):
+def closerange(start: int, end: int) -> None:
     """
     Closes all file descriptors between start and end, inclusive.
 

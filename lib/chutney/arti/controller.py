@@ -102,16 +102,14 @@ class LocalArtiNodeController(TorNet.NodeController):
                 "proxy",
                 "--config",
                 self._node.torrc_fname,
-                # TODO: Move this into config file
-                "-p",
-                str(self._node.socksport.unwrap()),
-                # TODO: Move this into config file
-                "-l",
-                "debug",
                 # Only available as a flag, not in config file.
                 "--disable-fs-permission-checks",
             ],
-            stdout_path=self._log_file_path(),
+            # In theory nothing should go here, since we configure
+            # arti to log to files instead of stdout.
+            stdout_path=self._node.dir.joinpath("arti.stdout"),
+            # Some error messages can end up here, e.g. before setting up
+            # logging.
             stderr_path=self._node.dir.joinpath("arti.stderr"),
             pid_path=self._node.pidfile,
             tor_name="arti",
@@ -138,9 +136,13 @@ class LocalArtiNodeController(TorNet.NodeController):
             debug("Renaming stale pid file for {} ...".format(self._node.nick))
             self._node.pidfile.rename(self._node.pidfile.with_suffix(".old"))
 
-    def _log_file_path(self) -> Path:
+    def _info_log_path(self) -> Path:
         """Return the expected path to the logfile for this instance."""
-        return self._node.dir.joinpath("arti.log")
+        return self._node.dir.joinpath("info.log")
+
+    def _debug_log_path(self) -> Path:
+        """Return the expected path to the logfile for this instance."""
+        return self._node.dir.joinpath("debug.log")
 
     def _getLastOnionServiceDescStatus(self) -> DirInfoStatus:
         """Return the last onion descriptor message fetched by
@@ -156,7 +158,7 @@ class LocalArtiNodeController(TorNet.NodeController):
 
     @override
     def updateLastBootstrapStatus(self) -> None:
-        logfname = self._log_file_path()
+        logfname = self._debug_log_path()
         if not logfname.exists():
             self.most_recent_bootstrap_status = DirInfoStatus(
                 percent_or_code=DirInfoStatusCode.MISSING_FILE,
