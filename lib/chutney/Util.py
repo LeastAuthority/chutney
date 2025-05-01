@@ -360,6 +360,30 @@ def values_for_keys(d: dict[K, V], keys: Collection[K]) -> list[V]:
     return [kv[1] for kv in d.items() if kv[0] in keys]
 
 
+def closerange(start: int, end: int):
+    """
+    Closes all file descriptors between start and end, inclusive.
+
+    Works around that on systems with kernels that don't provide the close_range syscall,
+    os.closerange iterates the full list of integers in the range, which can be quite slow,
+    especially under shadow.
+    """
+    for fd_s in os.listdir("/proc/self/fd"):
+        fd = int(fd_s)
+        if fd in range(start, end + 1):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+    # TODO: consider using os.closerange instead on systems that use the syscall.
+    # However even if we check that the kernel version has it, we'd have to be
+    # also be sure that the python runtime and/or libc actually use it.
+    #
+    # Alternatively we could just identify the smallest and largest actual open
+    # fd and clamp the range we actually pass to os.closerange; that'd be fewer
+    # syscalls in the common case but in theory could still blow up if there's
+    # somehow one high-int-value fd open.
+
 
 def launch_detached(
     cmd: Path,
@@ -456,7 +480,7 @@ def launch_detached(
             # running in child2.
 
             # Close all files after the ones we're explicitly passing.
-            os.closerange(execfail_w + 1, 2**31 - 1)
+            closerange(execfail_w + 1, 2**31 - 1)
 
             # replace ourselves with the specified process.
             try:
