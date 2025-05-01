@@ -509,7 +509,6 @@ class NodeController(ABC):
 
 CUR_CONFIG_PHASE: int = getenv_int("CHUTNEY_CONFIG_PHASE", 1)
 CUR_LAUNCH_PHASE: int = getenv_int("CHUTNEY_LAUNCH_PHASE", 1)
-CUR_BOOTSTRAP_PHASE: int = getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1)
 
 
 @dataclasses.dataclass
