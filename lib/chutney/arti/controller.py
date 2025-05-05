@@ -1,0 +1,293 @@
+import errno
+import os
+import re
+import signal
+import sqlite3
+
+from collections.abc import Collection
+from pathlib import Path
+from typing import Optional
+from typing_extensions import override
+
+from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode, DirFormat
+import chutney.errors
+import chutney.TorNet as TorNet
+
+from chutney.Debug import debug
+from chutney.Util import (
+    launch_detached,
+    Option,
+)
+
+
+class LocalArtiNodeController(TorNet.NodeController):
+    def __init__(self, network: TorNet.Network, node: TorNet.Node):
+        TorNet.NodeController.__init__(self)
+        self._network = network
+        self._node = node
+
+    @override
+    def getPtExtra(self) -> Option[str]:
+        if self._node._config.pt_bridge:
+            raise chutney.errors.ChutneyUnimplementedError(
+                "chutney pt_bridge unimplemented"
+            )
+        return Option(None)
+
+    # The extra time after other descriptors have finished, and before
+    # verifying.
+    DEFAULT_WAIT_FOR_UNCHECKED_DIR_INFO = 0
+    # We don't check for onion service descriptors before verifying.
+    # See #33609 for details.
+    HS_WAIT_FOR_UNCHECKED_DIR_INFO = TorNet.V3_AUTH_VOTING_INTERVAL + 10
+
+    @override
+    def getUncheckedDirInfoWaitTime(self) -> float:
+        if self._node.isOnionService():
+            return LocalArtiNodeController.HS_WAIT_FOR_UNCHECKED_DIR_INFO
+        else:
+            return LocalArtiNodeController.DEFAULT_WAIT_FOR_UNCHECKED_DIR_INFO
+
+    def _get_pid(self) -> Optional[int]:
+        """Read the pidfile, and return the pid of the running process.
+        Returns None if the file doesn't exist.
+        """
+        if not self._node.pidfile.exists():
+            return None
+
+        with self._node.pidfile.open(mode="r") as f:
+            return int(f.read())
+
+    @override
+    def isRunning(self) -> bool:
+        pid = self._get_pid()
+        if pid is None:
+            return False
+        return self._is_running_with_pid(pid)
+
+    def _is_running_with_pid(self, pid: int) -> bool:
+        """As for isRunning, but takes the pid, which should be the process ID for this node"""
+        try:
+            os.kill(pid, 0)  # "kill 0" == "are you there?"
+        except OSError as e:
+            if e.errno == errno.ESRCH:
+                return False
+            raise
+
+        # okay, so the process exists.  Say "True" for now.
+        # TODO: check if this is really arti?
+        return True
+
+    @override
+    def hup(self) -> bool:
+        pid = self._get_pid()
+        nick = self._node.nick
+        if pid is not None and self._is_running_with_pid(pid):
+            print("Sending sighup to {}".format(nick))
+            os.kill(pid, signal.SIGHUP)
+            return True
+        else:
+            print("{:12} is not running".format(nick))
+            return False
+
+    @override
+    def start(self) -> None:
+        if self.isRunning():
+            print("{:12} is already running".format(self._node.nick))
+            return
+        launch_detached(
+            cmd=Path(self._node._config.arti),
+            args=[
+                # Currently only client/proxy mode is supported
+                "proxy",
+                "--config",
+                self._node.torrc_fname,
+                # Only available as a flag, not in config file.
+                "--disable-fs-permission-checks",
+            ],
+            # In theory nothing should go here, since we configure
+            # arti to log to files instead of stdout.
+            stdout_path=self._node.dir.joinpath("arti.stdout"),
+            # Some error messages can end up here, e.g. before setting up
+            # logging.
+            stderr_path=self._node.dir.joinpath("arti.stderr"),
+            pid_path=self._node.pidfile,
+            tor_name="arti",
+        )
+
+    @override
+    def stop(self, sig: int = signal.SIGINT) -> None:
+        pid = self._get_pid()
+        if pid is None or not self._is_running_with_pid(pid):
+            print("{:12} is not running".format(self._node.nick))
+            return
+        os.kill(pid, sig)
+
+    @override
+    def cleanupRunFiles(self) -> None:
+        # move aside old pid files after arti stops running
+        self.cleanup_pidfile()
+
+    def cleanup_pidfile(self) -> None:
+        """Move PID file to pidfile.old if this node is no longer running
+        so that we don't try to stop the node again.
+        """
+        if not self.isRunning() and self._node.pidfile.exists():
+            debug("Renaming stale pid file for {} ...".format(self._node.nick))
+            self._node.pidfile.rename(self._node.pidfile.with_suffix(".old"))
+
+    def _info_log_path(self) -> Path:
+        """Return the expected path to the logfile for this instance."""
+        return self._node.dir.joinpath("info.log")
+
+    def _debug_log_path(self) -> Path:
+        """Return the expected path to the logfile for this instance."""
+        return self._node.dir.joinpath("debug.log")
+
+    def _getLastOnionServiceDescStatus(self) -> DirInfoStatus:
+        """Return the last onion descriptor message fetched by
+        updateLastOnionServiceDescStatus as a 3-tuple of percentage
+        complete, the hidden service version, and message.
+
+        The return status depends on the last time updateLastStatus()
+        was called; that function must be called before this one.
+        """
+        raise chutney.errors.ChutneyUnimplementedError(
+            "get onion service descriptor status"
+        )
+
+    @override
+    def updateLastBootstrapStatus(self) -> None:
+        logfname = self._debug_log_path()
+        if not logfname.exists():
+            self.most_recent_bootstrap_status = DirInfoStatus(
+                percent_or_code=DirInfoStatusCode.MISSING_FILE,
+                keyword="no_logfile",
+                message="There is no logfile yet.",
+            )
+            return
+        status = DirInfoStatus(
+            percent_or_code=DirInfoStatusCode.NO_RECORDS,
+            keyword="no_message",
+            message="No bootstrap messages yet.",
+        )
+        with logfname.open(mode="r") as f:
+            for line in f:
+                m = re.search(r" arti_client::status: (\d+)%: (.*)", line)
+                if m:
+                    percent_s, message = m.groups()
+                    status = DirInfoStatus(
+                        percent_or_code=(
+                            DirInfoStatusCode.SUCCESS
+                            if percent_s == "100"
+                            else int(percent_s)
+                        ),
+                        keyword="",
+                        message=message,
+                    )
+        self.most_recent_bootstrap_status = status
+
+    @override
+    def getLastBootstrapStatus(self) -> DirInfoStatus:
+        rv = self.most_recent_bootstrap_status
+        # Caller is required to have set this via `updateLastStatus` first.
+        # TODO: just call it ourselves if None, or use a default value?
+        assert rv is not None
+        return rv
+
+    @override
+    def updateLastStatus(self) -> None:
+        self.updateLastBootstrapStatus()
+
+    @override
+    def isBootstrapped(self) -> bool:
+        status = self.getLastBootstrapStatus()
+        if status.percent_or_code != DirInfoStatusCode.SUCCESS:
+            return False
+        if self._node.isOnionService():
+            status = self._getLastOnionServiceDescStatus()
+            if status.percent_or_code != DirInfoStatusCode.ONIONDESC_PUBLISHED:
+                return False
+        return True
+
+    def _get_sqlite_conn(self) -> Optional[sqlite3.Connection]:
+        db_path = self._node.dir.joinpath("cache", "dir.sqlite3")
+        if not db_path.exists():
+            return None
+        return sqlite3.connect(self._node.dir.joinpath("cache", "dir.sqlite3"))
+
+    def _get_md_consensus_path(self) -> Optional[Path]:
+        con = self._get_sqlite_conn()
+        if con is None:
+            return None
+        cur = con.cursor()
+        # Get path to most recent microdesc consensus file.
+        # TODO: verify that we're within the valid and fresh times?
+        res = cur.execute(
+            """
+            SELECT filename
+            FROM Consensuses
+                JOIN ExtDocs ON Consensuses.digest=ExtDocs.digest
+            WHERE Consensuses.flavor="microdesc"
+            ORDER BY Consensuses.valid_until DESC
+            LIMIT 1
+            """
+        )
+        filename = res.fetchone()
+        con.close()
+        if filename is None:
+            return None
+        return self._node.dir.joinpath("cache", "dir_blobs", filename[0])
+
+    @override
+    def getNodeDirInfoStatus(
+        self,
+    ) -> Optional[tuple[DirInfoStatusCode, Collection[str], Collection[DirFormat]]]:
+        if self._node._config.consensus_member:
+            raise chutney.errors.ChutneyUnimplementedError(
+                "arti consensus members unimplemented"
+            )
+        return None
+
+    def getEd25519Id(self) -> Option[str]:
+        return Option(None)
+
+    @override
+    def check_node_in_dirinfo(
+        self, dir_fmt: DirFormat, other_node: TorNet.Node
+    ) -> DirInfoStatusCode:
+        """Check whether `other_node` is present in the specified directory type"""
+        if dir_fmt == DirFormat.MD_CONS:
+            path = self._get_md_consensus_path()
+            if path is None:
+                return DirInfoStatusCode.MISSING_FILE
+            dir_pattern = dir_fmt.status_pattern(
+                other_node.nick, other_node._controller.getEd25519Id()
+            )
+            assert dir_pattern is not None
+            with path.open(mode="r") as f:
+                for line in f:
+                    if re.search(dir_pattern, line):
+                        return DirInfoStatusCode.SUCCESS
+            return DirInfoStatusCode.NO_PROGRESS
+        elif dir_fmt == DirFormat.MD:
+            con = self._get_sqlite_conn()
+            if con is None:
+                return DirInfoStatusCode.MISSING_FILE
+            cur = con.cursor()
+            dir_pattern = dir_fmt.status_pattern(
+                other_node.nick, other_node._controller.getEd25519Id()
+            )
+            if dir_pattern is None:
+                return DirInfoStatusCode.NOT_YET_IMPLEMENTED
+            for row in cur.execute(
+                """
+                SELECT contents
+                FROM Microdescs
+                """
+            ):
+                for line in row[0].splitlines():
+                    if re.search(dir_pattern, line):
+                        return DirInfoStatusCode.SUCCESS
+            return DirInfoStatusCode.NO_PROGRESS
+        return DirInfoStatusCode.NOT_YET_IMPLEMENTED

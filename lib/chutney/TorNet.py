@@ -17,6 +17,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Any, Iterable
 
@@ -66,6 +67,15 @@ _TORRC_OPTIONS = None
 
 HSV2_KEYWORD = "hidden service v2"
 HSV3_KEYWORD = "hidden service v3"
+
+
+class NodeBackend(Enum):
+    """Specifies the backend used to run a node"""
+
+    # c-tor (running locally)
+    TOR = 1
+    # arti (running locally)
+    ARTI = 2
 
 
 def get_absolute_chutney_path() -> Path:
@@ -228,12 +238,25 @@ class Node(object):
         self._network = network
         self._config = config
 
-        # We import these here instead of globally to avoid a circular reference.
-        from chutney.tor.builder import LocalNodeBuilder
-        from chutney.tor.controller import LocalNodeController
+        self._builder: NodeBuilder
+        self._controller: NodeController
+        if config.backend == NodeBackend.TOR:
+            # We import these here instead of globally to avoid a circular reference.
+            from chutney.tor.builder import LocalNodeBuilder
+            from chutney.tor.controller import LocalNodeController
 
-        self._builder: NodeBuilder = LocalNodeBuilder(self)
-        self._controller: NodeController = LocalNodeController(self._network, self)
+            self._builder = LocalNodeBuilder(self)
+            self._controller = LocalNodeController(self._network, self)
+        elif config.backend == NodeBackend.ARTI:
+            import chutney.arti.builder
+            import chutney.arti.controller
+
+            self._builder = chutney.arti.builder.LocalArtiNodeBuilder(self)
+            self._controller = chutney.arti.controller.LocalArtiNodeController(
+                self._network, self
+            )
+        else:
+            raise ChutneyError(f"Unrecognized backend {config.backend}")
 
     @property
     def orport(self) -> int:
@@ -509,13 +532,14 @@ class NodeController(ABC):
 
 CUR_CONFIG_PHASE: int = getenv_int("CHUTNEY_CONFIG_PHASE", 1)
 CUR_LAUNCH_PHASE: int = getenv_int("CHUTNEY_LAUNCH_PHASE", 1)
-CUR_BOOTSTRAP_PHASE: int = getenv_int("CHUTNEY_BOOTSTRAP_PHASE", 1)
 
 
 @dataclasses.dataclass
 class NodeConfig:
     """Properties of a Tor Node"""
 
+    # Which backend to use to run the node.
+    backend: NodeBackend = NodeBackend.TOR
     # a short text string that represents the type of node.
     # Some special tag prefixes:
     # * 'h' configures it to run an onion service.
@@ -552,8 +576,10 @@ class NodeConfig:
     hs_singlehop: bool = False
     # value of ConnLimit torrc option
     connlimit: int = 60
-    # path of the tor binary
+    # path of the tor binary (for backend = NodeBackend.TOR)
     tor: str = os.environ.get("CHUTNEY_TOR", "tor")
+    # path of the arti binary (for backend = NodeBackend.ARTI)
+    arti: str = os.environ.get("CHUTNEY_ARTI", "arti")
     # lifetime of authority certs, in months
     auth_cert_lifetime: int = 12
     # primary IP address (usually IPv4) to listen on.
@@ -1526,6 +1552,7 @@ def runConfigFile(verb: str, data: str) -> Optional[bool]:
         # networks, and only use this path for "external" network configs if we want
         # to continue supporting them.
         Node=NodeWrapper,
+        NodeBackend=NodeBackend,
         Require=Require,
         ConfigureNodes=ConfigureNodes,
         torrc_option_warn_count=0,

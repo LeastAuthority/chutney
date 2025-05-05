@@ -29,6 +29,7 @@ classifiers = [
 license = {file = "LICENSE"}
 dependencies = [
   'typeguard==4.3.0',
+  'tomli-w~=1.2.0',
 
   # drop-in replacements for the standard library's asyncore and asynchat,
   # which were removed after python 3.11.
