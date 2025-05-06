@@ -815,6 +815,48 @@ class Network(object):
         self.extorport_base: int = 9500
         self.ptport_base: int = 9900
 
+    @staticmethod
+    def from_network_script_contents(network_script_contents: str) -> Network:
+        """Create a Network object using the contents of a chutney network script.
+
+        For examples of network scripts, see`chutney/data/networks`.
+        """
+
+        # Wrappers used from network scripts (`data`) that manipulate
+        # an implicit network (`_THE_NETWORK`).
+        _THE_NETWORK = Network()
+
+        def Require(feature: str) -> None:
+            _THE_NETWORK._addRequirement(feature)
+
+        def ConfigureNodes(nodelist: list[NodeConfig]) -> None:
+            for n in nodelist:
+                _THE_NETWORK.addNode(n)
+
+        def NodeWrapper(
+            parent: Optional[NodeConfig] = None, **kwargs: Any
+        ) -> NodeConfig:
+            if parent is None:
+                return NodeConfig(**kwargs)
+            else:
+                return parent.specialize(**kwargs)
+
+        _GLOBALS = dict(
+            # Note that in the network scripts "Node" is actually a factory function
+            # for creating NodeConfig.
+            # TODO: Some way to make this less confusing? Maybe we can update built-in
+            # networks, and only use this path for "external" network configs if we want
+            # to continue supporting them.
+            Node=NodeWrapper,
+            NodeBackend=NodeBackend,
+            Require=Require,
+            ConfigureNodes=ConfigureNodes,
+            torrc_option_warn_count=0,
+            TORRC_OPTION_WARN_LIMIT=10,
+        )
+        exec(network_script_contents, _GLOBALS)
+        return _THE_NETWORK
+
     def addNode(self, config: NodeConfig) -> Node:
         """Create a node with the given config, add it to the network, and return it."""
         node = Node(self, config, self._nextnodenum)
@@ -1520,39 +1562,7 @@ def usage() -> str:
 
 
 def runConfigFile(verb: str, data: str) -> Optional[bool]:
-    # Wrappers used from network scripts (`data`) that manipulate
-    # an implicit network (`_THE_NETWORK`).
-    _THE_NETWORK = Network()
-
-    def Require(feature: str) -> None:
-        _THE_NETWORK._addRequirement(feature)
-
-    def ConfigureNodes(nodelist: list[NodeConfig]) -> None:
-        for n in nodelist:
-            _THE_NETWORK.addNode(n)
-
-    def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
-        if parent is None:
-            return NodeConfig(**kwargs)
-        else:
-            return parent.specialize(**kwargs)
-
-    _GLOBALS = dict(
-        # Note that in the network scripts "Node" is actually a factory function
-        # for creating NodeConfig.
-        # TODO: Some way to make this less confusing? Maybe we can update built-in
-        # networks, and only use this path for "external" network configs if we want
-        # to continue supporting them.
-        Node=NodeWrapper,
-        NodeBackend=NodeBackend,
-        Require=Require,
-        ConfigureNodes=ConfigureNodes,
-        torrc_option_warn_count=0,
-        TORRC_OPTION_WARN_LIMIT=10,
-    )
-
-    exec(data, _GLOBALS)
-    network = _THE_NETWORK
+    network = Network.from_network_script_contents(data)
 
     # let's check if the verb is a valid test and run it
     if verb in getTests():
