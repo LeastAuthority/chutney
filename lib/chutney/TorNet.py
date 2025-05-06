@@ -1305,30 +1305,22 @@ class Network(object):
                 break
             if now >= next_print_status:
                 if checks_since_last_print <= Network.CHECKS_PER_PRINT / 2:
-                    self.print_bootstrap_status(
-                        nodes,
-                        most_recent_desc_status,
-                        elapsed=elapsed,
-                        msg="Internal timing error",
-                    )
                     print(
-                        "checks_since_last_print: {} (expected: {})".format(
+                        "WARNING: checks_since_last_print: {} (expected: {})".format(
                             checks_since_last_print, Network.CHECKS_PER_PRINT
                         )
                     )
-                    print("start: {} limit: {}".format(start, limit))
+                    print("WARNING: start: {} limit: {}".format(start, limit))
                     print(
-                        "next_print_status: {} now: {}".format(
+                        "WARNING: next_print_status: {} now: {}".format(
                             next_print_status, time.time()
                         )
                     )
-                    raise ChutneyTimeoutError()
-                else:
-                    self.print_bootstrap_status(
-                        nodes, most_recent_desc_status, elapsed=elapsed
-                    )
-                    next_print_status = now + Network.PRINT_NETWORK_STATUS_DELAY
-                    checks_since_last_print = 0
+                self.print_bootstrap_status(
+                    nodes, most_recent_desc_status, elapsed=elapsed
+                )
+                next_print_status = now + Network.PRINT_NETWORK_STATUS_DELAY
+                checks_since_last_print = 0
 
             time.sleep(Network.CHECK_NETWORK_STATUS_DELAY)
 
