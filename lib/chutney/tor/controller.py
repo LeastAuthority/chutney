@@ -224,12 +224,10 @@ class LocalNodeController(TorNet.NodeController):
         if self.isRunning():
             print("{:12} is already running".format(self._node.nick))
             return
-        tor_path = self._node._config.tor
-        torrc = self._node.torrc_fname
         cmdline = [
-            tor_path,
+            self._node._config.tor,
             "-f",
-            torrc,
+            str(self._node.torrc_path),
         ]
         p = launch_process(cmdline)
         if self.waitOnLaunch():
@@ -303,7 +301,7 @@ class LocalNodeController(TorNet.NodeController):
         # TODO: is this the best place for this code?
         # RunAsDaemon default is 0
         runAsDaemon = False
-        with open(self._node.torrc_fname, "r") as f:
+        with self._node.torrc_path.open("r") as f:
             for line in f.readlines():
                 stline = line.strip()
                 # if the line isn't all whitespace or blank

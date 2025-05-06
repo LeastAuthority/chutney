@@ -303,8 +303,8 @@ class Node(object):
         ).resolve()
 
     @property
-    def torrc_fname(self) -> str:
-        return f"{self.dir}/torrc"
+    def torrc_path(self) -> Path:
+        return self.dir.joinpath("torrc")
 
     @property
     def controlsocket(self) -> Optional[Path]:
