@@ -857,6 +857,34 @@ class Network(object):
         exec(network_script_contents, _GLOBALS)
         return _THE_NETWORK
 
+    @staticmethod
+    def _get_network_script_contents(network_cfg_name: str) -> str:
+        # First look for built-in network with matching `name`
+        try:
+            return _NETWORKS.joinpath(network_cfg_name).read_text()
+        except FileNotFoundError:
+            # We'll try it as a path, below.
+            pass
+        try:
+            with open(network_cfg_name) as f:
+                return f.read()
+        except OSError as e:
+            raise ChutneyError(
+                f"'{network_cfg_name}' matches neither a built-in network name nor a readable file"
+            ) from e
+
+    @staticmethod
+    def from_network_script_name(network_cfg_name: str) -> Network:
+        """Create a Network object using the contents of a chutney network script name.
+
+        This can be either the name of a built-in network, such as "basic-min",
+        or path to a file containing a network script. Built in networks are
+        located in `chutney/data/networks`, and can be listed via the
+        `getNetworks` function, or with `chutney --help` at the command-line.
+        """
+        network_script_contents = Network._get_network_script_contents(network_cfg_name)
+        return Network.from_network_script_contents(network_script_contents)
+
     def addNode(self, config: NodeConfig) -> Node:
         """Create a node with the given config, add it to the network, and return it."""
         node = Node(self, config, self._nextnodenum)
@@ -1561,9 +1589,7 @@ def usage() -> str:
     )
 
 
-def runConfigFile(verb: str, data: str) -> Optional[bool]:
-    network = Network.from_network_script_contents(data)
-
+def runConfigFile(network: Network, verb: str) -> Optional[bool]:
     # let's check if the verb is a valid test and run it
     if verb in getTests():
         test_module = importlib.import_module("chutney.network_tests.{}".format(verb))
@@ -1600,32 +1626,13 @@ def getNetworks() -> list[str]:
     return [s.name for s in _NETWORKS.iterdir()]
 
 
-def getNetworkCfg(network_cfg: str) -> str:
-    """Get contents of a network config script. `network_cfg` should be the name of a built-in
-    network, or path to a file."""
-
-    # First look for built-in network with matching `name`
-    try:
-        return _NETWORKS.joinpath(network_cfg).read_text()
-    except FileNotFoundError:
-        # We'll try it as a path, below.
-        pass
-    try:
-        with open(network_cfg) as f:
-            return f.read()
-    except OSError as e:
-        raise ChutneyError(
-            f"'{network_cfg}' matches neither a built-in network name nor a readable file"
-        ) from e
-
-
-def main(action: str, network_cfg: str) -> None:
+def main(action: str, network_cfg_name: str) -> None:
     """A slightly more hermetic main could be called reasonably from python
 
     Raises an exception derived from `ChutneyError` on failure.
     """
-    network_cfg_contents = getNetworkCfg(network_cfg)
-    result = runConfigFile(action, network_cfg_contents)
+    network = Network.from_network_script_name(network_cfg_name)
+    result = runConfigFile(network, action)
     if result is False:
         # TODO: eliminate this case. Have all commands
         # return a more informative error instead of `False`
