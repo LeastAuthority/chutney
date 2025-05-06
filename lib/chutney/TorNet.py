@@ -335,6 +335,11 @@ class Node(object):
         """Path to this node's PidFile"""
         return Path(self.dir, "pid")
 
+    @property
+    def is_client(self) -> bool:
+        """Whether this node is configured as a client"""
+        return self._config.client
+
     # A hs generates its key on first run,
     # so check for it at the last possible moment,
     # but cache it in memory to avoid repeatedly reading the file
