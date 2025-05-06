@@ -815,6 +815,11 @@ class Network(object):
         self.extorport_base: int = 9500
         self.ptport_base: int = 9900
 
+    @property
+    def nodes(self) -> Iterable[Node]:
+        """The nodes in this network"""
+        return self._nodes
+
     @staticmethod
     def from_network_script_contents(network_script_contents: str) -> Network:
         """Create a Network object using the contents of a chutney network script.
