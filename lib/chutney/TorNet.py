@@ -303,8 +303,8 @@ class Node(object):
         ).resolve()
 
     @property
-    def torrc_fname(self) -> str:
-        return f"{self.dir}/torrc"
+    def torrc_path(self) -> Path:
+        return self.dir.joinpath("torrc")
 
     @property
     def controlsocket(self) -> Optional[Path]:
@@ -334,6 +334,11 @@ class Node(object):
     def pidfile(self) -> Path:
         """Path to this node's PidFile"""
         return Path(self.dir, "pid")
+
+    @property
+    def is_client(self) -> bool:
+        """Whether this node is configured as a client"""
+        return self._config.client
 
     # A hs generates its key on first run,
     # so check for it at the last possible moment,
@@ -814,6 +819,81 @@ class Network(object):
         self.socksport_base: int = 9000
         self.extorport_base: int = 9500
         self.ptport_base: int = 9900
+
+    @property
+    def nodes(self) -> Iterable[Node]:
+        """The nodes in this network"""
+        return self._nodes
+
+    @staticmethod
+    def from_network_script_contents(network_script_contents: str) -> Network:
+        """Create a Network object using the contents of a chutney network script.
+
+        For examples of network scripts, see`chutney/data/networks`.
+        """
+
+        # Wrappers used from network scripts (`data`) that manipulate
+        # an implicit network (`_THE_NETWORK`).
+        _THE_NETWORK = Network()
+
+        def Require(feature: str) -> None:
+            _THE_NETWORK._addRequirement(feature)
+
+        def ConfigureNodes(nodelist: list[NodeConfig]) -> None:
+            for n in nodelist:
+                _THE_NETWORK.addNode(n)
+
+        def NodeWrapper(
+            parent: Optional[NodeConfig] = None, **kwargs: Any
+        ) -> NodeConfig:
+            if parent is None:
+                return NodeConfig(**kwargs)
+            else:
+                return parent.specialize(**kwargs)
+
+        _GLOBALS = dict(
+            # Note that in the network scripts "Node" is actually a factory function
+            # for creating NodeConfig.
+            # TODO: Some way to make this less confusing? Maybe we can update built-in
+            # networks, and only use this path for "external" network configs if we want
+            # to continue supporting them.
+            Node=NodeWrapper,
+            NodeBackend=NodeBackend,
+            Require=Require,
+            ConfigureNodes=ConfigureNodes,
+            torrc_option_warn_count=0,
+            TORRC_OPTION_WARN_LIMIT=10,
+        )
+        exec(network_script_contents, _GLOBALS)
+        return _THE_NETWORK
+
+    @staticmethod
+    def _get_network_script_contents(network_cfg_name: str) -> str:
+        # First look for built-in network with matching `name`
+        try:
+            return _NETWORKS.joinpath(network_cfg_name).read_text()
+        except FileNotFoundError:
+            # We'll try it as a path, below.
+            pass
+        try:
+            with open(network_cfg_name) as f:
+                return f.read()
+        except OSError as e:
+            raise ChutneyError(
+                f"'{network_cfg_name}' matches neither a built-in network name nor a readable file"
+            ) from e
+
+    @staticmethod
+    def from_network_script_name(network_cfg_name: str) -> Network:
+        """Create a Network object using the contents of a chutney network script name.
+
+        This can be either the name of a built-in network, such as "basic-min",
+        or path to a file containing a network script. Built in networks are
+        located in `chutney/data/networks`, and can be listed via the
+        `getNetworks` function, or with `chutney --help` at the command-line.
+        """
+        network_script_contents = Network._get_network_script_contents(network_cfg_name)
+        return Network.from_network_script_contents(network_script_contents)
 
     def addNode(self, config: NodeConfig) -> Node:
         """Create a node with the given config, add it to the network, and return it."""
@@ -1519,41 +1599,7 @@ def usage() -> str:
     )
 
 
-def runConfigFile(verb: str, data: str) -> Optional[bool]:
-    # Wrappers used from network scripts (`data`) that manipulate
-    # an implicit network (`_THE_NETWORK`).
-    _THE_NETWORK = Network()
-
-    def Require(feature: str) -> None:
-        _THE_NETWORK._addRequirement(feature)
-
-    def ConfigureNodes(nodelist: list[NodeConfig]) -> None:
-        for n in nodelist:
-            _THE_NETWORK.addNode(n)
-
-    def NodeWrapper(parent: Optional[NodeConfig] = None, **kwargs: Any) -> NodeConfig:
-        if parent is None:
-            return NodeConfig(**kwargs)
-        else:
-            return parent.specialize(**kwargs)
-
-    _GLOBALS = dict(
-        # Note that in the network scripts "Node" is actually a factory function
-        # for creating NodeConfig.
-        # TODO: Some way to make this less confusing? Maybe we can update built-in
-        # networks, and only use this path for "external" network configs if we want
-        # to continue supporting them.
-        Node=NodeWrapper,
-        NodeBackend=NodeBackend,
-        Require=Require,
-        ConfigureNodes=ConfigureNodes,
-        torrc_option_warn_count=0,
-        TORRC_OPTION_WARN_LIMIT=10,
-    )
-
-    exec(data, _GLOBALS)
-    network = _THE_NETWORK
-
+def runConfigFile(network: Network, verb: str) -> Optional[bool]:
     # let's check if the verb is a valid test and run it
     if verb in getTests():
         test_module = importlib.import_module("chutney.network_tests.{}".format(verb))
@@ -1590,32 +1636,13 @@ def getNetworks() -> list[str]:
     return [s.name for s in _NETWORKS.iterdir()]
 
 
-def getNetworkCfg(network_cfg: str) -> str:
-    """Get contents of a network config script. `network_cfg` should be the name of a built-in
-    network, or path to a file."""
-
-    # First look for built-in network with matching `name`
-    try:
-        return _NETWORKS.joinpath(network_cfg).read_text()
-    except FileNotFoundError:
-        # We'll try it as a path, below.
-        pass
-    try:
-        with open(network_cfg) as f:
-            return f.read()
-    except OSError as e:
-        raise ChutneyError(
-            f"'{network_cfg}' matches neither a built-in network name nor a readable file"
-        ) from e
-
-
-def main(action: str, network_cfg: str) -> None:
+def main(action: str, network_cfg_name: str) -> None:
     """A slightly more hermetic main could be called reasonably from python
 
     Raises an exception derived from `ChutneyError` on failure.
     """
-    network_cfg_contents = getNetworkCfg(network_cfg)
-    result = runConfigFile(action, network_cfg_contents)
+    network = Network.from_network_script_name(network_cfg_name)
+    result = runConfigFile(network, action)
     if result is False:
         # TODO: eliminate this case. Have all commands
         # return a more informative error instead of `False`

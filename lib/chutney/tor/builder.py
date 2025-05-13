@@ -161,7 +161,6 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         """
         global torrc_option_warn_count
 
-        fn_out = self._node.torrc_fname
         output = self._getTorrcContents()
         if checkOnly:
             # XXXX Is it time-consuming to format? If so, cache here.
@@ -173,7 +172,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         torrc_opts = get_torrc_options(tor)
         # check if each option is supported before writing it
         # Unsupported option values may need special handling.
-        with open(fn_out, "w") as f:
+        with self._node.torrc_path.open("w") as f:
             # we need to do case-insensitive option comparison
             lower_opts = [opt.lower() for opt in torrc_opts]
             # keep ends when splitting lines, so we can write them out
@@ -210,7 +209,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
             [
                 str(self._node._config.tor),
                 "-f",
-                self._node.torrc_fname,
+                str(self._node.torrc_path),
                 "--verify-config",
             ]
         )
@@ -346,12 +345,11 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         """
         datadir = self._node.dir
         tor = self._node._config.tor
-        torrc = self._node.torrc_fname
         cmdline: list[str] = [
             tor,
             "--ignore-missing-torrc",
             "-f",
-            torrc,
+            str(self._node.torrc_path),
             "--orport",
             "1",
             "--datadirectory",

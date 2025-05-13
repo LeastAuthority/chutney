@@ -2,7 +2,6 @@
 # stringification.
 from __future__ import annotations
 
-import os
 import tomli_w
 
 from typing_extensions import override
@@ -134,7 +133,7 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
     def config(self, net: TorNet.Network) -> None:
         config_str = self._gen_config_str(net)
         mkdir_p(self._node.dir)
-        with open(os.path.join(self._node.dir, self._node.torrc_fname), "w") as f:
+        with self._node.torrc_path.open("w") as f:
             f.write(config_str)
 
     @override

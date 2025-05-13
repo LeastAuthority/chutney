@@ -101,7 +101,7 @@ class LocalArtiNodeController(TorNet.NodeController):
                 # Currently only client/proxy mode is supported
                 "proxy",
                 "--config",
-                self._node.torrc_fname,
+                str(self._node.torrc_path),
                 # Only available as a flag, not in config file.
                 "--disable-fs-permission-checks",
             ],
