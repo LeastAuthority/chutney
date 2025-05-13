@@ -651,7 +651,7 @@ class NodeConfig:
     # A list of identifiers for the families that this node belongs to.
     # These identifiers are strings, and must be valid filename components.
     # Two relays are in the same family if they have any identifier in common.
-    families: Optional[list[str]] = None
+    families: list[str] = dataclasses.field(default_factory=list)
 
     # "Escape hatch" for injecting raw lines at the end of the generated torrc.
     # Generally this should only be used as a short-term workaround. For
@@ -812,8 +812,8 @@ class Network(object):
         self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
-        # Map from family id to FamilyId torrc line
-        self.family_id_lines: dict[str, str] = dict()
+        # Map from family id to FamilyId hash
+        self.family_ids: dict[str, str] = dict()
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -1003,17 +1003,17 @@ class Network(object):
             if "Unknown option 'keygen-family'" in output:
                 print("No support for --keygen-family; using legacy families only.")
                 break
-            m = re.search(r"^FamilyId .*$", output, re.M)
+            m = re.search(r"^FamilyId (.*)$", output, re.M)
             if not m:
                 raise ChutneyError("unexpected output from tor --keygen-family")
-            self.family_id_lines[fid] = m.group(0).strip() + "\n"
+            self.family_ids[fid] = m.group(1)
         with get_familykey_path("map.json", ext=False).open("w") as f:
-            json.dump(self.family_id_lines, f)
+            json.dump(self.family_ids, f)
 
     def load_family_key_ids(self) -> None:
         """Load our family key identifiers from disk."""
         family_key_dir = get_familykey_path(None)
-        self.family_id_lines = json.load(family_key_dir.joinpath("map.json").open())
+        self.family_ids = json.load(family_key_dir.joinpath("map.json").open())
 
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries

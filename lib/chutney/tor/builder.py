@@ -232,7 +232,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
             self._genRouterKey()
         if self._node._config.hs:
             self._makeHiddenServiceDir()
-        if self._node._config.families and net.family_id_lines:
+        if net.family_ids:
             for fid in self._node._config.families:
                 shutil.copy(
                     TorNet.get_familykey_path(fid), Path(self._node.dir, "keys")

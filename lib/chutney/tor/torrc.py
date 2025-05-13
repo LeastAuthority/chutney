@@ -184,9 +184,9 @@ def format(n: TorNet.Node) -> str:
     family_members = n.myfamily_members.unwrap()
     if family_members:
         res += "MyFamily {}\n".format(", ".join(n.myfamily_members.unwrap()))
-    if n._config.families and n._network.family_id_lines:
+    if n._network.family_ids:
         for fid in n._config.families:
-            res += n._network.family_id_lines[fid]
+            res += f"FamilyId {n._network.family_ids[fid]}\n"
     if n._config.exit:
         if not n._config.relay:
             raise ChutneyError("'exit' set without 'relay'")
