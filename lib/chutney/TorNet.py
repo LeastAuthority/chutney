@@ -228,10 +228,6 @@ class Node(object):
             lambda: f"Config is missing 'tag': {config}"
         )
 
-        # These gets set by Builder.preConfigBuild.
-        # TODO: move onto the builder? Or a "builder output" field?
-        self.myfamily_members: Option[list[str]] = Option(None)
-
         self._network = network
         self._config = config
 
@@ -812,8 +808,10 @@ class Network(object):
         self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
-        # Map from family id to FamilyId hash
+        # Map from family name to FamilyId hash
         self.family_ids: dict[str, str] = dict()
+        # Map from family name to members of that family
+        self.family_members: dict[str, list[Node]] = dict()
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -914,6 +912,9 @@ class Network(object):
         self._nodes.append(node)
         if node._config.bridgeauthority:
             self.hasbridgeauth = True
+        for family_name in node._config.families:
+            self.family_members.setdefault(family_name, []).append(node)
+
         return node
 
     def addNodes(self, configs: List[NodeConfig]) -> List[Node]:

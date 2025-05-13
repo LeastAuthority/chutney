@@ -3,8 +3,22 @@ from __future__ import annotations
 import chutney.TorNet as TorNet
 import textwrap
 
+from typing import Iterable
+
 from chutney.errors import ChutneyError
 from chutney.Util import find_executable_on_path
+
+
+def _family_member_fps(node: TorNet.Node) -> Iterable[str]:
+    fp_set: set[str] = set()
+    for family_name in node._config.families:
+        fp_set.update(
+            (
+                other.fingerprint.unwrap()
+                for other in node._network.family_members[family_name]
+            )
+        )
+    return fp_set
 
 
 def format(n: TorNet.Node) -> str:
@@ -181,9 +195,9 @@ def format(n: TorNet.Node) -> str:
             DirPort {n.dirport.unwrap_or(0)}
             """
         )
-    family_members = n.myfamily_members.unwrap()
-    if family_members:
-        res += "MyFamily {}\n".format(", ".join(n.myfamily_members.unwrap()))
+    family_member_fps = _family_member_fps(n)
+    if family_member_fps:
+        res += "MyFamily {}\n".format(", ".join(family_member_fps))
     if n._network.family_ids:
         for fid in n._config.families:
             res += f"FamilyId {n._network.family_ids[fid]}\n"

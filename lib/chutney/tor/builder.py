@@ -240,21 +240,6 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
 
     @override
     def config(self, net: TorNet.Network) -> None:
-        if self._node._config.families:
-            # We have to do this now that the keys are loaded.
-            myfamily = []
-            for other in net._nodes:
-                if not other._config.families:
-                    continue
-                if any(
-                    fid in other._config.families for fid in self._node._config.families
-                ):
-                    # "Other" is in this node's family.
-                    myfamily.append(other.fingerprint.unwrap())
-            self._node.myfamily_members = Option(myfamily)
-        else:
-            self._node.myfamily_members = Option([])
-        # self._createScripts()
         self._createTorrcFile()
 
     @override
