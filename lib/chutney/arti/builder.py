@@ -133,10 +133,6 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
         pass
 
     @override
-    def get_ed25519_id(self) -> Option[str]:
-        return Option(None)
-
-    @override
     def get_fingerprint(self) -> Option[str]:
         return Option(None)
 

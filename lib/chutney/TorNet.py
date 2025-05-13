@@ -257,11 +257,6 @@ class Node(object):
             raise ChutneyError(f"Unrecognized backend {config.backend}")
 
     @property
-    def ed25519_id(self) -> Option[str]:
-        """The base64-encoded ed25519 public key of this node."""
-        return self._builder.get_ed25519_id()
-
-    @property
     def fingerprint(self) -> Option[str]:
         """The base64-encoded ed25519 public key of this node."""
         return self._builder.get_fingerprint()
@@ -417,11 +412,6 @@ class NodeBuilder(ABC):
     @abstractmethod
     def get_fingerprint_ed25519(self) -> Option[str]:
         """The base64-encoded ed25519 public key fingerprint of this node, if applicable."""
-        ...
-
-    @abstractmethod
-    def get_ed25519_id(self) -> Option[str]:
-        """Return the base64-encoded ed25519 public key of this node."""
         ...
 
     @abstractmethod

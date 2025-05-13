@@ -427,7 +427,9 @@ class LocalNodeController(TorNet.NodeController):
             return DirInfoStatusCode.NOT_YET_IMPLEMENTED
         if not dir_path.exists():
             return DirInfoStatusCode.MISSING_FILE
-        dir_pattern = dir_fmt.status_pattern(other_node.nick, other_node.ed25519_id)
+        dir_pattern = dir_fmt.status_pattern(
+            other_node.nick, other_node.fingerprint_ed25519
+        )
         line_count = 0
         with dir_path.open(mode="r") as f:
             for line in f:

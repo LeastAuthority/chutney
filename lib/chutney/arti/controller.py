@@ -260,7 +260,9 @@ class LocalArtiNodeController(TorNet.NodeController):
             path = self._get_md_consensus_path()
             if path is None:
                 return DirInfoStatusCode.MISSING_FILE
-            dir_pattern = dir_fmt.status_pattern(other_node.nick, other_node.ed25519_id)
+            dir_pattern = dir_fmt.status_pattern(
+                other_node.nick, other_node.fingerprint_ed25519
+            )
             assert dir_pattern is not None
             with path.open(mode="r") as f:
                 for line in f:
@@ -272,7 +274,9 @@ class LocalArtiNodeController(TorNet.NodeController):
             if con is None:
                 return DirInfoStatusCode.MISSING_FILE
             cur = con.cursor()
-            dir_pattern = dir_fmt.status_pattern(other_node.nick, other_node.ed25519_id)
+            dir_pattern = dir_fmt.status_pattern(
+                other_node.nick, other_node.fingerprint_ed25519
+            )
             if dir_pattern is None:
                 return DirInfoStatusCode.NOT_YET_IMPLEMENTED
             for row in cur.execute(
