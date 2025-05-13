@@ -262,7 +262,7 @@ class Node(object):
     @property
     def ed25519_id(self) -> Option[str]:
         """The base64-encoded ed25519 public key of this node."""
-        return self._controller.getEd25519Id()
+        return self._builder.get_ed25519_id()
 
     @property
     def orport(self) -> int:
@@ -403,6 +403,11 @@ class NodeBuilder(ABC):
         ...
 
     @abstractmethod
+    def get_ed25519_id(self) -> Option[str]:
+        """Return the base64-encoded ed25519 public key of this node."""
+        ...
+
+    @abstractmethod
     def config(self, net: Network) -> None:
         """Called to configure a node: creates a torrc file for it."""
         ...
@@ -460,11 +465,6 @@ class NodeController(ABC):
         Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
         Returns None if we *expect* there to be such info but couldn't locate it (yet).
         """
-        ...
-
-    @abstractmethod
-    def getEd25519Id(self) -> Option[str]:
-        """Return the base64-encoded ed25519 public key of this node."""
         ...
 
     @abstractmethod

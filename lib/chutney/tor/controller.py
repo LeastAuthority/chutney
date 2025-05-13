@@ -1,4 +1,3 @@
-import base64
 import errno
 import logging
 import os
@@ -73,56 +72,6 @@ class LocalNodeController(TorNet.NodeController):
         # TODO: cache result? I don't really think it's worth the extra complexity,
         # but not doing so is inconsistent with the other accessors.
         return self._loadPtExtra()
-
-    @override
-    def getEd25519Id(self) -> Option[str]:
-        """
-        Read the ed25519 identity key for this router, encode it using
-        base64, strip trailing padding, and return it.
-
-        If the file does not exist, returns None.
-
-        Raises a ValueError if the file appears to be corrupt.
-        """
-        datadir = self._node.dir
-        key_file = Path(datadir, "keys", "ed25519_master_id_public_key")
-        # If we're called early during bootstrap, the file won't have been
-        # created yet. (And some very old tor versions don't have ed25519.)
-        if not key_file.exists():
-            logger.debug(
-                (
-                    "File {} does not exist. Are you running a very old tor " "version?"
-                ).format(key_file)
-            )
-            return Option(None)
-
-        EXPECTED_ED25519_FILE_SIZE = 64
-        key_file_size = key_file.stat().st_size
-        if key_file_size != EXPECTED_ED25519_FILE_SIZE:
-            raise ValueError(
-                (
-                    "The current size of the file is {} bytes, which is not"
-                    "matching the expected value of {} bytes"
-                ).format(key_file_size, EXPECTED_ED25519_FILE_SIZE)
-            )
-
-        with key_file.open(mode="rb") as f:
-            ED25519_KEY_POSITION = 32
-            f.seek(ED25519_KEY_POSITION)
-            rest_file = f.read()
-            encoded_value = base64.b64encode(rest_file)
-            # tor strips trailing base64 padding
-            ed25519_id = encoded_value.decode("utf-8").replace("=", "")
-            EXPECTED_ED25519_BASE64_KEY_SIZE = 43
-            key_base64_size = len(ed25519_id)
-            if key_base64_size != EXPECTED_ED25519_BASE64_KEY_SIZE:
-                raise ValueError(
-                    (
-                        "The current length of the key is {}, which is not "
-                        "matching the expected length of {}"
-                    ).format(key_base64_size, EXPECTED_ED25519_BASE64_KEY_SIZE)
-                )
-            return Option(ed25519_id)
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
