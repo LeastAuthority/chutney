@@ -381,6 +381,31 @@ class Node(object):
                 return formats
         return {}
 
+    def as_jsonable_dict(self) -> dict[str, object]:
+        """Return a dict describing this object using primitive types.
+
+        Values are of types accepted by the json module's encoder."""
+        # Careful when modifying - this is ultimately used to produce "public"
+        # json output that is consumed by other tools.
+        return dict(
+            nick=self.nick,
+            auth_passphrase=self.auth_passphrase,
+            dir=str(self.dir.absolute()),
+            fingerprint=self.fingerprint.as_optional(),
+            fingerprint_ed25519=self.fingerprint_ed25519.as_optional(),
+            orport=self.orport,
+            controlport=self.controlport,
+            socksport=self.socksport.as_optional(),
+            dirport=self.dirport.as_optional(),
+            extorport=self.extorport,
+            ptport=self.ptport,
+            torrc_path=str(self.torrc_path),
+            controlsocket=str(self.controlsocket) if self.controlsocket else None,
+            tag=self._config.tag,
+            backend=self._config.backend.name,
+            is_client=self._config.client,
+        )
+
 
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
@@ -1077,6 +1102,9 @@ class Network(object):
         for n in cur_phase_nodes:
             n._builder.config(network)
 
+        with get_absolute_nodes_path().joinpath("network.json").open("w") as f:
+            json.dump(self.as_jsonable_dict(), f, indent=2)
+
         arti_fallback_lines = []
         arti_auth_lines = []
         for auth in self.authorities:
@@ -1172,6 +1200,16 @@ class Network(object):
 
         for n in cur_phase_nodes:
             n._builder.postConfig(network)
+
+    def as_jsonable_dict(self) -> dict[str, object]:
+        """Return a dict describing this object using primitive types.
+
+        Values are of types accepted by the json module's encoder."""
+        # Careful when modifying - this is ultimately used to produce "public"
+        # json output that is consumed by other tools.
+        return dict(
+            nodes=[n.as_jsonable_dict() for n in self.nodes],
+        )
 
     def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
