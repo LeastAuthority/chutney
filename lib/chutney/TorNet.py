@@ -230,7 +230,6 @@ class Node(object):
 
         # These gets set by Builder.preConfigBuild.
         # TODO: move onto the builder? Or a "builder output" field?
-        self.family_id_lines: Option[list[str]] = Option(None)
         self.myfamily_members: Option[list[str]] = Option(None)
 
         self._network = network
