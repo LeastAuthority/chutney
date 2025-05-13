@@ -137,6 +137,14 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
         return Option(None)
 
     @override
+    def get_fingerprint(self) -> Option[str]:
+        return Option(None)
+
+    @override
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        return Option(None)
+
+    @override
     def config(self, net: TorNet.Network) -> None:
         config_str = self._gen_config_str(net)
         mkdir_p(self._node.dir)

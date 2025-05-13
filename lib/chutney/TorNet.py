@@ -229,10 +229,7 @@ class Node(object):
         )
 
         # These gets set by Builder.preConfigBuild.
-        # TODO: make `Optional` and init to `None`?
         # TODO: move onto the builder? Or a "builder output" field?
-        self.fingerprint: Option[str] = Option(None)
-        self.fingerprint_ed25519: Option[str] = Option(None)
         self.family_id_lines: Option[list[str]] = Option(None)
         self.myfamily_members: Option[list[str]] = Option(None)
 
@@ -263,6 +260,16 @@ class Node(object):
     def ed25519_id(self) -> Option[str]:
         """The base64-encoded ed25519 public key of this node."""
         return self._builder.get_ed25519_id()
+
+    @property
+    def fingerprint(self) -> Option[str]:
+        """The base64-encoded ed25519 public key of this node."""
+        return self._builder.get_fingerprint()
+
+    @property
+    def fingerprint_ed25519(self) -> Option[str]:
+        """The base64-encoded ed25519 public key fingerprint of this node."""
+        return self._builder.get_fingerprint_ed25519()
 
     @property
     def orport(self) -> int:
@@ -400,6 +407,16 @@ class NodeBuilder(ABC):
         """Called on all nodes before any nodes configure: generates keys and
         hidden service directories as needed.
         """
+        ...
+
+    @abstractmethod
+    def get_fingerprint(self) -> Option[str]:
+        """Return the relay fingerprint, if applicable."""
+        ...
+
+    @abstractmethod
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        """The base64-encoded ed25519 public key fingerprint of this node, if applicable."""
         ...
 
     @abstractmethod

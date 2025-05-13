@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -395,9 +394,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         run_tor_gencert(cmdline, passphrase)
 
     def _genRouterKey(self) -> None:
-        """Generate an identity key for this router, unless we already have,
-        and set up the 'fingerprint' entry in the Environ.
-        """
+        """Generate an identity key for this router"""
         datadir = self._node.dir
         tor = self._node._config.tor
         cmdline: list[str] = [
@@ -411,20 +408,31 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
             str(datadir),
             "--list-fingerprint",
         ]
-        stdouterr = run_tor(cmdline)
-        fingerprint = "".join((stdouterr.rstrip().split("\n")[-1]).split()[1:])
-        if not re.match(r"^[A-F0-9]{40}$", fingerprint):
-            raise chutney.errors.ChutneyError(
-                "Error when getting fingerprint using '{0}'. It output '{1}'.".format(
-                    repr(" ".join(cmdline)), repr(stdouterr)
-                )
-            )
-        self._node.fingerprint.replace(fingerprint)
+        run_tor(cmdline)
 
-        ed_fn = os.path.join(datadir, "fingerprint-ed25519")
-        if os.path.exists(ed_fn):
-            s = open(ed_fn).read().strip().split()[1]
-            self._node.fingerprint_ed25519.replace(s)
+    @override
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        if not self._node._config.relay:
+            return Option(None)
+        s = self._node.dir.joinpath("fingerprint-ed25519").read_text()
+        m = re.match(r"^\w+ (\S{43})$", s)
+        if not m:
+            raise chutney.errors.ChutneyError(
+                f"Malformed fingerprint file contents: {s}"
+            )
+        return Option(m.group(1))
+
+    @override
+    def get_fingerprint(self) -> Option[str]:
+        if not self._node._config.relay:
+            return Option(None)
+        s = self._node.dir.joinpath("fingerprint").read_text()
+        m = re.match(r"^\w+ ([A-F0-9]{40})$", s)
+        if not m:
+            raise chutney.errors.ChutneyError(
+                f"Malformed fingerprint file contents: {s}"
+            )
+        return Option(m.group(1))
 
     @override
     def getAltAuthLines(
