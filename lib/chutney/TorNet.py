@@ -233,7 +233,6 @@ class Node(object):
         # TODO: move onto the builder? Or a "builder output" field?
         self.fingerprint: Option[str] = Option(None)
         self.fingerprint_ed25519: Option[str] = Option(None)
-        self.ed25519_id: Option[str] = Option(None)
         self.family_id_lines: Option[list[str]] = Option(None)
         self.myfamily_members: Option[list[str]] = Option(None)
 
@@ -259,6 +258,11 @@ class Node(object):
             )
         else:
             raise ChutneyError(f"Unrecognized backend {config.backend}")
+
+    @property
+    def ed25519_id(self) -> Option[str]:
+        """The base64-encoded ed25519 public key of this node."""
+        return self._controller.getEd25519Id()
 
     @property
     def orport(self) -> int:

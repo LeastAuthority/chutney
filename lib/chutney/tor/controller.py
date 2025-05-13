@@ -35,7 +35,47 @@ class LocalNodeController(TorNet.NodeController):
         self.most_recent_oniondesc_status: Optional[DirInfoStatus] = None
         self.most_recent_bootstrap_status: Optional[DirInfoStatus] = None
 
-    def _loadEd25519Id(self) -> Option[str]:
+    def _loadPtExtraObfs4(self) -> Option[str]:
+        """_loadPtExtra impl for the obfs4 transport"""
+        assert self._node._config.pt_transport == "obfs4"
+        location = Path(self._node.dir, "pt_state", "obfs4_bridgeline.txt")
+        if not location.exists():
+            return Option(None)
+        # read the file and find the actual line
+        with open(location, "r") as f:
+            for line in f:
+                if line.startswith("#"):
+                    continue
+                if line.isspace():
+                    continue
+                m = re.match(r"(.*<FINGERPRINT>) (cert.*)", line)
+                if m:
+                    return Option(m.group(2))
+        return Option(None)
+
+    def _loadPtExtra(self) -> Option[str]:
+        """Load extra bridge info to use this node as a PT bridge.
+
+        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
+        Returns None if we *expect* there to be such info but couldn't locate it (yet).
+        """
+        # `match` would be nice here, but requires python 3.10.
+        ptt = self._node._config.pt_transport
+        if ptt == "":
+            return Option("")
+        elif ptt == "obfs4":
+            return self._loadPtExtraObfs4()
+        else:
+            raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
+
+    @override
+    def getPtExtra(self) -> Option[str]:
+        # TODO: cache result? I don't really think it's worth the extra complexity,
+        # but not doing so is inconsistent with the other accessors.
+        return self._loadPtExtra()
+
+    @override
+    def getEd25519Id(self) -> Option[str]:
         """
         Read the ed25519 identity key for this router, encode it using
         base64, strip trailing padding, and return it.
@@ -83,52 +123,6 @@ class LocalNodeController(TorNet.NodeController):
                     ).format(key_base64_size, EXPECTED_ED25519_BASE64_KEY_SIZE)
                 )
             return Option(ed25519_id)
-
-    def _loadPtExtraObfs4(self) -> Option[str]:
-        """_loadPtExtra impl for the obfs4 transport"""
-        assert self._node._config.pt_transport == "obfs4"
-        location = Path(self._node.dir, "pt_state", "obfs4_bridgeline.txt")
-        if not location.exists():
-            return Option(None)
-        # read the file and find the actual line
-        with open(location, "r") as f:
-            for line in f:
-                if line.startswith("#"):
-                    continue
-                if line.isspace():
-                    continue
-                m = re.match(r"(.*<FINGERPRINT>) (cert.*)", line)
-                if m:
-                    return Option(m.group(2))
-        return Option(None)
-
-    def _loadPtExtra(self) -> Option[str]:
-        """Load extra bridge info to use this node as a PT bridge.
-
-        Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
-        Returns None if we *expect* there to be such info but couldn't locate it (yet).
-        """
-        # `match` would be nice here, but requires python 3.10.
-        ptt = self._node._config.pt_transport
-        if ptt == "":
-            return Option("")
-        elif ptt == "obfs4":
-            return self._loadPtExtraObfs4()
-        else:
-            raise chutney.errors.ChutneyError("Unhandled pt_transport: " + ptt)
-
-    @override
-    def getPtExtra(self) -> Option[str]:
-        # TODO: cache result? I don't really think it's worth the extra complexity,
-        # but not doing so is inconsistent with the other accessors.
-        return self._loadPtExtra()
-
-    @override
-    def getEd25519Id(self) -> Option[str]:
-        """Return the base64-encoded ed25519 public key of this node."""
-        if self._node.ed25519_id.is_none():
-            self._node.ed25519_id = self._loadEd25519Id()
-        return self._node.ed25519_id
 
     # Older tor versions need extra time to bootstrap.
     # (And we're not sure exactly why -  maybe we fixed some bugs in 0.4.0?)
@@ -484,9 +478,7 @@ class LocalNodeController(TorNet.NodeController):
             return DirInfoStatusCode.NOT_YET_IMPLEMENTED
         if not dir_path.exists():
             return DirInfoStatusCode.MISSING_FILE
-        dir_pattern = dir_fmt.status_pattern(
-            other_node.nick, other_node._controller.getEd25519Id()
-        )
+        dir_pattern = dir_fmt.status_pattern(other_node.nick, other_node.ed25519_id)
         line_count = 0
         with dir_path.open(mode="r") as f:
             for line in f:
