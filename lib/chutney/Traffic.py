@@ -454,7 +454,6 @@ class TrafficTester(object):
         data: bytes = b"",
         timeout: float = 3.0,
         repetitions: int = 1,
-        dot_repetitions: int = 0,
         # TODO make this an enum?
         chat_type: str = "Echo",
     ):
@@ -479,7 +478,6 @@ class TrafficTester(object):
         self.data_source = DataSource(data, repetitions)
 
         # sanity checks
-        self.dot_repetitions = dot_repetitions
         debug("listener fd=%d" % self.listener.fileno())
 
     def add(self, item: asynchat.async_chat) -> None:
@@ -522,9 +520,6 @@ class TrafficTester(object):
                 debug("Test status: %s" % self.tests.status())
                 dump_at += DUMP_TEST_STATUS_INTERVAL
 
-        if not debug_flag:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
         debug(
             "Done with run(); all_done == %s and failure_count == %s"
             % (self.tests.all_done(), self.tests.failure_count())
