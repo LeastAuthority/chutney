@@ -18,7 +18,7 @@ HS6 = Node(tag="h", hs=1, ip=None, use_microdescriptors=False, launch_phase=2)
 # connections:
 # a minimum path length of 3, plus the client-nominated rendezvous point,
 # plus a seperate introduction point
-NODES = Authority6.getN(3) + NonExitRelay6.getN(3) + \
+NODES = Authority6.getN(4) + NonExitRelay6.getN(3) + \
         Client.getN(1) + Client6.getN(1) + HS6.getN(1)
 
 ConfigureNodes(NODES)

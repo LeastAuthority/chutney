@@ -16,13 +16,7 @@ BridgeClient = Node(tag="bc", client=1, bridgeclient=1,
 # (However, bridge clients use bridges instead of guards, so this
 # is only an issue for the exit bootstrapping)
 
-# The minimum number of authorities/relays/exits is 3, the minimum path length
-# But relays and authorities need 1 extra node, because they won't make a path
-# that includes themselves.
-# (Bridges don't count, because they're not in the consensus.)
-# Due to microdec download issues, tor 0.3.5 needs at least 5
-# authorities/relays/exits in the consensus.
-NODES = Authority.getN(3) + BridgeAuthority.getN(1) + ExitRelay.getN(1) + \
+NODES = Authority.getN(4) + BridgeAuthority.getN(1) + ExitRelay.getN(1) + \
         Bridge.getN(1) + BridgeClient.getN(1)
 
 ConfigureNodes(NODES)
