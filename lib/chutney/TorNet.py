@@ -26,6 +26,7 @@ import dataclasses
 import errno
 import importlib
 import importlib.resources
+import logging
 import os
 import platform
 import re
@@ -41,7 +42,6 @@ from chutney.errors import (
     ChutneyErrorGroup,
     ChutneyTimeoutError,
 )
-from chutney.Debug import debug
 from chutney.Util import (
     getenv_int,
     getenv_bool,
@@ -58,6 +58,8 @@ import chutney.tor.torrc
 import chutney.tor.util
 import chutney.Host
 import chutney.Util
+
+logger = logging.getLogger(__name__ if __name__ != "__main__" else "chutney")
 
 V3_AUTH_VOTING_INTERVAL = 20.0
 
@@ -693,7 +695,7 @@ class NodeConfig:
             return "#ServerDNSResolvConfFile using tor's compile-time default"
         elif my_dns_conf is None:
             # if there is no DNS conf file set
-            debug(
+            logger.debug(
                 "CHUTNEY_DNS_CONF not specified, using '{}'.".format(
                     NodeConfig.DEFAULT_DNS_RESOLV_CONF
                 )
@@ -707,7 +709,7 @@ class NodeConfig:
         # (Path.exists returns False for broken symbolic links)
         if not dns_conf.exists():
             # Issue a warning so the user notices
-            print(
+            logger.warning(
                 "CHUTNEY_DNS_CONF '{}' does not exist, using '{}'.".format(
                     dns_conf, NodeConfig.OFFLINE_DNS_RESOLV_CONF
                 )
@@ -931,7 +933,7 @@ class Network(object):
         # subtract 1 second to avoid collisions and get the correct ordering
         newdir = get_new_absolute_nodes_path(time.time() - 1)
 
-        print("NOTE: renaming '%s' to '%s'" % (nodesdir, newdir))
+        logger.info("renaming '%s' to '%s'" % (nodesdir, newdir))
         nodesdir.rename(newdir)
 
     def create_new_nodes_dir(self) -> None:
@@ -959,7 +961,7 @@ class Network(object):
             )
 
         # create the new, uniquely named directory, and link it to nodes
-        print("NOTE: creating '%s', linking to '%s'" % (newnodesdir, nodeslink))
+        logger.info("creating '%s', linking to '%s'" % (newnodesdir, nodeslink))
         # this gets created with mode 0700, that's probably ok
         mkdir_p(newnodesdir)
         try:
@@ -1385,14 +1387,14 @@ class Network(object):
                 break
             if now >= next_print_status:
                 if checks_since_last_print <= Network.CHECKS_PER_PRINT / 2:
-                    print(
-                        "WARNING: checks_since_last_print: {} (expected: {})".format(
+                    logger.warning(
+                        "checks_since_last_print: {} (expected: {})".format(
                             checks_since_last_print, Network.CHECKS_PER_PRINT
                         )
                     )
-                    print("WARNING: start: {} limit: {}".format(start, limit))
-                    print(
-                        "WARNING: next_print_status: {} now: {}".format(
+                    logger.warning("start: {} limit: {}".format(start, limit))
+                    logger.warning(
+                        "next_print_status: {} now: {}".format(
                             next_print_status, time.time()
                         )
                     )
@@ -1641,6 +1643,8 @@ def main(action: str, network_cfg_name: str) -> None:
 
     Raises an exception derived from `ChutneyError` on failure.
     """
+    level = logging.DEBUG if os.environ.get("CHUTNEY_DEBUG", "") != "" else logging.INFO
+    logging.basicConfig(level=level)
     network = Network.from_network_script_name(network_cfg_name)
     result = runConfigFile(network, action)
     if result is False:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
@@ -14,12 +15,13 @@ import chutney
 import chutney.TorNet as TorNet
 
 from chutney.tor.util import get_tor_version, run_tor
-from chutney.Debug import debug
 from chutney.Util import (
     launch_process,
     mkdir_p,
     Option,
 )
+
+logger = logging.getLogger(__name__)
 
 TORRC_OPTION_WARN_LIMIT = 10
 torrc_option_warn_count = 0
@@ -116,7 +118,7 @@ def run_tor_gencert(cmdline: List[str], passphrase: str) -> str:
     """
     p = launch_process(cmdline, tor_name="tor-gencert", stdin=subprocess.PIPE)
     (stdouterr, empty_stderr) = p.communicate(passphrase + "\n")
-    debug(stdouterr)
+    logger.debug(stdouterr)
     assert p.returncode == 0  # XXXX BAD!
     assert empty_stderr is None
     return stdouterr
@@ -193,10 +195,10 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
                         + "the option in the torrc line:\n{}"
                     ).format(tor, line.strip())
                     if torrc_option_warn_count < TORRC_OPTION_WARN_LIMIT:
-                        print(warn_msg)
+                        logger.warning(warn_msg)
                         torrc_option_warn_count += 1
                     else:
-                        debug(warn_msg)
+                        logger.debug(warn_msg)
                     # always dump the full output to the torrc file
                     line = "# {} version {} does not support: {}".format(
                         tor, tor_version, line
@@ -336,7 +338,9 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
                 self._node.nick, cmdline[0]
             )
         )
-        debug("Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline)))
+        logger.debug(
+            "Identity key path '{}', command '{}'".format(idfile, " ".join(cmdline))
+        )
         run_tor_gencert(cmdline, passphrase)
 
     def _genRouterKey(self) -> None:
@@ -421,7 +425,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
                 # causes validation to pass, but a pt bridge client won't
                 # actually be able to connect.
                 # TODO(#40023): Once #40023 is fixed, revisit doing something else here.
-                debug(f"Couldn't load pt_extra from {self._node.dir}")
+                logger.debug(f"Couldn't load pt_extra from {self._node.dir}")
                 pt_extra = Option("")
         else:
             # the orport is the same on IPv4 and IPv6

@@ -8,6 +8,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import errno
+import logging
 import os
 import stat
 import subprocess
@@ -20,7 +21,7 @@ from typing_extensions import ParamSpec
 
 import chutney.errors
 
-from chutney.Debug import debug_flag
+logger = logging.getLogger(__name__)
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -318,10 +319,10 @@ def launch_process(
     Returns the Popen object for the launched process.
     """
     if tor_name == "tor":
-        if not debug_flag:
+        if not logger.isEnabledFor(logging.DEBUG):
             cmdline.append("--hush")
     elif tor_name == "tor-gencert":
-        if debug_flag:
+        if logger.isEnabledFor(logging.DEBUG):
             cmdline.append("-v")
     else:
         raise ValueError("Unknown tor_name: '{}'".format(tor_name))
