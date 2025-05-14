@@ -1052,6 +1052,17 @@ class Network(object):
         self.authorities = altauthlines
         self.bridges = bridgelines
 
+        n_dirauths = len([a for a in self.authorities if a.alt_dir_auth])
+        if n_dirauths < 4:
+            # Initially the authorities only know about each-other. They need 3
+            # other relays to build circuits of length 3 that don't include
+            # themselves.
+            # <https://gitlab.torproject.org/tpo/core/chutney/-/issues/40035>
+            logger.warning(
+                f"Only configuring {n_dirauths} dirauths;"
+                + " at least 4 recommended for reliable bootstrapping"
+            )
+
         for n in cur_phase_nodes:
             n._builder.config(network)
 
