@@ -1,4 +1,5 @@
 import errno
+import logging
 import os
 import re
 import signal
@@ -13,11 +14,12 @@ from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode, DirFormat
 import chutney.errors
 import chutney.TorNet as TorNet
 
-from chutney.Debug import debug
 from chutney.Util import (
     launch_detached,
     Option,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LocalArtiNodeController(TorNet.NodeController):
@@ -133,7 +135,7 @@ class LocalArtiNodeController(TorNet.NodeController):
         so that we don't try to stop the node again.
         """
         if not self.isRunning() and self._node.pidfile.exists():
-            debug("Renaming stale pid file for {} ...".format(self._node.nick))
+            logging.debug("Renaming stale pid file for {} ...".format(self._node.nick))
             self._node.pidfile.rename(self._node.pidfile.with_suffix(".old"))
 
     def _info_log_path(self) -> Path:

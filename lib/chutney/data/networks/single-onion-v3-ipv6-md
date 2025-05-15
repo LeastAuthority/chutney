@@ -18,10 +18,7 @@ SingleOnionv3IPv6 = Node(tag="h", hs=1, hs_singlehop=True, ip=None, launch_phase
 # connections:
 # a minimum path length of 3, plus the client-nominated rendezvous point,
 # plus a seperate introduction point
-#
-# (XXX We have temporarily added an extra authority to work around issue
-# 34447.)
-NODES = Authority6.getN(3) + NonExitRelay6.getN(3) + \
+NODES = Authority6.getN(4) + NonExitRelay6.getN(3) + \
         Client.getN(1) + Client6.getN(1) + \
         SingleOnionv3IPv6.getN(1)
 

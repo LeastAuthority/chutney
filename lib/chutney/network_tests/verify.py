@@ -62,8 +62,6 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
     # We create a source-sink pair for each (bridge) client to an exit,
     # and a source-sink pair for a (bridge) client to each hidden service
     DATALEN: int = getenv_int("CHUTNEY_DATA_BYTES", 10 * 1024)
-    # Print a dot each time a sink verifies this much data
-    DOTDATALEN = 5 * 1024 * 1024  # Octets
     # Calculate the amount of random data we should use
     randomlen = _calculate_randomlen(DATALEN)
     reps = _calculate_reps(DATALEN, randomlen)
@@ -74,14 +72,9 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         DATALEN = 0
     # Get the random data
     if randomlen > 0:
-        # print a dot after every DOTDATALEN data is verified, rounding up
-        dot_reps = _calculate_reps(DOTDATALEN, randomlen)
-        # make sure we get at least one dot per transmission
-        dot_reps = min(reps, dot_reps)
         with open("/dev/urandom", "rb") as randfp:
             tmpdata = randfp.read(randomlen)
     else:
-        dot_reps = 0
         tmpdata = b""
     # now make the connections
     bind_to = (LISTEN_ADDR, LISTEN_PORT)
@@ -90,7 +83,6 @@ def _verify_traffic(network: chutney.TorNet.Network, timeout: float = 5.0) -> bo
         data=tmpdata,
         timeout=timeout,
         repetitions=reps,
-        dot_repetitions=dot_reps,
     )
     client_list = list(
         filter(

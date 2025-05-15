@@ -30,6 +30,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import abc
+import logging
 import sys
 import socket
 import struct
@@ -38,18 +39,11 @@ import time
 import asyncore
 import asynchat
 
-from chutney.Debug import debug_flag, debug
 from typing import Any, Callable, Optional, cast
 
+logger = logging.getLogger(__name__)
+
 HostPortTuple = tuple[str, int]
-
-
-def note(s: str) -> None:
-    sys.stderr.write("NOTE: %s\n" % s)
-
-
-def warn(s: str) -> None:
-    sys.stderr.write("WARN: %s\n" % s)
 
 
 UNIQ_CTR = 0
@@ -90,7 +84,7 @@ def socks_cmd(addr_port: HostPortTuple) -> bytes:
     except socket.error:
         addr = b"\x00\x00\x00\x01"
         dnsname = "%s\x00" % host
-    debug("Socks 4a request to %s:%d" % (host, port))
+    logger.debug("Socks 4a request to %s:%d" % (host, port))
     dnsname_enc: bytes = dnsname.encode("ascii")
     return struct.pack("!BBH", ver, cmd, port) + addr + user + dnsname_enc
 
@@ -110,33 +104,33 @@ class TestSuite(object):
         self.teststatus[testname] = status
 
     def add(self, name: str) -> None:
-        note("Registering %s" % name)
+        logger.info("Registering %s" % name)
         if name not in self.tests:
-            debug("Registering %s" % name)
+            logger.debug("Registering %s" % name)
             self.not_done += 1
             self.tests[name] = "not done"
         else:
-            warn("... already registered!")
+            logger.warning("... already registered!")
 
     def success(self, name: str) -> None:
-        note("Success for %s" % name)
+        logger.info("Success for %s" % name)
         if self.tests[name] == "not done":
-            debug("Succeeded %s" % name)
+            logger.debug("Succeeded %s" % name)
             self.tests[name] = "success"
             self.not_done -= 1
             self.successes += 1
         else:
-            warn("... status was %s" % self.tests.get(name))
+            logger.warning("... status was %s" % self.tests.get(name))
 
     def failure(self, name: str) -> None:
-        note("Failure for %s" % name)
+        logger.info("Failure for %s" % name)
         if self.tests[name] == "not done":
-            debug("Failed %s" % name)
+            logger.debug("Failed %s" % name)
             self.tests[name] = "failure"
             self.not_done -= 1
             self.failures += 1
         else:
-            warn("... status was %s" % self.tests.get(name))
+            logger.warning("... status was %s" % self.tests.get(name))
 
     def failure_count(self) -> int:
         return self.failures
@@ -172,7 +166,7 @@ class Listener(asyncore.dispatcher):
         pair = self.accept()
         if pair is not None:
             newsock, endpoint = pair
-            debug(
+            logger.debug(
                 "new client from %s:%s (fd=%d)"
                 % (endpoint[0], endpoint[1], newsock.fileno())
             )
@@ -275,14 +269,14 @@ class Sink(asynchat.async_chat):
     def collect_incoming_data(self, inp: bytes) -> None:
         # shortcut read when we don't ever expect any data
 
-        debug("successfully received (bytes=%d)" % len(inp))
+        logger.debug("successfully received (bytes=%d)" % len(inp))
         self.data_checker.consume(inp)
         if self.data_checker.succeeded:
-            debug("successful verification")
+            logger.debug("successful verification")
             self.close()
             self.tt.success(self.testname)
         elif self.data_checker.failed:
-            debug("receive comparison failed")
+            logger.debug("receive comparison failed")
             self.tt.failure(self.testname)
             self.close()
 
@@ -329,7 +323,7 @@ class Source(asynchat.async_chat):
         self.set_terminator(None)
         dest = self.proxy or self.server
         self.create_socket(addr_to_family(dest[0]), socket.SOCK_STREAM)
-        debug("socket %d connecting to %r..." % (self.fileno(), dest))
+        logger.debug("socket %d connecting to %r..." % (self.fileno(), dest))
         self.state = self.CONNECTING
         self.connect(dest)
 
@@ -358,11 +352,11 @@ class Source(asynchat.async_chat):
                 if self.inbuf[:2] == b"\x00\x5a":
                     self.note("proxy handshake successful")
                     self.state = self.CONNECTED
-                    debug("successfully connected (fd=%d)" % self.fileno())
+                    logger.debug("successfully connected (fd=%d)" % self.fileno())
                     self.inbuf = self.inbuf[8:]
                     self.push_output()
                 else:
-                    debug(
+                    logger.debug(
                         "proxy handshake failed (0x%x)! (fd=%d)"
                         % (self.inbuf[1], self.fileno())
                     )
@@ -430,11 +424,11 @@ class EchoClient(Source):
 
         if self.data_checker.succeeded:
             self.enote("successful verification")
-            debug("successful verification")
+            logger.debug("successful verification")
             self.close()
             self.tt.success(self.testname_check)
         elif self.data_checker.failed:
-            debug("receive comparison failed")
+            logger.debug("receive comparison failed")
             self.tt.failure(self.testname_check)
             self.close()
 
@@ -454,7 +448,6 @@ class TrafficTester(object):
         data: bytes = b"",
         timeout: float = 3.0,
         repetitions: int = 1,
-        dot_repetitions: int = 0,
         # TODO make this an enum?
         chat_type: str = "Echo",
     ):
@@ -479,8 +472,7 @@ class TrafficTester(object):
         self.data_source = DataSource(data, repetitions)
 
         # sanity checks
-        self.dot_repetitions = dot_repetitions
-        debug("listener fd=%d" % self.listener.fileno())
+        logger.debug("listener fd=%d" % self.listener.fileno())
 
     def add(self, item: asynchat.async_chat) -> None:
         """Register a single item."""
@@ -519,18 +511,15 @@ class TrafficTester(object):
             asyncore.loop(5.0, False, self.socket_map, 1)
             now = time.time()
             if now > dump_at:
-                debug("Test status: %s" % self.tests.status())
+                logger.debug("Test status: %s" % self.tests.status())
                 dump_at += DUMP_TEST_STATUS_INTERVAL
 
-        if not debug_flag:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        debug(
+        logger.debug(
             "Done with run(); all_done == %s and failure_count == %s"
             % (self.tests.all_done(), self.tests.failure_count())
         )
 
-        note("Status:\n%s" % self.tests.teststatus)
+        logger.info("Status:\n%s" % self.tests.teststatus)
 
         self.listener.close()
 

@@ -1,3 +1,4 @@
+import logging
 import re
 import subprocess
 import textwrap
@@ -8,7 +9,7 @@ import chutney
 import chutney.errors
 import chutney.Util
 
-from chutney.Debug import debug_flag, debug
+logger = logging.getLogger(__name__)
 
 
 def run_tor(cmdline: List[str], tolerate_error: bool = False) -> str:
@@ -21,7 +22,7 @@ def run_tor(cmdline: List[str], tolerate_error: bool = False) -> str:
 
     If `tolerate_error` is set, ignore the return code from the binary.
     """
-    if not debug_flag:
+    if not logger.isEnabledFor(logging.DEBUG):
         cmdline.append("--hush")
     try:
         res = subprocess.run(
@@ -39,7 +40,9 @@ def run_tor(cmdline: List[str], tolerate_error: bool = False) -> str:
         raise chutney.errors.ChutneyError(
             f"Failed to run cmdline: {cmdline}. Output: {stdouterr}"
         )
-    debug("Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    "))
+    logger.debug(
+        "Output for " + str(cmdline) + ":\n" + textwrap.indent(stdouterr, "    ")
+    )
     return stdouterr
 
 

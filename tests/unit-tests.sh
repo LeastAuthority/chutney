@@ -17,32 +17,6 @@ CHUTNEY_DIR=$(dirname "$TEST_DIR")
 echo "$myname: changing to chutney directory"
 cd "$CHUTNEY_DIR"
 
-
-echo "$myname: running Debug.py tests"
-
-LOG_FILE=$(mktemp)
-export LOG_FILE
-test -n "$LOG_FILE"
-
-unset CHUTNEY_DEBUG
-export CHUTNEY_DEBUG
-$PYTHON lib/chutney/Debug.py | tee "$LOG_FILE"
-LOG_FILE_LINES=$(wc -l < "$LOG_FILE")
-test "$LOG_FILE_LINES" -eq 1
-
-LOG_FILE=$(mktemp)
-export LOG_FILE
-test -n "$LOG_FILE"
-
-export CHUTNEY_DEBUG=1
-$PYTHON lib/chutney/Debug.py | tee "$LOG_FILE"
-LOG_FILE_LINES=$(wc -l < "$LOG_FILE")
-test "$LOG_FILE_LINES" -eq 2
-
-unset CHUTNEY_DEBUG
-export CHUTNEY_DEBUG
-
-
 echo "$myname: running Traffic.py tests"
 
 LOG_FILE=$(mktemp)

@@ -1,5 +1,6 @@
 import base64
 import errno
+import logging
 import os
 import re
 import signal
@@ -16,12 +17,13 @@ import chutney.TorNet as TorNet
 
 from chutney.dirinfo import DirInfoStatus, DirInfoStatusCode, DirFormat
 from chutney.tor.util import get_tor_version
-from chutney.Debug import debug
 from chutney.Util import (
     launch_process,
     values_for_keys,
     Option,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class LocalNodeController(TorNet.NodeController):
@@ -47,7 +49,7 @@ class LocalNodeController(TorNet.NodeController):
         # If we're called early during bootstrap, the file won't have been
         # created yet. (And some very old tor versions don't have ed25519.)
         if not key_file.exists():
-            debug(
+            logger.debug(
                 (
                     "File {} does not exist. Are you running a very old tor " "version?"
                 ).format(key_file)
@@ -233,7 +235,7 @@ class LocalNodeController(TorNet.NodeController):
         if self.waitOnLaunch():
             # this requires that RunAsDaemon is set.
             (stdouterr, empty_stderr) = p.communicate()
-            debug(stdouterr)
+            logger.debug(stdouterr)
             assert empty_stderr is None
             # We expect the parent process to have exited with code 0.
             if p.returncode != 0:
@@ -284,7 +286,7 @@ class LocalNodeController(TorNet.NodeController):
         """Remove lock file if this node is no longer running."""
         lf = Path(self._node.lockfile)
         if not self.isRunning() and lf.exists():
-            debug("Removing stale lock file for {} ...".format(self._node.nick))
+            logger.debug("Removing stale lock file for {} ...".format(self._node.nick))
             os.remove(lf)
 
     def cleanup_pidfile(self) -> None:
@@ -293,7 +295,7 @@ class LocalNodeController(TorNet.NodeController):
         """
         pidfile = Path(self._node.pidfile)
         if not self.isRunning() and pidfile.exists():
-            debug("Renaming stale pid file for {} ...".format(self._node.nick))
+            logger.debug("Renaming stale pid file for {} ...".format(self._node.nick))
             pidfile.rename(pidfile.with_suffix(".old"))
 
     def waitOnLaunch(self) -> bool:
