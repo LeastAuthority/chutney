@@ -86,6 +86,8 @@ rm -rf "$tmpdir"
 if diffoscope \
   --exclude=keys \
   --exclude-directory-metadata=yes  \
+  --new-file \
+  --no-default-limits \
   "$artifacts"/base/net \
   "$artifacts"/head/net \
   | tee "$artifacts"/diff.txt; then
