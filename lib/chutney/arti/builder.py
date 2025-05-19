@@ -13,7 +13,10 @@ from chutney.errors import (
     ChutneyError,
     ChutneyInternalError,
 )
-from chutney.Util import mkdir_p
+from chutney.Util import (
+    mkdir_p,
+    Option,
+)
 
 
 class LocalArtiNodeBuilder(TorNet.NodeBuilder):
@@ -128,6 +131,14 @@ class LocalArtiNodeBuilder(TorNet.NodeBuilder):
     @override
     def preConfig(self, net: TorNet.Network) -> None:
         pass
+
+    @override
+    def get_fingerprint(self) -> Option[str]:
+        return Option(None)
+
+    @override
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        return Option(None)
 
     @override
     def config(self, net: TorNet.Network) -> None:

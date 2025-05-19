@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -233,35 +232,14 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
             self._genRouterKey()
         if self._node._config.hs:
             self._makeHiddenServiceDir()
-        if self._node._config.families:
-            lines: list[str] = []
+        if net.family_ids:
             for fid in self._node._config.families:
-                if net.family_id_lines:
-                    shutil.copy(
-                        TorNet.get_familykey_path(fid), Path(self._node.dir, "keys")
-                    )
-                    lines.append(net.family_id_lines[fid])
-            self._node.family_id_lines = Option(lines)
-        else:
-            self._node.family_id_lines = Option([])
+                shutil.copy(
+                    TorNet.get_familykey_path(fid), Path(self._node.dir, "keys")
+                )
 
     @override
     def config(self, net: TorNet.Network) -> None:
-        if self._node._config.families:
-            # We have to do this now that the keys are loaded.
-            myfamily = []
-            for other in net._nodes:
-                if not other._config.families:
-                    continue
-                if any(
-                    fid in other._config.families for fid in self._node._config.families
-                ):
-                    # "Other" is in this node's family.
-                    myfamily.append(other.fingerprint.unwrap())
-            self._node.myfamily_members = Option(myfamily)
-        else:
-            self._node.myfamily_members = Option([])
-        # self._createScripts()
         self._createTorrcFile()
 
     @override
@@ -344,9 +322,7 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
         run_tor_gencert(cmdline, passphrase)
 
     def _genRouterKey(self) -> None:
-        """Generate an identity key for this router, unless we already have,
-        and set up the 'fingerprint' entry in the Environ.
-        """
+        """Generate an identity key for this router"""
         datadir = self._node.dir
         tor = self._node._config.tor
         cmdline: list[str] = [
@@ -360,20 +336,31 @@ class LocalNodeBuilder(TorNet.NodeBuilder):
             str(datadir),
             "--list-fingerprint",
         ]
-        stdouterr = run_tor(cmdline)
-        fingerprint = "".join((stdouterr.rstrip().split("\n")[-1]).split()[1:])
-        if not re.match(r"^[A-F0-9]{40}$", fingerprint):
-            raise chutney.errors.ChutneyError(
-                "Error when getting fingerprint using '{0}'. It output '{1}'.".format(
-                    repr(" ".join(cmdline)), repr(stdouterr)
-                )
-            )
-        self._node.fingerprint.replace(fingerprint)
+        run_tor(cmdline)
 
-        ed_fn = os.path.join(datadir, "fingerprint-ed25519")
-        if os.path.exists(ed_fn):
-            s = open(ed_fn).read().strip().split()[1]
-            self._node.fingerprint_ed25519.replace(s)
+    @override
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        if not self._node._config.relay:
+            return Option(None)
+        s = self._node.dir.joinpath("fingerprint-ed25519").read_text()
+        m = re.match(r"^\w+ (\S{43})$", s)
+        if not m:
+            raise chutney.errors.ChutneyError(
+                f"Malformed fingerprint file contents: {s}"
+            )
+        return Option(m.group(1))
+
+    @override
+    def get_fingerprint(self) -> Option[str]:
+        if not self._node._config.relay:
+            return Option(None)
+        s = self._node.dir.joinpath("fingerprint").read_text()
+        m = re.match(r"^\w+ ([A-F0-9]{40})$", s)
+        if not m:
+            raise chutney.errors.ChutneyError(
+                f"Malformed fingerprint file contents: {s}"
+            )
+        return Option(m.group(1))
 
     @override
     def getAltAuthLines(

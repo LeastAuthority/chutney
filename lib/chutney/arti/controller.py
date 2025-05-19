@@ -251,9 +251,6 @@ class LocalArtiNodeController(TorNet.NodeController):
             )
         return None
 
-    def getEd25519Id(self) -> Option[str]:
-        return Option(None)
-
     @override
     def check_node_in_dirinfo(
         self, dir_fmt: DirFormat, other_node: TorNet.Node
@@ -264,7 +261,7 @@ class LocalArtiNodeController(TorNet.NodeController):
             if path is None:
                 return DirInfoStatusCode.MISSING_FILE
             dir_pattern = dir_fmt.status_pattern(
-                other_node.nick, other_node._controller.getEd25519Id()
+                other_node.nick, other_node.fingerprint_ed25519
             )
             assert dir_pattern is not None
             with path.open(mode="r") as f:
@@ -278,7 +275,7 @@ class LocalArtiNodeController(TorNet.NodeController):
                 return DirInfoStatusCode.MISSING_FILE
             cur = con.cursor()
             dir_pattern = dir_fmt.status_pattern(
-                other_node.nick, other_node._controller.getEd25519Id()
+                other_node.nick, other_node.fingerprint_ed25519
             )
             if dir_pattern is None:
                 return DirInfoStatusCode.NOT_YET_IMPLEMENTED

@@ -244,7 +244,13 @@ shadow-test-network:
   - python3 -m pip install --user .
   # run the test
   - |
-    for flavor in basic basic-arti bridges-min bridges-min-arti; do
+    for flavor in \
+          basic \
+          basic-arti \
+          basic-families \
+          bridges-min \
+          bridges-min-arti \
+          ; do
       shadow-exec \
         -- \
       bash -c \

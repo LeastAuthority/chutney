@@ -228,15 +228,6 @@ class Node(object):
             lambda: f"Config is missing 'tag': {config}"
         )
 
-        # These gets set by Builder.preConfigBuild.
-        # TODO: make `Optional` and init to `None`?
-        # TODO: move onto the builder? Or a "builder output" field?
-        self.fingerprint: Option[str] = Option(None)
-        self.fingerprint_ed25519: Option[str] = Option(None)
-        self.ed25519_id: Option[str] = Option(None)
-        self.family_id_lines: Option[list[str]] = Option(None)
-        self.myfamily_members: Option[list[str]] = Option(None)
-
         self._network = network
         self._config = config
 
@@ -259,6 +250,16 @@ class Node(object):
             )
         else:
             raise ChutneyError(f"Unrecognized backend {config.backend}")
+
+    @property
+    def fingerprint(self) -> Option[str]:
+        """The base64-encoded ed25519 public key of this node."""
+        return self._builder.get_fingerprint()
+
+    @property
+    def fingerprint_ed25519(self) -> Option[str]:
+        """The base64-encoded ed25519 public key fingerprint of this node."""
+        return self._builder.get_fingerprint_ed25519()
 
     @property
     def orport(self) -> int:
@@ -380,6 +381,31 @@ class Node(object):
                 return formats
         return {}
 
+    def as_jsonable_dict(self) -> dict[str, object]:
+        """Return a dict describing this object using primitive types.
+
+        Values are of types accepted by the json module's encoder."""
+        # Careful when modifying - this is ultimately used to produce "public"
+        # json output that is consumed by other tools.
+        return dict(
+            nick=self.nick,
+            auth_passphrase=self.auth_passphrase,
+            dir=str(self.dir.absolute()),
+            fingerprint=self.fingerprint.as_optional(),
+            fingerprint_ed25519=self.fingerprint_ed25519.as_optional(),
+            orport=self.orport,
+            controlport=self.controlport,
+            socksport=self.socksport.as_optional(),
+            dirport=self.dirport.as_optional(),
+            extorport=self.extorport,
+            ptport=self.ptport,
+            torrc_path=str(self.torrc_path),
+            controlsocket=str(self.controlsocket) if self.controlsocket else None,
+            tag=self._config.tag,
+            backend=self._config.backend.name,
+            is_client=self._config.client,
+        )
+
 
 class NodeBuilder(ABC):
     """Abstract base class.  A NodeBuilder is responsible for doing all the
@@ -396,6 +422,16 @@ class NodeBuilder(ABC):
         """Called on all nodes before any nodes configure: generates keys and
         hidden service directories as needed.
         """
+        ...
+
+    @abstractmethod
+    def get_fingerprint(self) -> Option[str]:
+        """Return the relay fingerprint, if applicable."""
+        ...
+
+    @abstractmethod
+    def get_fingerprint_ed25519(self) -> Option[str]:
+        """The base64-encoded ed25519 public key fingerprint of this node, if applicable."""
         ...
 
     @abstractmethod
@@ -456,11 +492,6 @@ class NodeController(ABC):
         Returns an empty string if there is no such info (e.g. this isn't a PT bridge).
         Returns None if we *expect* there to be such info but couldn't locate it (yet).
         """
-        ...
-
-    @abstractmethod
-    def getEd25519Id(self) -> Option[str]:
-        """Return the base64-encoded ed25519 public key of this node."""
         ...
 
     @abstractmethod
@@ -641,7 +672,7 @@ class NodeConfig:
     # A list of identifiers for the families that this node belongs to.
     # These identifiers are strings, and must be valid filename components.
     # Two relays are in the same family if they have any identifier in common.
-    families: Optional[list[str]] = None
+    families: list[str] = dataclasses.field(default_factory=list)
 
     # "Escape hatch" for injecting raw lines at the end of the generated torrc.
     # Generally this should only be used as a short-term workaround. For
@@ -802,8 +833,10 @@ class Network(object):
         self.authorities: list[AuthorityLine] = []
         # bridges: potential Bridge descriptors in this network.
         self.bridges: list[BridgeLine] = []
-        # Map from family id to FamilyId torrc line
-        self.family_id_lines: dict[str, str] = dict()
+        # Map from family name to FamilyId hash
+        self.family_ids: dict[str, str] = dict()
+        # Map from family name to members of that family
+        self.family_members: dict[str, list[Node]] = dict()
 
         # bootstrap_time: How long in seconds we should verify (and similar
         # commands) wait for a successful outcome. We check BOOTSTRAP_TIME for
@@ -904,6 +937,9 @@ class Network(object):
         self._nodes.append(node)
         if node._config.bridgeauthority:
             self.hasbridgeauth = True
+        for family_name in node._config.families:
+            self.family_members.setdefault(family_name, []).append(node)
+
         return node
 
     def addNodes(self, configs: List[NodeConfig]) -> List[Node]:
@@ -993,17 +1029,17 @@ class Network(object):
             if "Unknown option 'keygen-family'" in output:
                 print("No support for --keygen-family; using legacy families only.")
                 break
-            m = re.search(r"^FamilyId .*$", output, re.M)
+            m = re.search(r"^FamilyId (.*)$", output, re.M)
             if not m:
                 raise ChutneyError("unexpected output from tor --keygen-family")
-            self.family_id_lines[fid] = m.group(0).strip() + "\n"
+            self.family_ids[fid] = m.group(1)
         with get_familykey_path("map.json", ext=False).open("w") as f:
-            json.dump(self.family_id_lines, f)
+            json.dump(self.family_ids, f)
 
     def load_family_key_ids(self) -> None:
         """Load our family key identifiers from disk."""
         family_key_dir = get_familykey_path(None)
-        self.family_id_lines = json.load(family_key_dir.joinpath("map.json").open())
+        self.family_ids = json.load(family_key_dir.joinpath("map.json").open())
 
     def supported(self) -> None:
         """Check whether this network is supported by the set of binaries
@@ -1065,6 +1101,9 @@ class Network(object):
 
         for n in cur_phase_nodes:
             n._builder.config(network)
+
+        with get_absolute_nodes_path().joinpath("network.json").open("w") as f:
+            json.dump(self.as_jsonable_dict(), f, indent=2)
 
         arti_fallback_lines = []
         arti_auth_lines = []
@@ -1161,6 +1200,16 @@ class Network(object):
 
         for n in cur_phase_nodes:
             n._builder.postConfig(network)
+
+    def as_jsonable_dict(self) -> dict[str, object]:
+        """Return a dict describing this object using primitive types.
+
+        Values are of types accepted by the json module's encoder."""
+        # Careful when modifying - this is ultimately used to produce "public"
+        # json output that is consumed by other tools.
+        return dict(
+            nodes=[n.as_jsonable_dict() for n in self.nodes],
+        )
 
     def status(self) -> bool:
         """Print how many nodes are running and how many are expected, and
