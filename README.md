@@ -13,9 +13,14 @@ It is supposed to be a good tool for:
 Right now it only sorta does these things.
 
 ## You will need
-- A supported version of Python 3
-  - (we support Python versions that are still getting updates), and
+- A supported version of Python 3 (see `requires-python` in `pyproject.toml`)
+- Supported versions of python dependencies. See `dependencies` in
+  `pyproject.toml`.
 - Tor binaries.
+
+You can install updated versions of the python dependencies by using `pip` to
+install chutney itself.  This will also install a chutney CLI wrapper (e.g.
+`~/.local/bin/`) and the chutney python modules.
 
 Chutney checks for Tor binaries in this order:
 
