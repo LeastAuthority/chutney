@@ -62,8 +62,6 @@ def format(n: TorNet.Node) -> str:
 
         AddressDisableIPv6 {int(n._config.disableipv6)}
         ControlPort {n.controlport}
-        # Use ControlSocket rather than ControlPort unix: to support older tors
-        ControlSocket {n.controlsocket or 0}
         CookieAuthentication 1
         PidFile {n.pidfile}
 
