@@ -60,6 +60,11 @@ def format(n: TorNet.Node) -> str:
         ShutdownWaitLength 2
         DisableDebuggerAttachment 0
 
+        # On Windows, the default relative path for GeoIPFile breaks together
+        # with "RunAsDaemon 1"
+        GeoIPFile {Path("/dev/null")}
+        GeoIPv6File {Path("/dev/null")}
+
         AddressDisableIPv6 {int(n._config.disableipv6)}
         ControlPort {n.controlport}
         CookieAuthentication 1
