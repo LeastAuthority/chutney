@@ -3,6 +3,7 @@ from __future__ import annotations
 import chutney.TorNet as TorNet
 import textwrap
 
+from pathlib import Path
 from typing import Iterable
 
 from chutney.errors import ChutneyError
